@@ -1,0 +1,32 @@
+# Nginx ishlatsangiz (.htaccess ishlamaydi!) — server { } blokiga qo'shing.
+# Maxfiy fayllar va ichki papkalar internetdan ochilmasin:
+location ~ ^/(storage|lib|vendor)/ { return 404; }
+location ~* \.(sqlite|sqlite3|db|sql|log|md|lock|bak|env|json|zip|pptx|docx)$ { return 404; }
+location = /config.php { return 404; }
+location = /db.php { return 404; }
+
+# Tahrirlovchi: faqat index.php va api.php
+location ^~ /editor/ {
+    location ~ ^/editor/(index|api)\.php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass unix:/run/php/php-fpm.sock;   # o'zingizning php-fpm manzilingiz
+        client_max_body_size 10m;
+    }
+    location ~ ^/editor/?$ { rewrite ^ /editor/index.php last; }
+    return 404;
+}
+
+# Admin panel (WebApp). Papka nomini config.php dagi ADMIN_PATH bilan bir xil qiling.
+location ^~ /admin/ {
+    location ~ ^/admin/(index|api)\.php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass unix:/run/php/php-fpm.sock;   # o'zingizning php-fpm manzilingiz
+        client_max_body_size 64k;
+    }
+    location ~ ^/admin/?$ { rewrite ^ /admin/index.php last; }
+    return 404;
+}
+
+# Cloudflare orqasida bo'lsangiz config.php da:  define('EDITOR_TRUSTED_IP_HEADER', 'HTTP_CF_CONNECTING_IP');
