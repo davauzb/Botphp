@@ -362,6 +362,20 @@ class PptxLayouts
         return $min;
     }
 
+    /** Berilgan shriftda matn egallaydigan taxminiy balandlik (EMU) — kartani matnga moslash uchun. */
+    private static function measure(array $paras, int $wEmu, int $sz): int
+    {
+        $wPt = max(10, $wEmu / 12700);
+        $fw = self::$S['fw'];
+        $tot = 0.0;
+        foreach ($paras as [$t, $bold, $delta, $gap]) {
+            $s = $sz + $delta;
+            $cpl = max(1, (int)floor($wPt / ($s * ($bold ? 0.56 : 0.52) * $fw)));
+            $tot += max(1, (int)ceil(self::len($t) / $cpl * 1.07)) * $s * 1.2 + $gap;
+        }
+        return (int)($tot * 12700);
+    }
+
     private static function pointParas(array $p, int $sz, string $headColor, int $gap = 3): string
     {
         $out = '';
@@ -466,23 +480,37 @@ class PptxLayouts
 
     private static function pictureXml(string $imagePath, int $bx, int $by, int $bw, int $bh, string $border): string
     {
+        // Rasm qutini TO'LIQ to'ldiradi (cover): ortiqcha qismi markazdan qirqiladi — kichkina "pochta markasi" ko'rinishi bo'lmaydi.
+        // Juda cho'zilgan qutida (nisbat 2.2 baravardan ko'p farq qilsa) rasm buzilmasligi uchun quti rasmga moslab qisqartiriladi.
         $x = $bx; $y = $by; $w = $bw; $h = $bh;
+        $src = '<a:srcRect/>';
         $size = @getimagesize($imagePath);
-        if ($size && $size[0] > 0 && $size[1] > 0) {
+        if ($size && $size[0] > 0 && $size[1] > 0 && $bw > 0 && $bh > 0) {
             $ir = $size[0] / $size[1];
             $br = $bw / $bh;
+            if ($ir / $br > 3.0 || $br / $ir > 3.0) {
+                $tr = $ir > $br ? $br * 3.0 : $br / 3.0;        // qutining yangi nisbati
+                if ($ir > $br) {
+                    $h = (int)round($bw / $tr);
+                    $y = $by + (int)round(($bh - $h) / 2);
+                } else {
+                    $w = (int)round($bh * $tr);
+                    $x = $bx + (int)round(($bw - $w) / 2);
+                }
+                $br = $w / $h;
+            }
             if ($ir > $br) {
-                $h = (int)round($bw / $ir);
-                $y = $by + (int)round(($bh - $h) / 2);
-            } else {
-                $w = (int)round($bh * $ir);
-                $x = $bx + (int)round(($bw - $w) / 2);
+                $cut = (int)round((1 - $br / $ir) / 2 * 100000);
+                $src = '<a:srcRect l="' . $cut . '" r="' . $cut . '"/>';
+            } elseif ($ir < $br) {
+                $cut = (int)round((1 - $ir / $br) / 2 * 100000);
+                $src = '<a:srcRect t="' . $cut . '" b="' . $cut . '"/>';
             }
         }
         $geom = self::$S['card']['geom'] === 'rect' ? 'rect' : 'roundRect';
         $av = $geom === 'roundRect' ? '<a:avLst><a:gd name="adj" fmla="val 6000"/></a:avLst>' : '<a:avLst/>';
         return '<p:pic><p:nvPicPr><p:cNvPr id="' . self::nid() . '" name="Picture"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>'
-            . '<p:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>'
+            . '<p:blipFill><a:blip r:embed="rId2"/>' . $src . '<a:stretch><a:fillRect/></a:stretch></p:blipFill>'
             . '<p:spPr><a:xfrm><a:off x="' . $x . '" y="' . $y . '"/><a:ext cx="' . $w . '" cy="' . $h . '"/></a:xfrm>'
             . '<a:prstGeom prst="' . $geom . '">' . $av . '</a:prstGeom>'
             . '<a:ln w="19050"><a:solidFill><a:srgbClr val="' . $border . '"/></a:solidFill></a:ln></p:spPr></p:pic>';
@@ -902,7 +930,7 @@ class PptxLayouts
         $textX = $cardX + $pad + $circ + 190000;
         $textW = $cardW - ($textX - $cardX) - $pad;
         $pts = self::shrinkPts($pts, $textW, $rowH - 50000, 11);
-        $sz = self::commonSize($pts, $textW, $rowH - 50000, 16, 11);
+        $sz = self::commonSize($pts, $textW, $rowH - 50000, $hasImage ? 18 : 20, 11);
 
         foreach ($pts as $i => $p) {
             $ry = $y + $pad + $i * $rowH;
@@ -977,7 +1005,7 @@ class PptxLayouts
                 $body .= self::card('MiniCard' . ($k + 1), $cx, $cy, $cellW, $rowH, $col);
                 $tw = $cellW - 460000;
                 $p['text'] = self::clipTo($p['text'], $tw, $rowH - 130000, 10, $p['head'] !== '');
-                $s = self::fit(self::pointFitDesc($p), $tw, $rowH - 130000, 15, 10);
+                $s = self::fit(self::pointFitDesc($p), $tw, $rowH - 130000, 16, 10);
                 $body .= self::textBox('MiniText' . ($k + 1), $cx + 290000, $cy + 40000, $tw, $rowH - 80000, self::pointParas($p, $s, $H), 'ctr');
                 $k++;
             }
@@ -1011,6 +1039,26 @@ class PptxLayouts
         $chevH = $mode === 'circle' ? 640000 : ($mode === 'ruled' ? 700000 : 760000);
         $cardY = $y + $chevH + 140000;
         $cardH = self::$yb - $cardY;
+
+        // Barcha bosqichlarga bitta shrift o'lchami va matnga mos karta balandligi (bo'm-bo'sh baland kartalar bo'lmasin)
+        $tw0 = $mode === 'ruled' ? $colW - 40000 : $colW - 240000;
+        $padV = $mode === 'ruled' ? 100000 : 280000;
+        foreach ($pts as $k => $q) {
+            $pts[$k]['text'] = self::clipTo($q['text'], $tw0, $cardH - $padV, 10, $q['head'] !== '');
+        }
+        $stepSz = 18;
+        foreach ($pts as $q) {
+            $stepSz = min($stepSz, self::fit(self::pointFitDesc($q, 5), $tw0, $cardH - $padV, 18, 10));
+        }
+        $need = 0;
+        foreach ($pts as $q) {
+            $need = max($need, self::measure(self::pointFitDesc($q, 5), $tw0, $stepSz));
+        }
+        $fullH = $cardH;
+        $cardH = min($cardH, max((int)($cardH * 0.45), $need + $padV + 260000));
+        $shift = (int)(($fullH - $cardH) * 0.4);          // guruh bo'sh joy markazroqqa tushadi
+        $y += $shift;
+        $cardY += $shift;
 
         if ($mode === 'circle' && $N > 1) {
             $body .= self::shape('StepLine', 'rect', $x0 + (int)($colW / 2), $y + (int)($chevH / 2) - 15000, $cw - $colW, 30000, self::$S['dark'] ? $P['hair'] : self::tint($A, 0.55));
@@ -1049,19 +1097,15 @@ class PptxLayouts
                     break;
             }
             if ($mode === 'ruled') {
-                $tw = $colW - 40000;
-                $p['text'] = self::clipTo($p['text'], $tw, $cardH - 100000, 10, $p['head'] !== '');
-                $s = self::fit(self::pointFitDesc($p, 5), $tw, $cardH - 100000, 15, 10);
-                $body .= self::textBox('StepText' . ($i + 1), $x, $cardY, $tw, $cardH, self::pointParas($p, $s, $P['head'], 5), 't');
+                $tw = $tw0;
+                $body .= self::textBox('StepText' . ($i + 1), $x, $cardY, $tw, $cardH, self::pointParas($p, $stepSz, $P['head'], 5), 't');
                 if ($i < $N - 1) {
                     $body .= self::shape('StepDiv' . ($i + 1), 'rect', $x + $colW + (int)($gap / 2) - 3000, $cardY, 6350, $cardH - 100000, $P['hair']);
                 }
             } else {
                 $body .= self::card('StepCard' . ($i + 1), $x, $cardY, $colW, $cardH, $col);
-                $tw = $colW - 240000;
-                $p['text'] = self::clipTo($p['text'], $tw, $cardH - 280000, 10, $p['head'] !== '');
-                $s = self::fit(self::pointFitDesc($p, 5), $tw, $cardH - 280000, 15, 10);
-                $body .= self::textBox('StepText' . ($i + 1), $x + 120000, $cardY + 150000, $tw, $cardH - 220000, self::pointParas($p, $s, $P['head'], 5), 't');
+                $tw = $tw0;
+                $body .= self::textBox('StepText' . ($i + 1), $x + 120000, $cardY + 110000, $tw, $cardH - 220000, self::pointParas($p, $stepSz, $P['head'], 5), 'ctr');
             }
         }
         return $body;
@@ -1095,7 +1139,7 @@ class PptxLayouts
         $cardX = $x0 + 720000;
         $cardW = $cw - 720000;
         $pts = self::shrinkPts($pts, $cardW - 380000, $slot - 60000, 11);
-        $sz = self::commonSize($pts, $cardW - 380000, $slot - 60000, 15, 11);
+        $sz = self::commonSize($pts, $cardW - 380000, $slot - 60000, 18, 11);
         foreach ($pts as $i => $p) {
             $cy = $y + $i * ($slot + $gap);
             $col = self::mix($A, $T, $N > 1 ? $i / ($N - 1) : 0);
@@ -1148,7 +1192,7 @@ class PptxLayouts
                 $tw = $cellW - 300000;
                 $th = $rowH - $headH - 100000;
                 $p['text'] = self::clipTo($p['text'], $tw, $th, 11, false);
-                $s = self::fit([[$p['text'], false, 0, 0]], $tw, $th, $single ? 20 : 16, 11);
+                $s = self::fit([[$p['text'], false, 0, 0]], $tw, $th, $single ? 22 : 18, 11);
                 $body .= self::textBox('GText' . ($k + 1), $cx + 150000, $cy + $headH + 50000, $tw, $th, self::para(self::run($p['text'], $s, $P['txt'])), 'ctr');
                 $k++;
             }
@@ -1199,17 +1243,22 @@ class PptxLayouts
         $rowH = (int)(($bodyH - $headH - 2 * $pad) / $rowsMax);
         $left = self::shrinkPts($left, $colW - 2 * $pad - 300000, $rowH - 40000, 10);
         $right = self::shrinkPts($right, $colW - 2 * $pad - 300000, $rowH - 40000, 10);
-        $sz = self::commonSize(array_merge($left, $right), $colW - 2 * $pad - 300000, $rowH - 40000, 15, 10);
+        $sz = self::commonSize(array_merge($left, $right), $colW - 2 * $pad - 300000, $rowH - 40000, 18, 10);
 
         foreach ([[$left, $leftTitle, $A, $x0], [$right, $rightTitle, $T, $x0 + $colW + $gap]] as $ci => [$items, $name, $col, $x]) {
             $body .= self::card('CBody' . ($ci + 1), $x, $y, $colW, $bodyH, $col);
             $hs = self::fit([[$name, true, 0, 0]], $colW - 700000, $headH - 60000, 20, 13);
             $body .= self::gridHead('CHead' . ($ci + 1), $x, $y, $colW, $headH, $name, $hs, $col);
             $hc = self::$S['dark'] ? $P['head'] : ($col === $T ? $P['head'] : $col);
+            $rg = 70000;
             foreach ($items as $i => $p) {
                 $ry = $y + $headH + $pad + $i * $rowH;
-                $body .= self::shape('Dot', 'ellipse', $x + $pad, $ry + 60000, 150000, 150000, $col);
-                $body .= self::textBox('CText', $x + $pad + 270000, $ry, $colW - 2 * $pad - 270000, $rowH, self::pointParas($p, $sz, $hc, 2), 't');
+                $rh = $rowH - $rg;
+                // har bir punkt — yumshoq fonli qator (bo'shliqlar tartibli ko'rinadi)
+                $body .= self::shape('CRow', 'roundRect', $x + $pad - 40000, $ry, $colW - 2 * $pad + 80000, $rh,
+                    self::$S['dark'] ? self::mix($P['card'], $col, 0.18) : self::tint($col, 0.9), null, 0, '', 't', [0, 0, 0, 0], 12000);
+                $body .= self::shape('Dot', 'ellipse', $x + $pad + 50000, $ry + (int)(($rh - 150000) / 2), 150000, 150000, $col);
+                $body .= self::textBox('CText', $x + $pad + 300000, $ry, $colW - 2 * $pad - 330000, $rh, self::pointParas($p, $sz, $hc, 2), 'ctr');
             }
         }
         $body .= self::shape(
@@ -1248,7 +1297,7 @@ class PptxLayouts
         $nb = 460000;
         $tw = $w - 240000 - $nb - 160000;
         $pts = self::shrinkPts($pts, $tw, $rowH - 50000, 11);
-        $s = self::commonSize($pts, $tw, $rowH - 50000, 15, 11);
+        $s = self::commonSize($pts, $tw, $rowH - 50000, 18, 11);
         foreach ($pts as $i => $p) {
             $ry = self::$y0 + $i * ($rowH + $gap);
             $body .= self::card('CRow' . ($i + 1), $x, $ry, $w, $rowH, $i % 2 === 0 ? $A : $T, $i % 2 === 0 ? null : $P['soft']);
@@ -1269,24 +1318,26 @@ class PptxLayouts
         if ($N === 0) {
             return '';
         }
-        $cols = $N > 5 ? 2 : 1;
+        $cols = $N > 6 ? 2 : 1;
         $rows = (int)ceil($N / $cols);
         $gapX = 200000;
-        $gapY = 130000;
+        $gapY = $rows > 5 ? 110000 : 140000;
         $colW = (int)((self::$cw - $gapX * ($cols - 1)) / $cols);
         $availH = self::$yb - self::$y0;
-        $rowH = min(820000, (int)(($availH - $gapY * ($rows - 1)) / $rows));
+        $rowH = min(900000, (int)(($availH - $gapY * ($rows - 1)) / $rows));
+        $used = $rows * $rowH + ($rows - 1) * $gapY;
+        $top = self::$y0 + (int)(max(0, $availH - $used) * 0.35);       // qisqa reja slayd tepasida yopishib qolmasin
         $body = '';
         foreach ($items as $i => $t) {
             $cc = intdiv($i, $rows);
             $r = $i % $rows;
             $x = self::$x0 + $cc * ($colW + $gapX);
-            $y = self::$y0 + $r * ($rowH + $gapY);
+            $y = $top + $r * ($rowH + $gapY);
             $col = self::mix($A, $T, $N > 1 ? $i / ($N - 1) : 0);
-            $nb = 520000;
-            $s = self::fit([[$t, true, 0, 0]], $colW - $nb - 400000, $rowH - 80000, 19, 12);
+            $nb = min(560000, $rowH - 140000);
+            $s = self::fit([[$t, true, 0, 0]], $colW - $nb - 400000, $rowH - 80000, $cols === 1 ? 22 : 19, 12);
             $body .= self::card('AItem' . ($i + 1), $x, $y, $colW, $rowH, $col);
-            $body .= self::badge('ANum' . ($i + 1), $x + 140000, $y + (int)(($rowH - $nb) / 2), $nb, sprintf('%02d', $i + 1), 15, $col, true);
+            $body .= self::badge('ANum' . ($i + 1), $x + 140000, $y + (int)(($rowH - $nb) / 2), $nb, sprintf('%02d', $i + 1), $nb >= 500000 ? 16 : 13, $col, true);
             $body .= self::textBox('AText' . ($i + 1), $x + 140000 + $nb + 170000, $y, $colW - $nb - 400000, $rowH, self::para(self::run($t, $s, $P['head'], true, false, true)), 'ctr');
         }
         return $body;

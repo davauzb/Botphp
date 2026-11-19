@@ -229,6 +229,17 @@ class ProDeck
         return [$min, (int)($tot * 12700)];
     }
 
+    /** Berilgan shriftda bloklar egallaydigan balandlik (EMU). */
+    private static function measure(array $blocks, int $wEmu, float $pt): int
+    {
+        $wPt = $wEmu / 12700;
+        $tot = 0.0;
+        foreach ($blocks as [$t, $b, $k, $gap]) {
+            $tot += self::lines($t, $wPt, $pt * $k, $b) * $pt * $k * 1.22 + $gap;
+        }
+        return (int)($tot * 12700);
+    }
+
     // ================================================================== umumiy bezaklar
 
     private static function card(string $name, int $x, int $y, int $w, int $h, int $adj = 5500, bool $strong = false): string
@@ -421,17 +432,18 @@ class ProDeck
         $cnt = max(1, count($items));
         $cols = $cnt > 4 ? 2 : 1;
         $rows = (int)ceil($cnt / $cols);
-        $gap = 150000;
+        $gap = 170000;
         $areaH = self::H - 700000 - $y0;
-        $cw = $cols === 2 ? (int)((self::W - 2 * self::M - $gap) / 2) : 7200000;
-        $ch = min(820000, (int)(($areaH - ($rows - 1) * $gap) / $rows));
-        $x0 = $cols === 2 ? self::M : self::M;
+        $cw = $cols === 2 ? (int)((self::W - 2 * self::M - $gap) / 2) : 8600000;
+        $ch = min(980000, (int)(($areaH - ($rows - 1) * $gap) / $rows));
+        $y0 += (int)(max(0, $areaH - $rows * $ch - ($rows - 1) * $gap) * 0.4);     // ro'yxat bo'sh joyda muvozanatli turadi
+        $x0 = self::M;
         foreach ($items as $i => $it) {
             $c = (int)floor($i / $rows);
             $r = $i % $rows;
             $x = $x0 + $c * ($cw + $gap);
             $y = $y0 + $r * ($ch + $gap);
-            [$pt] = self::fit([[$it, false, 1.0, 0]], $cw - 1150000, $ch - 80000, 21, 13);
+            [$pt] = self::fit([[$it, false, 1.0, 0]], $cw - 1150000, $ch - 80000, 23, 13);
             $inner = self::card('Karta', $x, $y, $cw, $ch)
                 . self::tbox('Raqam', $x + 140000, $y, 860000, $ch, self::para(self::run(sprintf('%02d', $i + 1), 28, $T['acc'], true), 'l'), 'ctr')
                 . self::tbox('Matn', $x + 1020000, $y, $cw - 1150000, $ch, self::para(self::run($it, $pt, $T['txt']), 'l', 0, 100), 'ctr');
@@ -471,7 +483,7 @@ class ProDeck
         $pts = self::points($s, 6);
         $kind = I18n::t('tag_' . (($s['kind'] ?? 'matn') === 'tarif' ? 'tarif' : 'matn'), self::$lang);
         $out = '';
-        $pw = 4800000;
+        $pw = 4200000;
         if ($panel) {
             $left = $n % 2 === 0;
             $px = $left ? 0 : $W - $pw;
@@ -496,32 +508,59 @@ class ProDeck
         return $out . self::chrome($n, $total, $kind, $panel && $n % 2 === 0 ? $cx : self::M);
     }
 
-    /** TA'RIF: chapda katta ta'rif bloki, o'ngda asosiy belgilar. */
+    /**
+     * TA'RIF: tepada butun kenglikda katta ta'rif bloki (qo'shtirnoq + aksent chiziq), pastda asosiy belgilar
+     * gorizontal kartalarda (raqam + sarlavha + izoh). Ta'rif matni hajmiga qarab blok balandligi o'zgaradi.
+     */
     private static function definition(array $s, int $n, int $total): string
     {
         $T = self::$T;
         $W = self::W;
         $H = self::H;
-        $pts = self::points($s, 5);
+        $pts = self::points($s, 4);
         $lead = self::clip((string)($s['lead'] ?? ''), 330);
         if ($lead === '' && $pts) {
             $lead = $pts[0]['text'] !== '' ? $pts[0]['text'] : $pts[0]['head'];
             $pts = array_slice($pts, 1);
         }
         [$out, $y0] = self::head((string)($s['title'] ?? ''), '', self::M, $W - 2 * self::M);
-        $bw = $pts ? 6200000 : $W - 2 * self::M;
-        $bh = $H - 700000 - $y0;
-        [$pt] = self::fit([[$lead, false, 1.0, 0]], $bw - 1000000, $bh - 700000, 28, 15);
+        $bw = $W - 2 * self::M;
+        $bottom = $H - 680000;
+        $avail = $bottom - $y0;
+        $tx = self::M + 1150000;
+        $twd = $bw - 1150000 - 450000;
+        // ta'rif bloki uchun joy: belgilar bo'lsa ~45%, bo'lmasa hammasi
+        $maxBox = $pts ? (int)($avail * 0.47) : $avail;
+        [$pt] = self::fit([[$lead, false, 1.0, 0]], $twd, $maxBox - 360000, $pts ? 24 : 32, 15);
+        $bh = $pts ? min($maxBox, max(1150000, self::measure([[$lead, false, 1.0, 0]], $twd, $pt) + 400000)) : $avail;
         $inner = self::card('Ta\'rif foni', self::M, $y0, $bw, $bh, 4500, true)
             . self::sp('Aksent', 'roundRect', self::M, $y0, 90000, $bh, ['grad' => [$T['acc'], $T['acc2']], 'ang' => 90], null, 0, '', 't', [0, 0, 0, 0], 50000)
-            . self::tbox('Qo\'shtirnoq', self::M + 330000, $y0 + 120000, 900000, 900000, self::para(self::run('“', 80, $T['acc'], true), 'l'), 't')
-            . self::tbox('Ta\'rif', self::M + 500000, $y0 + 650000, $bw - 1000000, $bh - 900000, self::para(self::run($lead, $pt, $T['txt']), 'l', 0, 108), 't');
+            . self::tbox('Qo\'shtirnoq', self::M + 300000, $y0 + 60000, 900000, 900000, self::para(self::run('“', 88, $T['acc'], true), 'l'), 't')
+            . self::tbox('Ta\'rif', $tx, $y0, $twd, $bh, self::para(self::run($lead, $pt, $T['txt']), 'l', 0, 108), 'ctr');
         $out .= self::grp('Ta\'rif', self::M, $y0, $bw, $bh, $inner);
         if ($pts) {
-            $rx = self::M + $bw + 280000;
-            $rw = $W - self::M - $rx;
-            $out .= self::tbox('Belgilar sarlavhasi', $rx, $y0, $rw, 330000, self::para(self::run(I18n::t('key_features', self::$lang), 12, $T['acc'], true, false, 160), 'l'), 'ctr', true);
-            $out .= self::rows($pts, $rx, $y0 + 420000, $rw, min($bh - 420000, 1000000 * count($pts)));
+            $ly = $y0 + $bh + 230000;
+            $out .= self::tbox('Belgilar sarlavhasi', self::M, $ly, $bw, 300000, self::para(self::run(I18n::t('key_features', self::$lang), 12, $T['acc'], true, false, 160), 'l'), 'ctr', true);
+            $cy = $ly + 400000;
+            $cnt = count($pts);
+            $gap = 190000;
+            $cw = (int)(($bw - ($cnt - 1) * $gap) / $cnt);
+            $d = 440000;
+            $tw = $cw - 2 * 220000;
+            $chMax = $bottom - $cy;
+            $sz = self::commonSize($pts, $tw, $chMax - $d - 330000, 18, 11);
+            $need = 0;
+            foreach ($pts as $p) {
+                $need = max($need, self::measure(self::pointBlocks($p), $tw, $sz));
+            }
+            $ch = min($chMax, $need + $d + 480000);
+            foreach ($pts as $i => $p) {
+                $x = self::M + $i * ($cw + $gap);
+                $inner = self::card('Karta', $x, $cy, $cw, $ch, 7000)
+                    . self::badge('Raqam', $x + 220000, $cy + 200000, $d, (string)($i + 1), 16)
+                    . self::tbox('Matn', $x + 220000, $cy + 200000 + $d + 100000, $tw, $ch - $d - 330000, self::pointParas($p, $sz), 't');
+                $out .= self::grp('Belgi ' . ($i + 1), $x, $cy, $cw, $ch, $inner);
+            }
         }
         return $out . self::chrome($n, $total, I18n::t('tag_tarif', self::$lang));
     }
@@ -572,13 +611,22 @@ class ProDeck
         $ch = min(self::H - 660000 - $cy, 3000000);
         $tw = $cw - 2 * 170000;
         $sz = self::commonSize($pts, $tw, $ch - 200000, 20, 11);
+        $need = 0;
+        foreach ($pts as $p) {
+            $need = max($need, self::measure(self::pointBlocks($p), $tw, $sz));
+        }
+        $full = $ch;
+        $ch = min($ch, max((int)($ch * 0.5), $need + 420000));
+        $shift = (int)(($full - $ch) * 0.4);
+        $ny += $shift;
+        $cy += $shift;
         // ulovchi chiziq
         $out .= self::sp('Chiziq', 'rect', self::M + (int)($cw / 2), $ny + (int)($d / 2) - 15000, $areaW - $cw, 30000, [$T['acc'], 45], null, 0, '', 't', [0, 0, 0, 0], null, false, null, true);
         foreach ($pts as $i => $p) {
             $x = self::M + $i * ($cw + $gap);
             $inner = self::badge('Raqam', $x + (int)(($cw - $d) / 2), $ny, $d, (string)($i + 1), 22)
                 . self::card('Karta', $x, $cy, $cw, $ch, 7000)
-                . self::tbox('Matn', $x + 170000, $cy + 140000, $tw, $ch - 200000, self::pointParas($p, $sz, 'ctr'), 't');
+                . self::tbox('Matn', $x + 170000, $cy + 100000, $tw, $ch - 200000, self::pointParas($p, $sz, 'ctr'), 'ctr');
             $out .= self::grp('Bosqich ' . ($i + 1), $x, $ny, $cw, $cy + $ch - $ny, $inner);
         }
         return $out . self::chrome($n, $total, I18n::t('tag_bosqichlar', self::$lang));
@@ -819,8 +867,8 @@ class ProDeck
                 $bg = $absBg($n);
                 if ($kind === 'matn' && $img) {
                     $left = $n % 2 === 0;
-                    $pf = 4800000 / self::W;
-                    $panel = ProArt::photoPanel($img, $theme, 4800000, self::H, $left ? 'right' : 'left', $bg, $left ? 0.0 : 1 - $pf, $left ? $pf : 1.0);
+                    $pf = 4200000 / self::W;
+                    $panel = ProArt::photoPanel($img, $theme, 4200000, self::H, $left ? 'right' : 'left', $bg, $left ? 0.0 : 1 - $pf, $left ? $pf : 1.0);
                     if ($panel) {
                         $tmp[] = $panel;
                     }

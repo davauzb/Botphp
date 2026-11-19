@@ -94,7 +94,7 @@ class ProArt
         if ($mode === 'left') {
             for ($x = 0; $x < $w; $x++) {
                 $t = $x / $w;                                  // 0 chap .. 1 o'ng
-                $op = $t < 0.45 ? 0.93 - ($t / 0.45) * 0.22 : max(0.0, 0.71 * (1 - ($t - 0.45) / 0.55) ** 1.25);
+                $op = $t < 0.5 ? 0.95 - ($t / 0.5) * 0.17 : max(0.0, 0.78 * (1 - ($t - 0.5) / 0.5) ** 1.15);       // matn tomoni deyarli to'liq qoraytiriladi
                 $col = imagecolorallocatealpha($im, $r, $g, $b, self::a($op));
                 imageline($im, $x, 0, $x, $h, $col);
             }
