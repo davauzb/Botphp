@@ -35,8 +35,9 @@ class AdminService
 
     // ------------------------------------------------------------------ statistika
 
-    public static function stats(): array
+    public static function stats(int $days = 14): array
     {
+        $days = in_array($days, [7, 14, 30], true) ? $days : 14;
         $today = self::dayStart();
         $week = $today - 6 * 86400;
         $pdo = db();
@@ -75,24 +76,74 @@ class AdminService
             'pending_manual' => self::one("SELECT COUNT(*) FROM topups WHERE status = 'pending' AND method = 'manual' AND receipt_file_id IS NOT NULL"),
         ];
 
-        // Oxirgi 14 kun (Toshkent vaqti bilan), bo'sh kunlar 0 bilan to'ldiriladi
-        $from = $today - 13 * 86400;
+        // Oxirgi $days kun (Toshkent vaqti bilan), bo'sh kunlar 0 bilan to'ldiriladi
+        $from = $today - ($days - 1) * 86400;
         $ord = self::seriesMap("SELECT date(created_at + :o, 'unixepoch') d, COUNT(*) v FROM jobs WHERE created_at >= :f GROUP BY d", $from);
         $rev = self::seriesMap("SELECT date(updated_at + :o, 'unixepoch') d, SUM(amount) v FROM topups WHERE status = 'approved' AND updated_at >= :f GROUP BY d", $from);
         $usr = self::seriesMap("SELECT date(created_at + :o, 'unixepoch') d, COUNT(*) v FROM users WHERE created_at >= :f GROUP BY d", $from);
         $series = [];
-        for ($i = 0; $i < 14; $i++) {
+        $sal = self::seriesMap("SELECT date(updated_at + :o, 'unixepoch') d, SUM(price) v FROM jobs WHERE status = 'done' AND is_free = 0 AND updated_at >= :f GROUP BY d", $from);
+        for ($i = 0; $i < $days; $i++) {
             $ts = $from + $i * 86400;
             $d = gmdate('Y-m-d', $ts + ADMIN_TZ_OFFSET);
-            $series[] = ['d' => $d, 'orders' => $ord[$d] ?? 0, 'revenue' => $rev[$d] ?? 0, 'users' => $usr[$d] ?? 0];
+            $series[] = ['d' => $d, 'orders' => $ord[$d] ?? 0, 'revenue' => $rev[$d] ?? 0, 'users' => $usr[$d] ?? 0, 'sales' => $sal[$d] ?? 0];
         }
+        // Oldingi teng davr bilan solishtirish (o'sish foizi uchun)
+        $prevFrom = $from - $days * 86400;
+        $cmp = [
+            'orders' => [self::one('SELECT COUNT(*) FROM jobs WHERE created_at >= ? AND created_at < ?', [$from, time() + 1]),
+                self::one('SELECT COUNT(*) FROM jobs WHERE created_at >= ? AND created_at < ?', [$prevFrom, $from])],
+            'revenue' => [self::one("SELECT COALESCE(SUM(amount),0) FROM topups WHERE status = 'approved' AND updated_at >= ?", [$from]),
+                self::one("SELECT COALESCE(SUM(amount),0) FROM topups WHERE status = 'approved' AND updated_at >= ? AND updated_at < ?", [$prevFrom, $from])],
+            'users' => [self::one('SELECT COUNT(*) FROM users WHERE created_at >= ?', [$from]),
+                self::one('SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?', [$prevFrom, $from])],
+        ];
 
         $types = [];
         foreach ($pdo->query("SELECT type, COUNT(*) c FROM jobs WHERE status = 'done' GROUP BY type")->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $types[$r['type']] = (int)$r['c'];
         }
 
-        return ['users' => $users, 'jobs' => $jobs, 'money' => $money, 'series' => $series, 'types' => $types, 'server_time' => time()];
+        $designs = [];
+        foreach ($pdo->query("SELECT design_key k, COUNT(*) c FROM jobs WHERE type = 'slayd' AND design_key IS NOT NULL AND design_key <> '' GROUP BY design_key ORDER BY c DESC LIMIT 6")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $label = (string)(pptxDesigns()[$r['k']]['label'] ?? $r['k']);
+            $designs[] = ['key' => (string)$r['k'], 'label' => preg_replace('/^\d+\.\s*/u', '', $label), 'c' => (int)$r['c']];
+        }
+
+        return ['users' => $users, 'jobs' => $jobs, 'money' => $money, 'series' => $series, 'types' => $types, 'designs' => $designs,
+            'cmp' => $cmp, 'days' => $days, 'health' => self::health(), 'server_time' => time()];
+    }
+
+    /** Tizim holati: AI marshrutlari, navbat, disk, PDF. Har biri xato bersa ham panel ochilaveradi. */
+    private static function health(): array
+    {
+        $h = ['ai' => null, 'queue' => null, 'disk' => null, 'pdf' => null];
+        try {
+            require_once __DIR__ . '/AIClient.php';
+            $s = AIClient::status();
+            $h['ai'] = ['total' => $s['total'], 'ready' => $s['ready'], 'cooling' => $s['cooling'], 'dead' => $s['dead'],
+                'routes' => array_map(fn($r) => ['p' => $r['provider'], 'm' => (string)$r['model'], 'k' => $r['key'], 'st' => $r['state'], 'wait' => $r['wait'], 'ok' => $r['ok'], 'err' => $r['err']], array_slice($s['routes'], 0, 12))];
+        } catch (Throwable $e) {
+        }
+        try {
+            $h['queue'] = [
+                'pending' => self::one("SELECT COUNT(*) FROM jobs WHERE status = 'pending'"),
+                'processing' => self::one("SELECT COUNT(*) FROM jobs WHERE status = 'processing'"),
+                'oldest' => self::one("SELECT COALESCE(MIN(created_at),0) FROM jobs WHERE status IN ('pending','processing')"),
+            ];
+        } catch (Throwable $e) {
+        }
+        $free = @disk_free_space(dirname(DB_PATH));
+        $tot = @disk_total_space(dirname(DB_PATH));
+        if ($free !== false && $tot) {
+            $h['disk'] = ['free' => (int)$free, 'total' => (int)$tot, 'db' => (int)@filesize(DB_PATH)];
+        }
+        try {
+            require_once __DIR__ . '/SlidePdf.php';
+            $h['pdf'] = (string)SlidePdf::engine();
+        } catch (Throwable $e) {
+        }
+        return $h;
     }
 
     private static function seriesMap(string $sql, int $from): array

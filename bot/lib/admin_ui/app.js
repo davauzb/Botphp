@@ -41,10 +41,23 @@ const ICONS = {
   tag: 'M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01',
   bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
   alert: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
+  chart: 'M3 3v18h18M7 15l4-4 3 3 6-6',
+  cpu: 'M9 3v2M15 3v2M9 19v2M15 19v2M3 9h2M3 15h2M19 9h2M19 15h2M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM9 9h6v6H9z',
+  disk: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
+  doc: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h6',
+  slides: 'M3 4h18v12H3zM12 16v4M8 20h8M7 8h6M7 11h10',
+  file: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5',
+  chev: 'M9 6l6 6-6 6',
+  zap: 'M13 2L4 14h7l-1 8 9-12h-7z',
+  star: 'M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+  user: 'M20 21v-1a5 5 0 0 0-5-5H9a5 5 0 0 0-5 5v1M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
 };
 function icon(name) { const s = sv('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }); s.append(sv('path', { d: ICONS[name] || '' })); return s; }
 const fmt = n => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const money = n => fmt(n) + " so'm";
+const moneyS = n => { n = Number(n) || 0; return Math.abs(n) >= 1e6 ? (Math.round(n / 1e5) / 10).toString().replace('.', ',') + " mln so'm" : money(n); };
 const p2 = n => String(n).padStart(2, '0');
 function dt(ts) { if (!ts) return '—'; const d = new Date((ts + 18000) * 1000); return p2(d.getUTCDate()) + '.' + p2(d.getUTCMonth() + 1) + ' ' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()); }
 function ago(ts) { if (!ts) return '—'; const s = Math.max(0, Math.floor(Date.now() / 1000) - ts); if (s < 60) return 'hozir'; if (s < 3600) return Math.floor(s / 60) + ' daq oldin'; if (s < 86400) return Math.floor(s / 3600) + ' soat oldin'; return Math.floor(s / 86400) + ' kun oldin'; }
@@ -59,6 +72,15 @@ const L = {
   audit: { auth_ok: ['Kirish', 'ok'], auth_fail: ['Kirish urinishi (rad etildi)', 'bad'], pin_fail: ['PIN xato', 'bad'], balance_adjust: ["Balans o'zgartirildi", 'warn'], topup_approve: ["To'lov tasdiqlandi", 'ok'], topup_reject: ["To'lov rad etildi", 'bad'], job_cancel: ['Buyurtma bekor', 'warn'], ban: ['Bloklandi', 'bad'], unban: ['Blokdan chiqarildi', 'ok'], send_msg: ['Xabar yuborildi', ''], view_receipt: ["Chek ko'rildi", ''], link_issued: ['Havola berildi', ''], logout: ['Chiqish', ''], promo_create: ['Promokod yaratildi', 'ok'], promo_on: ['Promokod yoqildi', 'ok'], promo_off: ["Promokod o'chirildi", 'warn'], promo_delete: ["Promokod o'chirib tashlandi", 'bad'], bad_link: ["Noto'g'ri havola", 'bad'], bad_origin: ['Begona manba', 'bad'], session_ua_mismatch: ['Sessiya brauzeri o\'zgargan', 'bad'] },
 };
 const badge = (t, c) => h('span', { class: 'badge ' + (c || '') }, t);
+const haptic = (k) => { try { TG && TG.HapticFeedback && (k === 'ok' || k === 'bad' ? TG.HapticFeedback.notificationOccurred(k === 'ok' ? 'success' : 'error') : TG.HapticFeedback.impactOccurred(k || 'light')); } catch (e) {} };
+const AV_COLORS = ['#4f6bff', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'];
+function avStyle(seed) { let x = 0; String(seed).split('').forEach(c => { x = (x * 31 + c.charCodeAt(0)) >>> 0; }); const c = AV_COLORS[x % AV_COLORS.length]; return { color: c, background: c + '1f' }; }
+const TYPE_IC = { mustaqil_ish: 'doc', referat: 'file', slayd: 'slides' };
+function emptyBox(text, ic) { return h('div', { class: 'empty' }, h('div', { class: 'big' }, icon(ic || 'box')), text); }
+function skeleton(n, hgt) { return h('div', { class: 'list' }, Array.from({ length: n || 4 }, () => h('div', { class: 'sk', style: { height: (hgt || 66) + 'px' } }))); }
+function pct(a, b) { if (!b) return a ? null : 0; return Math.round((a - b) / b * 100); }
+function deltaEl(a, b) { const p = pct(a, b); if (p === null) return h('span', { class: 'delta' }, 'yangi'); return h('span', { class: 'delta' + (p > 0 ? '' : p < 0 ? ' down' : ' flat') }, (p > 0 ? '▲ ' : p < 0 ? '▼ ' : '') + Math.abs(p) + '%'); }
+function bytes(n) { const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; n = Number(n) || 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i ? n.toFixed(1) : n) + ' ' + u[i]; }
 
 /* ------------------------------------------------------------------ tema */
 function applyTheme() {
@@ -106,7 +128,7 @@ const root = document.getElementById('app');
 function show(...nodes) { root.replaceChildren(...nodes); }
 function loader() { return h('div', { class: 'spin' }); }
 function fatal(title, text, ic) { show(h('div', { class: 'full' }, h('div', { class: 'big' }, icon(ic || 'lock')), h('h2', {}, title), h('p', {}, text))); }
-function toast(msg, tone) { const t = h('div', { class: 'toast ' + (tone || '') }, msg); document.body.append(t); setTimeout(() => t.remove(), 2600); }
+function toast(msg, tone) { document.querySelectorAll('.toast').forEach(x => x.remove()); const t = h('div', { class: 'toast ' + (tone || ''), role: 'status' }, msg); document.body.append(t); if (tone) haptic(tone); setTimeout(() => t.remove(), 2600); }
 const sheets = [];
 function syncBack() { if (!TG || !TG.BackButton) return; sheets.length ? TG.BackButton.show() : TG.BackButton.hide(); }
 if (TG && TG.BackButton) TG.BackButton.onClick(() => { const s = sheets[sheets.length - 1]; if (s) s.close(); });
@@ -140,19 +162,19 @@ function askPin(msg) {
 }
 
 /* ------------------------------------------------------------------ ro'yxat (sahifalab) */
-function paged(container, fetcher, renderItem, emptyText) {
+function paged(container, fetcher, renderItem, emptyText, emptyIcon) {
   let offset = 0, busy = false;
   const list = h('div', { class: 'list' }); const foot = h('div', {});
   container.replaceChildren(list, foot);
   async function more() {
     if (busy) return; busy = true;
-    foot.replaceChildren(loader());
+    foot.replaceChildren(offset === 0 ? skeleton(5) : loader());
     const r = await fetcher(offset);
     busy = false;
-    if (!r.ok) { foot.replaceChildren(h('div', { class: 'empty' }, r.msg || 'Xatolik')); return; }
+    if (!r.ok) { foot.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
     r.items.forEach(it => list.append(renderItem(it)));
     offset += r.items.length;
-    if (!list.children.length) foot.replaceChildren(h('div', { class: 'empty' }, emptyText || "Ma'lumot yo'q"));
+    if (!list.children.length) foot.replaceChildren(emptyBox(emptyText || "Ma'lumot yo'q", emptyIcon));
     else foot.replaceChildren(r.more ? h('button', { class: 'more', onclick: more }, 'Yana yuklash') : '');
   }
   more();
@@ -160,51 +182,125 @@ function paged(container, fetcher, renderItem, emptyText) {
 }
 
 /* ------------------------------------------------------------------ bosh sahifa */
-function chart(title, series, key, isMoney) {
-  const W = 320, H = 108, n = series.length, bw = (W - 8) / n, max = Math.max(1, ...series.map(s => s[key]));
-  const total = series.reduce((a, s) => a + s[key], 0);
-  const sub = h('span', {}, '14 kun: ' + (isMoney ? money(total) : total));
-  const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + (H + 16) });
-  series.forEach((s, i) => {
-    const bh = Math.max(s[key] > 0 ? 3 : 1, (s[key] / max) * (H - 14)), x = 4 + i * bw;
-    const r = sv('rect', { x: x + 1.5, y: H - bh, width: bw - 3, height: bh, rx: 3, class: 'bar' });
-    r.addEventListener('click', () => { svg.querySelectorAll('.bar').forEach(b => b.classList.remove('sel')); r.classList.add('sel'); sub.textContent = s.d.slice(8) + '.' + s.d.slice(5, 7) + ': ' + (isMoney ? money(s[key]) : s[key]); });
-    svg.append(r);
-    if (i % 2 === 0) { const t = sv('text', { x: x + bw / 2, y: H + 12, 'text-anchor': 'middle', class: 'axis' }); t.textContent = s.d.slice(8); svg.append(t); }
-  });
-  return h('div', { class: 'card chart' }, h('div', { class: 'ct' }, h('b', {}, title), sub), svg);
+function dLabel(d) { return d.slice(8) + '.' + d.slice(5, 7); }
+/** Silliq chiziqli (area) grafik: tegish/sichqoncha bilan kun qiymati ko'rinadi. */
+function areaChart(title, series, key, isMoney, cmpPair) {
+  const wide = window.matchMedia && matchMedia('(min-width:860px)').matches, cw = (mainBox && mainBox.clientWidth) || 380;
+  const W = Math.round(Math.max(300, wide ? Math.min(1180, cw - 52) / 2 - 36 : cw - 58)), H = wide ? 170 : 128, PT = 8, PB = 18, n = series.length, vals = series.map(s => Number(s[key]) || 0);
+  const max = Math.max(1, ...vals), total = vals.reduce((a, v) => a + v, 0);
+  const X = i => n > 1 ? 6 + i * (W - 12) / (n - 1) : W / 2, Y = v => PT + (H - PT - PB) * (1 - v / max);
+  const pts = vals.map((v, i) => [X(i), Y(v)]);
+  let d = 'M' + pts[0][0] + ',' + pts[0][1];
+  for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], cx = (x0 + x1) / 2; d += ' C' + cx + ',' + y0 + ' ' + cx + ',' + y1 + ' ' + x1 + ',' + y1; }
+  const gid = 'g' + Math.random().toString(36).slice(2, 8);
+  const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': title });
+  const defs = sv('defs'); const lg = sv('linearGradient', { id: gid, x1: '0', y1: '0', x2: '0', y2: '1' });
+  lg.append(sv('stop', { offset: '0%', 'stop-color': 'var(--acc)', 'stop-opacity': '.32' }), sv('stop', { offset: '100%', 'stop-color': 'var(--acc)', 'stop-opacity': '0' }));
+  defs.append(lg); svg.append(defs);
+  [0.25, 0.5, 0.75].forEach(f => svg.append(sv('line', { x1: 0, x2: W, y1: PT + (H - PT - PB) * f, y2: PT + (H - PT - PB) * f, class: 'gridl' })));
+  svg.append(sv('path', { d: d + ' L' + pts[n - 1][0] + ',' + (H - PB) + ' L' + pts[0][0] + ',' + (H - PB) + 'Z', fill: 'url(#' + gid + ')' }));
+  svg.append(sv('path', { d, class: 'cline' }));
+  const step = Math.max(1, Math.ceil(n / 7));
+  series.forEach((s, i) => { if ((i % step === 0 && (n - 1 - i >= step * 0.75 || i === 0)) || i === n - 1) { const t = sv('text', { x: X(i), y: H - 4, 'text-anchor': i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle'), class: 'axis' }); t.textContent = dLabel(s.d); svg.append(t); } });
+  const guide = sv('line', { y1: PT, y2: H - PB, class: 'cguide', visibility: 'hidden' });
+  const dot = sv('circle', { r: 4, class: 'cdot', visibility: 'hidden' });
+  svg.append(guide, dot);
+  const tip = h('div', { class: 'tip' }, ' ');
+  const fmtV = v => isMoney ? money(v) : fmt(v);
+  const pick = ev => {
+    const r = svg.getBoundingClientRect(); const cx = ((ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left) / r.width * W;
+    let i = Math.round((cx - 6) / ((W - 12) / Math.max(1, n - 1))); i = Math.max(0, Math.min(n - 1, i));
+    guide.setAttribute('x1', X(i)); guide.setAttribute('x2', X(i)); guide.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', X(i)); dot.setAttribute('cy', Y(vals[i])); dot.setAttribute('visibility', 'visible');
+    tip.textContent = dLabel(series[i].d) + ' — ' + fmtV(vals[i]);
+  };
+  ['mousemove', 'touchstart', 'touchmove', 'click'].forEach(e => svg.addEventListener(e, pick, { passive: true }));
+  svg.addEventListener('mouseleave', () => { guide.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); tip.textContent = ' '; });
+  return h('div', { class: 'card chart' },
+    h('div', { class: 'ct' }, h('div', {}, h('b', {}, title), h('div', { class: 'tv' }, fmtV(total), cmpPair ? ' ' : '', cmpPair ? deltaEl(cmpPair[0], cmpPair[1]) : '')), tip), svg);
+}
+function sparkline(vals) {
+  const W = 120, H = 44, n = vals.length, max = Math.max(1, ...vals);
+  const p = vals.map((v, i) => (n > 1 ? i * W / (n - 1) : 0).toFixed(1) + ',' + (H - 3 - (H - 6) * v / max).toFixed(1)).join(' ');
+  const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'spark', preserveAspectRatio: 'none', 'aria-hidden': 'true' });
+  svg.append(sv('polyline', { points: p, fill: 'none', stroke: 'rgba(255,255,255,.9)', 'stroke-width': '2', 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  return svg;
+}
+function distCard(rows) {
+  const tot = rows.reduce((a, r) => a + r[1], 0) || 1;
+  if (!rows.length) return h('div', { class: 'card' }, emptyBox('Hali ma\'lumot yo\'q', 'chart'));
+  return h('div', { class: 'card dist' }, rows.map(([l, v]) => {
+    const i = h('i', { style: { width: '0%' } }); requestAnimationFrame(() => requestAnimationFrame(() => { i.style.width = Math.max(2, v / tot * 100) + '%'; }));
+    return h('div', { class: 'it' }, h('div', { class: 'tl' }, h('b', {}, l), h('span', {}, fmt(v) + ' · ' + Math.round(v / tot * 100) + '%')), h('div', { class: 'bar' }, i));
+  }));
+}
+function healthCard(hh) {
+  const rows = [];
+  const hr = (ic, title, sub, st, extra) => h('div', {}, h('div', { class: 'hrow' }, h('div', { class: 'ic' }, icon(ic)), h('div', { class: 'grow' }, h('div', { class: 't1' }, title), h('div', { class: 't2' }, sub)), st ? h('span', { class: 'st ' + st }) : ''), extra || '');
+  if (hh.ai) {
+    const a = hh.ai, st = a.total === 0 ? 'bad' : (a.ready > 0 ? (a.dead || a.cooling ? 'warn' : 'ok') : (a.cooling ? 'warn' : 'bad'));
+    const routes = a.routes.length ? h('div', { class: 'routes' }, a.routes.map(r => h('span', { class: 'route', title: r.m }, h('span', { class: 'st ' + (r.st === 'ready' ? 'ok' : r.st === 'cooling' ? 'warn' : 'bad') }), r.p + ' ' + r.k + (r.wait ? ' · ' + Math.ceil(r.wait / 60) + ' daq' : '')))) : '';
+    rows.push(hr('cpu', 'AI kalitlar', a.total === 0 ? 'Kalit sozlanmagan — config.php → AI_PROVIDERS' : 'Tayyor ' + a.ready + ' · limitda ' + a.cooling + ' · yaroqsiz ' + a.dead + ' (jami ' + a.total + ')', st, routes));
+  }
+  if (hh.queue) {
+    const q = hh.queue, wait = q.oldest ? Math.floor(Date.now() / 1000) - q.oldest : 0;
+    rows.push(hr('layers', 'Navbat', 'Kutmoqda ' + q.pending + ' · ishlanmoqda ' + q.processing + (q.oldest ? ' · eng eskisi ' + ago(q.oldest) : ''), wait > 1800 ? 'bad' : (wait > 600 ? 'warn' : 'ok')));
+  }
+  if (hh.disk) {
+    const d = hh.disk, used = 1 - d.free / d.total, i = h('i', { style: { width: Math.round(used * 100) + '%' } });
+    rows.push(hr('disk', 'Disk', 'Bo\'sh ' + bytes(d.free) + ' / ' + bytes(d.total) + ' · baza ' + bytes(d.db), d.free < 300 * 1048576 ? 'bad' : (d.free < 2 * 1073741824 ? 'warn' : 'ok'), h('div', { class: 'bar', style: { margin: '0 0 10px 46px' } }, i)));
+  }
+  if (hh.pdf != null) rows.push(hr('file', 'PDF eksport', hh.pdf === 'soffice' ? 'LibreOffice (eng sifatli)' : hh.pdf === 'gd' ? 'GD (zaxira rejim)' : 'Mavjud emas', hh.pdf === 'soffice' ? 'ok' : hh.pdf === 'gd' ? 'warn' : 'bad'));
+  return h('div', { class: 'card health' }, rows);
 }
 async function viewHome(box) {
-  box.replaceChildren(loader());
-  const r = await api('stats');
-  if (!r.ok) { box.replaceChildren(h('div', { class: 'empty' }, r.msg || 'Xatolik')); return; }
+  const days = S.days || 14;
+  box.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'sk', style: { height: '170px', borderRadius: '20px' } }), h('div', { style: { height: '12px' } }), h('div', { class: 'grid' }, Array.from({ length: 4 }, () => h('div', { class: 'sk', style: { height: '112px' } })))));
+  const r = await api('stats', { days });
+  if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
   setPending(r.money.pending_manual);
-  const kpi = (l, v, s, on, alert) => h(on ? 'button' : 'div', { class: 'card kpi' + (alert ? ' alert' : ''), onclick: on }, h('div', { class: 'l' }, l), h('div', { class: 'v' }, v), h('div', { class: 's' }, s));
-  box.replaceChildren(
+  const kpi = (ic, tone, l, v, sub, on, alert) => h(on ? 'button' : 'div', { class: 'card kpi ' + (tone || '') + (alert ? ' alert' : ''), onclick: on ? () => { haptic(); on(); } : null },
+    h('div', { class: 'ic' }, icon(ic)), on ? h('span', { class: 'go' }, icon('chev')) : '', h('div', { class: 'l' }, l), h('div', { class: 'v' }, v), h('div', { class: 's' }, sub));
+  const seg = h('div', { class: 'seg sm' }, [7, 14, 30].map(d => h('button', { class: d === days ? 'on' : '', onclick: () => { S.days = d; haptic(); viewHome(box); } }, d + ' kun')));
+  const cmp = r.cmp || {};
+  const tdist = Object.keys(L.type).map(k => [L.type[k], r.types[k] || 0]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+  const ddist = (r.designs || []).map(x => [x.label, x.c]);
+  box.replaceChildren(h('div', { class: 'wrap' },
+    h('div', { class: 'hero' },
+      sparkline(r.series.map(x => x.revenue)),
+      h('div', { class: 'l' }, 'Bugungi kirim'),
+      h('div', { class: 'v' }, money(r.money.topup_today)),
+      h('div', {}, cmp.revenue ? deltaEl(cmp.revenue[0], cmp.revenue[1]) : '', h('span', { style: { fontSize: '12px', opacity: '.85', marginLeft: '6px' } }, days + ' kun: ' + money(cmp.revenue ? cmp.revenue[0] : 0))),
+      h('div', { class: 'row3' },
+        h('div', { class: 'mini' }, h('b', {}, fmt(r.jobs.today)), h('span', {}, 'buyurtma bugun')),
+        h('div', { class: 'mini' }, h('b', {}, '+' + fmt(r.users.today)), h('span', {}, 'yangi mijoz')),
+        h('div', { class: 'mini' }, h('b', {}, money(r.money.sales_today).replace(" so'm", '')), h('span', {}, "sotuv (so'm)")))),
+    h('div', { class: 'sec' }, 'Ko\'rsatkichlar', seg),
     h('div', { class: 'grid' },
-      kpi('Foydalanuvchilar', fmt(r.users.total), '+' + r.users.today + ' bugun · +' + r.users.week + ' hafta', () => go('users')),
-      kpi('Buyurtmalar bugun', fmt(r.jobs.today), 'Jami ' + fmt(r.jobs.total) + ' · jarayonda ' + r.jobs.active, () => go('jobs')),
-      kpi('Kirim bugun', money(r.money.topup_today), '7 kun: ' + money(r.money.topup_week)),
-      kpi('Jami kirim', money(r.money.topup_total), 'Sotuv: ' + money(r.money.sales_total)),
-      kpi('Kutilayotgan to\'lovlar', fmt(r.money.pending_manual), 'Chek tekshiruvi', () => go('topups'), r.money.pending_manual > 0),
-      kpi('Xatolar (24 soat)', fmt(r.jobs.failed_24h), 'Jami xato: ' + r.jobs.failed, () => { S.jobFilter = 'failed'; go('jobs'); }, r.jobs.failed_24h > 0),
-      kpi('Balanslar yig\'indisi', money(r.users.balance_sum), 'Mijozlar hamyonida'),
-      kpi('O\'rtacha baho', r.jobs.rating == null ? '—' : r.jobs.rating + ' ★', 'Bajarilgan: ' + fmt(r.jobs.done))),
-    h('div', { class: 'sec' }, 'Oxirgi 14 kun'),
-    chart('Buyurtmalar', r.series, 'orders', false),
-    h('div', { style: { height: '10px' } }),
-    chart('Kirim (so\'m)', r.series, 'revenue', true),
-    h('div', { style: { height: '10px' } }),
-    chart('Yangi foydalanuvchilar', r.series, 'users', false),
-    h('button', { class: 'btn ghost', style: { width: '100%', marginTop: '14px' }, onclick: () => go('audit') }, '📜 Xavfsizlik jurnali'),
-    h('div', { class: 'sec' }, 'Bajarilgan buyurtmalar turi'),
-    h('div', { class: 'card' }, Object.keys(L.type).map(k => h('div', { class: 'row' }, h('div', { class: 'grow t1' }, L.type[k]), h('div', { class: 'amt' }, fmt(r.types[k] || 0))))));
+      kpi('users', '', 'Foydalanuvchilar', fmt(r.users.total), '+' + r.users.week + ' shu hafta', () => go('users')),
+      kpi('box', 'vio', 'Buyurtmalar', fmt(r.jobs.total), 'Jarayonda ' + r.jobs.active + ' · bajarilgan ' + fmt(r.jobs.done), () => go('jobs')),
+      kpi('wallet', 'ok', 'Jami kirim', moneyS(r.money.topup_total), 'Sotuv: ' + moneyS(r.money.sales_total)),
+      kpi('zap', '', 'Hamyonlarda', moneyS(r.users.balance_sum), 'Mijozlar balansi yig\'indisi'),
+      kpi('clock', '', 'Kutilayotgan to\'lov', fmt(r.money.pending_manual), 'Chek tekshiruvi', () => go('topups'), r.money.pending_manual > 0),
+      kpi('alert', 'bad', 'Xatolar (24 soat)', fmt(r.jobs.failed_24h), 'Jami xato: ' + r.jobs.failed, () => { S.jobFilter = 'failed'; go('jobs'); }, r.jobs.failed_24h > 0),
+      kpi('star', '', 'O\'rtacha baho', r.jobs.rating == null ? '—' : r.jobs.rating + ' ★', 'Bajarilgan: ' + fmt(r.jobs.done)),
+      kpi('shield', '', 'Bloklangan', fmt(r.users.banned || 0), 'Xavfsizlik jurnali', () => go('audit'))),
+    h('div', { class: 'sec' }, 'Dinamika · ' + days + ' kun'),
+    h('div', { class: 'cols' },
+      areaChart('Kirim', r.series, 'revenue', true, cmp.revenue),
+      areaChart('Buyurtmalar', r.series, 'orders', false, cmp.orders),
+      areaChart('Sotuv (bajarilgan)', r.series, 'sales', true),
+      areaChart('Yangi foydalanuvchilar', r.series, 'users', false, cmp.users)),
+    h('div', { class: 'cols' },
+      h('div', {}, h('div', { class: 'sec' }, 'Tizim holati'), r.health ? healthCard(r.health) : emptyBox('—')),
+      h('div', {}, h('div', { class: 'sec' }, 'Bajarilgan buyurtmalar turi'), distCard(tdist),
+        ddist.length ? h('div', { class: 'sec' }, 'Mashhur dizaynlar') : '', ddist.length ? distCard(ddist) : ''))));
 }
 
 /* ------------------------------------------------------------------ foydalanuvchilar */
 function userRow(u) {
   return h('button', { class: 'card row', onclick: () => openUser(u.telegram_id) },
-    h('div', { class: 'av' }, initial(u)),
+    h('div', { class: 'av', style: avStyle(u.telegram_id) }, initial(u)),
     h('div', { class: 'grow' }, h('div', { class: 't1' }, nm(u), ' ', u.banned ? badge('BLOK', 'bad') : ''), h('div', { class: 't2' }, (u.username ? '@' + u.username + ' · ' : '') + 'ID ' + u.telegram_id + ' · ' + u.jobs + ' buyurtma')),
     h('div', { class: 'right' }, h('div', { class: 'amt' }, money(u.balance)), h('div', { class: 't2' }, ago(u.last_request_at))));
 }
@@ -213,9 +309,9 @@ function viewUsers(box) {
   const inp = h('input', { class: 'inp', type: 'search', placeholder: 'ID, @username yoki ism bo\'yicha qidirish', autocomplete: 'off', maxlength: '60' });
   const res = h('div', {});
   let pg = null;
-  const run = () => { pg = paged(res, off => api('users', { q, offset: off }), userRow, 'Hech narsa topilmadi'); };
+  const run = () => { pg = paged(res, off => api('users', { q, offset: off }), userRow, 'Hech narsa topilmadi', 'users'); S.reload = () => pg.reload(); };
   inp.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { q = inp.value.trim(); run(); }, 350); });
-  box.replaceChildren(h('div', { class: 'search' }, inp), res);
+  box.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'search' }, icon('search'), inp), res));
   run();
 }
 async function openUser(id) {
@@ -225,7 +321,7 @@ async function openUser(id) {
   const u = r.user, kv = (a, b) => h('div', { class: 'kv' }, h('span', {}, a), h('span', {}, b));
   const refresh = () => { s.close(); openUser(id); if (S.tab === 'users' && S.reload) S.reload(); };
   s.bd.replaceChildren(
-    h('div', { class: 'card row', style: { marginBottom: '10px' } }, h('div', { class: 'av' }, initial(u)), h('div', { class: 'grow' }, h('div', { class: 't1' }, nm(u), ' ', u.banned ? badge('BLOK', 'bad') : ''), h('div', { class: 't2' }, (u.username ? '@' + u.username + ' · ' : '') + 'ID ' + u.telegram_id))),
+    h('div', { class: 'card row', style: { marginBottom: '10px' } }, h('div', { class: 'av', style: avStyle(u.telegram_id) }, initial(u)), h('div', { class: 'grow' }, h('div', { class: 't1' }, nm(u), ' ', u.banned ? badge('BLOK', 'bad') : ''), h('div', { class: 't2' }, (u.username ? '@' + u.username + ' · ' : '') + 'ID ' + u.telegram_id))),
     h('div', { class: 'card', style: { padding: '4px 14px' } },
       kv('Balans', money(u.balance)), kv('Jami to\'ldirgan', money(u.topped_up)), kv('Sarflagan', money(u.spent)),
       kv('Buyurtmalar', fmt(u.jobs_total)), kv('Bepul urinish', u.free_used ? 'Ishlatilgan' : 'Bor'),
@@ -295,7 +391,7 @@ function topupCard(t, reload) {
   };
   return h('div', { class: 'card', style: { padding: '12px 13px' } },
     h('div', { class: 'row', style: { padding: 0 } },
-      h('button', { class: 'av', onclick: () => openUser(t.telegram_id) }, initial(t)),
+      h('button', { class: 'av', style: avStyle(t.telegram_id), onclick: () => openUser(t.telegram_id) }, initial(t)),
       h('div', { class: 'grow' }, h('div', { class: 't1' }, t.full_name || (t.username ? '@' + t.username : 'ID ' + t.telegram_id)), h('div', { class: 't2' }, '#' + t.id + ' · ' + (L.method[t.method] || t.method) + ' · ' + dt(t.created_at))),
       h('div', { class: 'right' }, h('div', { class: 'amt' }, money(t.amount)), badge(st[0], st[1]))),
     canAct ? h('div', { class: 'btns', style: { marginTop: '11px' } },
@@ -307,16 +403,16 @@ function viewTopups(box) {
   let filter = S.topupFilter || 'pending';
   const res = h('div', {}); let pg = null;
   const seg = h('div', { class: 'seg' });
-  const run = () => { pg = paged(res, off => api('topups', { filter, offset: off }), t => topupCard(t, () => pg.reload()), filter === 'pending' ? 'Kutilayotgan to\'lov yo\'q 🎉' : 'To\'lovlar yo\'q'); S.reload = () => pg.reload(); };
+  const run = () => { pg = paged(res, off => api('topups', { filter, offset: off }), t => topupCard(t, () => pg.reload()), filter === 'pending' ? 'Kutilayotgan to\'lov yo\'q 🎉' : 'To\'lovlar yo\'q', 'wallet'); S.reload = () => pg.reload(); };
   const draw = () => seg.replaceChildren(...[['pending', 'Kutilayotgan'], ['all', 'Hammasi']].map(([k, l]) => h('button', { class: filter === k ? 'on' : '', onclick: () => { filter = k; S.topupFilter = k; draw(); run(); } }, l)));
-  draw(); box.replaceChildren(seg, res); run();
+  draw(); box.replaceChildren(h('div', { class: 'wrap' }, seg, res)); run();
 }
 
 /* ------------------------------------------------------------------ buyurtmalar */
 function jobRow(j, compact) {
   const st = L.job[j.status] || [j.status, ''];
   return h('button', { class: 'card row', onclick: () => openJob(j.id) },
-    h('div', { class: 'av' }, '#'),
+    h('div', { class: 'av', style: j.type === 'slayd' ? { color: '#8b5cf6', background: '#8b5cf61f' } : (j.type === 'referat' ? { color: '#0ea5e9', background: '#0ea5e91f' } : {}) }, icon(TYPE_IC[j.type] || 'box')),
     h('div', { class: 'grow' }, h('div', { class: 't1' }, j.topic || '—'), h('div', { class: 't2' }, '#' + j.id + ' · ' + (L.type[j.type] || j.type) + ' · ' + j.volume_key + (compact ? '' : ' · ' + (j.username ? '@' + j.username : 'ID ' + j.telegram_id)))),
     h('div', { class: 'right' }, badge(st[0], st[1]), h('div', { class: 't2' }, j.is_free ? 'Bepul' : money(j.price))));
 }
@@ -324,10 +420,10 @@ function viewJobs(box) {
   let filter = S.jobFilter || 'all', q = '', timer = null; S.jobFilter = null;
   const seg = h('div', { class: 'seg' }); const res = h('div', {}); let pg = null;
   const inp = h('input', { class: 'inp', type: 'search', placeholder: '№, user ID, mavzu yoki talaba (ism/guruh) bo\'yicha', maxlength: '60', autocomplete: 'off' });
-  const run = () => { pg = paged(res, off => api('jobs', { filter, q, offset: off }), j => jobRow(j, false), 'Buyurtma topilmadi'); S.reload = () => pg.reload(); };
+  const run = () => { pg = paged(res, off => api('jobs', { filter, q, offset: off }), j => jobRow(j, false), 'Buyurtma topilmadi', 'box'); S.reload = () => pg.reload(); };
   const draw = () => seg.replaceChildren(...[['all', 'Hammasi'], ['active', 'Jarayonda'], ['failed', 'Xato'], ['done', 'Bajarilgan'], ['cancelled', 'Bekor']].map(([k, l]) => h('button', { class: filter === k ? 'on' : '', onclick: () => { filter = k; draw(); run(); } }, l)));
   inp.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { q = inp.value.trim(); run(); }, 350); });
-  draw(); box.replaceChildren(h('div', { class: 'search' }, inp), seg, res); run();
+  draw(); box.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'search' }, icon('search'), inp), seg, res)); run();
 }
 async function openJob(id) {
   const s = openSheet('Buyurtma #' + id, loader());
@@ -366,7 +462,7 @@ function promoCard(p, reload) {
 function viewPromos(box) {
   const head = h('div', {}); const res = h('div', {}); let pg = null;
   const run = () => { pg = paged(res, async off => { const r = await api('promos', { offset: off }); if (r.ok && off === 0) head.replaceChildren(h('div', { class: 'card', style: { padding: '4px 14px', marginBottom: '10px' } }, h('div', { class: 'kv' }, h('span', {}, 'Jami ishlatilgan'), h('span', {}, fmt(r.uses_total))), h('div', { class: 'kv' }, h('span', {}, 'Berilgan bonus jami'), h('span', {}, money(r.given_total))))); return r; }, p => promoCard(p, () => pg.reload()), 'Hali promokod yo\'q — «➕ Yangi promokod» tugmasini bosing'); S.reload = () => pg.reload(); };
-  box.replaceChildren(h('button', { class: 'btn pri', style: { width: '100%', marginBottom: '10px' }, onclick: () => promoCreateSheet(() => pg.reload()) }, '➕ Yangi promokod'), head, res); run();
+  box.replaceChildren(h('div', { class: 'wrap' }, h('button', { class: 'btn pri', style: { width: '100%', marginBottom: '10px' }, onclick: () => promoCreateSheet(() => pg.reload()) }, '➕ Yangi promokod'), head, res)); run();
 }
 function promoCreateSheet(done) {
   let kind = 'balance';
@@ -429,13 +525,13 @@ function viewEvents(box) {
     h('div', { class: 'grow' }, h('div', { class: 't1', style: { whiteSpace: 'normal' } }, e.title, ' ', e.is_read ? '' : badge('YANGI', 'acc')), h('div', { class: 't2', style: { whiteSpace: 'pre-line', marginTop: '3px' } }, e.body)),
     h('div', { class: 'right' }, h('div', { class: 't2' }, ago(e.ts)))), 'Xabarlar yo\'q');
   S.reload = () => pg.reload();
-  box.replaceChildren(markBtn, res);
+  box.replaceChildren(h('div', { class: 'wrap' }, markBtn, res));
 }
 
 /* ------------------------------------------------------------------ jurnal */
 function viewAudit(box) {
-  box.replaceChildren(h('div', { class: 'sec', style: { marginTop: '6px' } }, 'Xavfsizlik va amallar jurnali'), h('div', {}));
-  const res = box.lastChild;
+  const res = h('div', {});
+  box.replaceChildren(h('div', { class: 'wrap' }, h('div', { class: 'sec', style: { marginTop: '6px' } }, 'Xavfsizlik va amallar jurnali'), res));
   paged(res, off => api('audit', { offset: off }), a => {
     const l = L.audit[a.event] || [a.event, ''];
     return h('div', { class: 'card logrow' }, h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px' } }, badge(l[0], l[1]), h('span', { class: 't2' }, dt(a.ts))),
@@ -444,14 +540,16 @@ function viewAudit(box) {
 }
 
 /* ------------------------------------------------------------------ asosiy oyna */
-const S = { tab: 'home', reload: null, jobFilter: null, topupFilter: null };
+const S = { tab: 'home', reload: null, jobFilter: null, topupFilter: null, days: 14 };
 let mainBox, tabsBox, chipEl, pendingN = 0, unreadN = 0;
 const TABS = [['home', 'Bosh', 'home', viewHome], ['topups', "To'lov", 'wallet', viewTopups], ['users', 'Mijoz', 'users', viewUsers], ['jobs', 'Buyurtma', 'box', viewJobs], ['promos', 'Promo', 'tag', viewPromos], ['events', 'Xabar', 'bell', viewEvents], ['audit', 'Jurnal', 'list', viewAudit, true]];
 function setPending(n) { pendingN = n | 0; drawTabs(); }
 async function refreshBadge() { const r = await api('topups', { filter: 'pending', offset: 0 }); if (r.ok) setPending(r.more ? 30 : r.items.length); }
 function drawTabs() {
   const dotN = k => k === 'topups' ? pendingN : (k === 'events' ? unreadN : 0);
-  tabsBox.replaceChildren(...TABS.filter(t => !t[4]).map(([k, label, ic]) => h('button', { class: S.tab === k ? 'on' : '', onclick: () => go(k) }, icon(ic), label, dotN(k) > 0 ? h('span', { class: 'dot' }, dotN(k) > 29 ? '30+' : dotN(k)) : '')));
+  const wide = window.matchMedia && matchMedia('(min-width:860px)').matches;
+  const LONG = { home: 'Bosh sahifa', topups: "To'lovlar", users: 'Mijozlar', jobs: 'Buyurtmalar', promos: 'Promokodlar', events: 'Xabarlar', audit: 'Jurnal' };
+  tabsBox.replaceChildren(...TABS.filter(t => wide || !t[4]).map(([k, label, ic]) => h('button', { class: S.tab === k ? 'on' : '', 'aria-label': LONG[k], onclick: () => { if (S.tab !== k) haptic('light'); go(k); } }, icon(ic), wide ? LONG[k] : label, dotN(k) > 0 ? h('span', { class: 'dot' }, dotN(k) > 29 ? '30+' : dotN(k)) : '')));
 }
 function go(tab) {
   S.tab = tab; S.reload = null; drawTabs(); mainBox.scrollTop = 0;
@@ -467,9 +565,10 @@ function tickChip() {
 function start() {
   chipEl = h('span', { class: 'chip' }, '🔒');
   mainBox = h('div', { class: 'main' }); tabsBox = h('div', { class: 'tabs' });
-  show(h('div', { class: 'top' }, h('h1', {}, '🛡 Admin'), chipEl,
-    h('button', { class: 'ibtn', onclick: () => go(S.tab), 'aria-label': 'Yangilash' }, icon('refresh')),
-    h('button', { class: 'ibtn', onclick: logout, 'aria-label': 'Chiqish' }, icon('logout'))), mainBox, tabsBox);
+  const rb = h('button', { class: 'ibtn', onclick: () => { haptic(); rb.classList.add('spin-on'); setTimeout(() => rb.classList.remove('spin-on'), 700); go(S.tab); }, 'aria-label': 'Yangilash', title: 'Yangilash' }, icon('refresh'));
+  show(h('div', { class: 'top' }, h('div', { class: 'brand' }, h('div', { class: 'logo' }, icon('shield')), h('h1', {}, 'Admin panel', h('small', {}, 'StudyBot · boshqaruv'))), chipEl, rb,
+    h('button', { class: 'ibtn', onclick: logout, 'aria-label': 'Chiqish', title: 'Chiqish' }, icon('logout'))), h('div', { class: 'shell' }, tabsBox, mainBox));
+  try { matchMedia('(min-width:860px)').addEventListener('change', drawTabs); } catch (e) {}
   lastActive = Date.now(); setInterval(tickChip, 15000); tickChip();
   go('home'); refreshEvents(); setInterval(() => { if (SESS && !document.hidden) refreshEvents(); }, 60000);
 }

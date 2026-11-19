@@ -192,7 +192,7 @@ try {
             out(['ok' => true]);
 
         case 'stats':
-            out(['ok' => true] + AdminService::stats());
+            out(['ok' => true] + AdminService::stats(intv($b['days'] ?? 14, 7, 30)));
 
         case 'users':
             out(['ok' => true] + AdminService::users(strv($b['q'] ?? '', 60), intv($b['offset'] ?? 0, 0, 100000)));
