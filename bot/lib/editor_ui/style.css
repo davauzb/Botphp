@@ -176,3 +176,15 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);outline-off
   .thumb.drop{box-shadow:0 -5px 0 var(--acc)}.thumb.dropR{box-shadow:0 5px 0 var(--acc)}
 }
 .aibox{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}.aibox .seg{flex-wrap:wrap}.aibox .seg button{flex:1 0 30%;min-height:32px}.aibox .btn{width:100%;margin-top:8px}
+
+/* ================= PRO uslub (yagona dizayn tili: admin panel va hujjat tahrirlovchisi bilan bir xil) ================= */
+:root{--acc:#4f6bff;--acc2:#8b5cf6;--bg:#eef0f5;--line:#e3e6ee;--soft:#eef1ff}
+:root[data-theme=dark]{--acc:#7088ff;--acc2:#a78bfa;--bg:#0b0d12;--panel:#151821;--card:#1b1f2a;--line:#262b39;--soft:#1e2540}
+#top{background:color-mix(in srgb,var(--panel) 90%,transparent);backdrop-filter:saturate(1.5) blur(12px);-webkit-backdrop-filter:saturate(1.5) blur(12px)}
+.ttl{font-weight:700;letter-spacing:-.2px}
+.st{padding:3px 8px;border-radius:999px;font-weight:600}
+.st.ok{background:color-mix(in srgb,var(--ok) 13%,transparent)}.st.err{background:color-mix(in srgb,var(--danger) 13%,transparent)}
+.btn.pri,.send.pri{background:linear-gradient(135deg,var(--acc),color-mix(in srgb,var(--acc) 65%,var(--acc2)));border:0;color:#fff;box-shadow:0 8px 18px -10px var(--acc)}
+.btn{transition:transform .12s,background .15s}.btn:active{transform:scale(.97)}
+#wrap{background:radial-gradient(1200px 600px at 50% -10%,color-mix(in srgb,var(--acc) 7%,transparent),transparent 60%),var(--bg)}
+#stage{box-shadow:0 18px 40px -18px rgba(15,23,42,.45),0 0 0 1px rgba(15,23,42,.06)}

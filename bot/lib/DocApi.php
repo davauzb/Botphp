@@ -31,7 +31,7 @@ class DocApi
                     'ai' => DocAI::enabled(), 'pdf' => (bool)SlidePdf::sofficePath(),
                     'max_sections' => DocStore::MAX_SECTIONS, 'max_text' => DocStore::MAX_TEXT, 'max_heading' => DocStore::MAX_HEADING,
                     'ai_max_input' => DocAI::MAX_INPUT,
-                ]]);
+                ], 'labels' => self::labels((string)$doc['doc_type'], (string)$doc['lang'])]);
 
             case 'save':
                 if (!EditorSecurity::rate("dsave:$pid", 300, 600)) {
@@ -114,5 +114,19 @@ class DocApi
                 out(['ok' => true]);
         }
         EditorSecurity::deny();
+    }
+
+    /** «Ko'rinish» rejimi uchun titul varag'i yozuvlari (hujjat tilida). */
+    private static function labels(string $docType, string $lang): array
+    {
+        $lang = I18n::norm($lang);
+        $y = (int)date('Y');
+        $start = (int)date('n') >= 9 ? $y : $y - 1;
+        return [
+            'ministry' => I18n::ministry($lang), 'type' => I18n::t('doc_' . ($docType === 'REFERAT' ? 'REFERAT' : 'MUSTAQIL ISH'), $lang),
+            'topic' => I18n::t('topic', $lang), 'executor' => I18n::t('executor', $lang), 'group' => I18n::t('group', $lang),
+            'checked' => I18n::t('checked_by', $lang), 'plan' => rtrim(I18n::t('plan_upper', $lang), ':'),
+            'year' => $start . '–' . ($start + 1) . ' ' . I18n::t('year_suffix', $lang),
+        ];
     }
 }

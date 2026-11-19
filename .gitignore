@@ -2,3 +2,4 @@ bot/storage/*.sqlite*
 bot/storage/logs/
 bot/storage/generated/
 bot/storage/*.lock
+bot/storage/editor/

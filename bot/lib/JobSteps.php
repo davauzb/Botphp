@@ -286,8 +286,8 @@ class JobSteps
         }
         $t = preg_replace('/```[a-z]*\n?|```/i', '', $t) ?? $t;
         $t = preg_replace('/^\s{0,3}#{1,6}\s*/m', '', $t) ?? $t;
-        $t = preg_replace('/(\*\*|__|\*|`)/', '', $t) ?? $t;
         $t = preg_replace('/^\s*[-•*]\s+/mu', '• ', $t) ?? $t;            // ro'yxat punktlari DOCX'da haqiqiy ro'yxatga aylanadi
+        $t = preg_replace('/(\*\*|__|\*|`)/', '', $t) ?? $t;
         $t = preg_replace("/^(Albatta|Mana|Quyida)[^\n]{0,80}:\s*\n/iu", '', $t) ?? $t;
         $t = preg_replace("/\r\n?/", "\n", $t) ?? $t;
         $t = preg_replace("/\n{3,}/", "\n\n", $t) ?? $t;

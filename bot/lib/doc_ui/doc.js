@@ -4,7 +4,7 @@ const $=(s,r=document)=>r.querySelector(s);
 const TG=()=>window.Telegram&&window.Telegram.WebApp;
 
 const S={sess:null,doc:null,title:'',student:{},sections:[],version:0,caps:{},dirty:false,saving:false,pending:false,timer:null,
-  undo:[],expired:false,nid:0,listEl:null,statsEl:null,stateEl:null,undoBtn:null};
+  undo:[],expired:false,nid:0,listEl:null,statsEl:null,stateEl:null,undoBtn:null,mode:'edit',labels:{},navEl:null,ovEl:null};
 
 /* ---------- yordamchilar ---------- */
 function h(tag,props,...kids){
@@ -97,9 +97,22 @@ function undo(){
 }
 
 /* ---------- ko'rinish ---------- */
+function totalWords(){ let w=0; for(const s of S.sections) w+=words(s.text); return w; }
 function updateStats(){
-  if(!S.statsEl) return; let w=0; for(const s of S.sections) w+=words(s.text);
-  S.statsEl.textContent='≈ '+Math.max(1,Math.ceil(w/250))+' bet · '+fmt(w)+' so‘z · '+S.sections.length+' bo‘lim';
+  const w=totalWords(), pages=Math.max(1,Math.ceil(w/250))+2;
+  if(S.statsEl) S.statsEl.textContent='≈ '+pages+' bet · '+fmt(w)+' so‘z · '+S.sections.length+' bo‘lim';
+  if(S.ovEl){ const maxW=Math.max(1,...S.sections.map(x=>words(x.text)));
+    S.ovEl.textContent=''; [[pages,'bet (≈)'],[fmt(w),'so‘z'],[S.sections.length,'bo‘lim'],[fmt(Math.round(w/Math.max(1,S.sections.length))),'so‘z/bo‘lim'],].forEach(([v,l])=>S.ovEl.append(h('div',null,h('b',null,v),h('span',null,l))));
+    S.listEl&&S.listEl.querySelectorAll('.sec').forEach((c,i)=>{ const b=c.querySelector('.bar i'); if(b&&S.sections[i]) b.style.width=Math.round(words(S.sections[i].text)/maxW*100)+'%'; }); }
+  clearTimeout(S.navT); S.navT=setTimeout(drawNav,250);
+}
+function drawNav(){
+  const n=S.navEl; if(!n) return; n.textContent='';
+  S.sections.forEach((sec,i)=>n.append(h('button',{type:'button',title:sec.heading,onclick:()=>jumpTo(i)},h('b',null,i+1),sec.heading||'Bo‘lim')));
+}
+function jumpTo(i){
+  if(S.mode!=='edit'){ setMode('edit'); }
+  requestAnimationFrame(()=>{ const c=S.listEl&&S.listEl.querySelectorAll('.sec')[i]; if(c){ c.scrollIntoView({block:'start'}); const t=c.querySelector('textarea'); if(t) t.focus({preventScroll:true}); } });
 }
 function fit(t){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight+2,4000)+'px'; }
 
@@ -117,7 +130,7 @@ function sectionCard(sec,i){
     h('button',{type:'button',class:'ib sm',title:'O‘chirish',onclick:()=>remove(i)},'🗑'),
     S.caps.ai?h('button',{type:'button',class:'btn sm',onclick:()=>openAi(i)},'✨ AI'):null,
     cnt);
-  const card=h('section',{class:'card sec'},h('div',{class:'chead'},h('span',{class:'num'},i+1),hd),h('div',{class:'tx'},tx),tools);
+  const card=h('section',{class:'card sec'},h('div',{class:'chead'},h('span',{class:'num'},i+1),hd),h('div',{class:'bar'},h('i',{style:'width:0%'})),h('div',{class:'tx'},tx),tools);
   requestAnimationFrame(()=>fit(tx));
   return card;
 }
@@ -194,19 +207,57 @@ function render(){
   S.undoBtn=h('button',{type:'button',class:'ib',title:'Oxirgi o‘zgarishni qaytarish',disabled:!S.undo.length,onclick:undo},'↶');
   S.stateEl=h('span',{class:'st ok'},'✓ Saqlandi');
   const send=h('button',{id:'bSend',type:'button',class:'btn pri',onclick:e=>openSend(e.currentTarget)},'Yuborish ▾');
-  top.append(S.undoBtn,h('div',{class:'ttl',id:'ttl'},S.title||'Hujjat'),S.stateEl,send);
+  const modes=h('div',{class:'modes',role:'tablist'},
+    h('button',{type:'button',class:S.mode==='edit'?'on':'','data-m':'edit',onclick:()=>setMode('edit')},'✏️ Matn'),
+    h('button',{type:'button',class:S.mode==='preview'?'on':'','data-m':'preview',onclick:()=>setMode('preview')},'👁 Ko‘rinish'));
+  top.append(S.undoBtn,h('div',{class:'ttl',id:'ttl'},S.title||'Hujjat',h('small',null,(S.labels.type||'Hujjat'))),modes,S.stateEl,send);
+  if(!S.navEl){ S.navEl=h('nav',{class:'nav','aria-label':'Bo‘limlar'}); top.after(S.navEl); }
   const m=$('#main'); m.textContent='';
-  m.append(h('details',{class:'card'},h('summary',null,'📝 Titul varag‘i ma’lumotlari'),h('div',{class:'body'},
+  if(S.mode==='preview'){ m.append(h('div',{class:'inner'},preview())); const bar=$('#bar'); bar.textContent=''; S.statsEl=h('div',{class:'meta'}); bar.append(S.statsEl,h('button',{type:'button',class:'btn',onclick:()=>setMode('edit')},'✏️ Tahrirlash')); updateStats(); return; }
+  const inner=h('div',{class:'inner'}); m.append(inner);
+  S.ovEl=h('div',{class:'overview'}); inner.append(S.ovEl);
+  inner.append(h('details',{class:'card'},h('summary',null,'📝 Titul varag‘i ma’lumotlari'),h('div',{class:'body'},
     field('Mavzu','title',300,'Ish mavzusi'),field('F.I.Sh','full_name',120,'Aliyev Vali Sobirovich'),field('Universitet','university',160,''),field('Guruh','group_name',60,''),
     h('div',{class:'hint'},'«Reja» sahifasi bo‘limlar sarlavhalaridan avtomatik tuziladi.'))));
-  S.listEl=h('div'); m.append(S.listEl);
+  S.listEl=h('div'); inner.append(S.listEl);
   const bar=$('#bar'); bar.textContent=''; S.statsEl=h('div',{class:'meta'});
   bar.append(S.statsEl,h('button',{type:'button',class:'btn',onclick:()=>addAfter(S.sections.length-1)},'＋ Bo‘lim'));
   renderList(false);
 }
+function setMode(mode){
+  if(S.mode===mode) return; S.mode=mode; render(); $('#main').scrollTop=0;
+  const t=TG(); try{ t&&t.HapticFeedback&&t.HapticFeedback.selectionChanged(); }catch(e){}
+}
+/* A4 ko'rinish: DOCX andozasiga yaqin (titul, reja, bo'limlar har biri yangi betdan). Taxminiy sahifalash. */
+function preview(){
+  const L=S.labels||{}, st=S.student||{}, wrap=h('div',{class:'pv'});
+  const page=(cls,kids,pn)=>h('div',{class:'page '+(cls||'')},h('div',{class:'in'},kids),pn?h('div',{class:'pn'},pn):null);
+  wrap.append(page('title',[
+    L.ministry?h('div',{class:'min'},L.ministry.toUpperCase()):null,
+    h('div',{class:'uni'},st.university||'________________'),h('div',{class:'rule'}),
+    h('div',{class:'type'},(L.type||'MUSTAQIL ISH').toUpperCase()),
+    h('div',{class:'tl'},(L.topic||'Mavzu')+':'),h('div',{class:'topic'},'«'+(S.title||'')+'»'),
+    h('div',{class:'who'},h('div',null,h('b',null,(L.executor||'Bajaruvchi')+': '),st.full_name||'________'),h('div',null,h('b',null,(L.group||'Guruh')+': '),st.group_name||'____'),h('div',null,h('b',null,(L.checked||'Qabul qildi')+': '),'__________')),
+    h('div',{class:'yr'},L.year||'')]));
+  const PER=1850; // bir betga sig'adigan taxminiy belgilar soni (14pt, 1.5 interval)
+  const pages=[]; let pn=3;
+  S.sections.forEach(sec=>{
+    const chapter=/^\s*\d+\s*[.)]/.test(sec.heading); const title=chapter?sec.heading:(sec.heading||'').toUpperCase();
+    const paras=(sec.text||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    let cur=[h('h3',null,title)], used=180; const start=pn;
+    paras.forEach(p=>{ const len=p.length+70; if(used+len>PER&&cur.length>1){ pages.push([cur,pn++]); cur=[]; used=0; }
+      cur.push(/^[•\-–]\s+/.test(p)?h('ul',null,h('li',null,p.replace(/^[•\-–]\s+/,''))):h('p',null,p)); used+=len; });
+    pages.push([cur,pn++]); sec._page=start;
+  });
+  wrap.append(page('',[h('h3',null,L.plan||'REJA'),h('div',{class:'toc'},S.sections.map(sec=>h('div',null,h('span',{style:/^\s*\d/.test(sec.heading)?'':'font-weight:700'},sec.heading),h('i'),h('span',null,String(sec._page)))))],'2'));
+  pages.forEach(([kids,n])=>wrap.append(page('',kids,String(n))));
+  wrap.append(h('div',{class:'pvnote'},'Bu taxminiy ko‘rinish. Yakuniy fayl (DOCX/PDF) Word andozasida — Times New Roman 14, 1.5 interval, titul ramkasi va bet raqamlari bilan yaratiladi.'));
+  return wrap;
+}
 function applyLoad(r){
   const d=r.doc; S.doc=d; S.title=d.title||''; S.student=Object.assign({full_name:'',university:'',group_name:''},d.student||{}); S.version=d.version; S.caps=r.caps||{};
   S.sections=(d.sections||[]).map(s=>({id:++S.nid,heading:s.heading||'',text:s.text||''})); S.undo=[]; S.dirty=false; S.rev=0; closeConfirm(false);
+  S.labels=r.labels||{};
 }
 function fail(msg){ const b=$('#boot'); b.classList.add('err'); b.textContent=msg; }
 async function authenticate(){
@@ -224,5 +275,10 @@ async function boot(){
   setInterval(()=>{ if(!document.hidden&&!S.expired) api('ping',{}); },240000);
   document.addEventListener('visibilitychange',()=>{ if(document.hidden&&S.dirty) doSave(true); });
   window.addEventListener('pagehide',()=>{ if(S.dirty) doSave(true); });
+  document.addEventListener('keydown',e=>{
+    const mod=e.ctrlKey||e.metaKey; if(!mod) return; const k=e.key.toLowerCase();
+    if(k==='s'){ e.preventDefault(); if(S.dirty) doSave(); else toast('Hammasi saqlangan'); }
+    else if(k==='z'&&!e.shiftKey&&!/^(TEXTAREA|INPUT)$/.test((document.activeElement||{}).tagName||'')){ e.preventDefault(); undo(); }
+  });
 }
 boot();

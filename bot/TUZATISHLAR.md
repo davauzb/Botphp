@@ -1,3 +1,44 @@
+# studybot 14-6 — PRO DIZAYN YANGILANISHI
+
+**Eski `config.php` ni almashtirmang** — yangi kod eski config bilan ishlaydi, baza o'zgarmaydi, yangi sozlama kerak emas.
+
+## 📄 Mustaqil ish / referat (DOCX) — butunlay yangi andoza
+- Haqiqiy Word uslublari (Normal, Heading 1/2, Title, TOC): Word'dagi «Navigatsiya» paneli va avtomatik mundarija ishlaydi.
+- **Titul varag'i**: faqat 1-betda ikki chiziqli ramka, vazirlik → universitet → ajratuvchi chiziq → katta «MUSTAQIL ISH» → mavzu
+  → o'ngda «Bajaruvchi / Guruh / Qabul qildi» bloki → eng pastda o'quv yili (har doim bet tagida).
+- **Reja** endi nuqtali chiziq va **bet raqami** bilan (PAGEREF + xatcho'p). Raqam oldindan hisoblanadi, LibreOffice/PDF'da o'zi aniqlanadi,
+  Word'da `Ctrl+A → F9` bilan yangilanadi.
+- Har asosiy bo'lim (Kirish, boblar, Xulosa, Adabiyotlar) **yangi betdan**; boblar raqami bilan, Kirish/Xulosa katta harflarda.
+- Hoshiyalar: chap 3 sm, o'ng 1.5 sm, tepa/past 2 sm; abzats 1.25 sm; «yetim» qatorlar nazorati.
+- AI matnidagi ro'yxatlar (•) haqiqiy Word ro'yxatiga aylanadi; «Atama — izoh» boshlanishi qalin; adabiyotlar — raqamlangan ro'yxat; «Eslatma» alohida blokda.
+- Hujjat xossalari (sarlavha, muallif, til) to'ldiriladi.
+
+## 🎨 Slaydlar
+- Rasm endi ajratilgan joyni **to'liq to'ldiradi** (markazdan qirqiladi) — kichkina «pochta markasi» rasm yo'q.
+- Matn shrifti kattaroq (sig'magandagina kichrayadi), «Bosqichlar» kartalari matn hajmiga moslashadi (bo'm-bo'sh baland kartalar yo'q),
+  «Taqqoslash» punktlari yumshoq fonli qatorlarda, «Reja» butun slaydni muvozanatli egallaydi.
+- PRO: «Ta'rif» slaydi qayta qurildi (tepada keng ta'rif bloki, pastda belgilar kartalari), «Reja» va «Bosqichlar» markazlashtirildi,
+  muqovada matn tomoni kuchliroq qoraytiriladi (har qanday rasmda o'qiladi), yon rasm paneli torroq — matnga ko'proq joy.
+
+## 🛡 Admin panel
+- Yangi dizayn: gradient «Bugungi kirim» kartasi (sparkline bilan), ikonli KPI kartalar, skeleton yuklanish, haptik javob.
+- **Interaktiv grafiklar** (barmoq/sichqoncha bilan kun qiymati), **7 / 14 / 30 kun** tanlash, oldingi davrga nisbatan **o'sish foizi**.
+- **Tizim holati**: AI kalitlar (har biri tayyor/limitda/yaroqsiz), navbat, disk joyi, PDF eksport rejimi.
+- Bajarilgan buyurtmalar turi va **mashhur dizaynlar** diagrammasi.
+- Kompyuter/planshetda chap yon menyu, 4 ustunli ko'rsatkichlar, oynalar markazda.
+
+## ✏️ Tahrirlovchilar
+- Hujjat tahrirlovchisi: **«👁 Ko'rinish» rejimi** — A4 betlar (titul ramkasi, reja, bo'limlar) Word andozasiga yaqin ko'rinishda;
+  bo'limlar bo'yicha tezkor navigatsiya, umumiy statistika kartalari, `Ctrl+S` / `Ctrl+Z`, yangi uslub.
+- Slayd tahrirlovchisi: yagona dizayn tili (rang, tugmalar, sahna soyasi).
+
+## 🐞 Tuzatishlar
+- AI matnidagi `* punkt` ko'rinishidagi ro'yxatlar yulduzcha olib tashlanganda buzilib qolardi — endi to'g'ri ro'yxatga aylanadi.
+- Titulda uzun «Qabul qildi» qatori ikki tomonlama tekislanib, so'zlar orasida katta bo'shliq paydo bo'lardi.
+- Admin grafiklarida oxirgi sanalar ustma-ust tushardi; katta summalar KPI kartadan chiqib ketardi (endi «28,5 mln so'm»).
+
+---
+
 # studybot 14-5 — YANGILIK: ⚡ Humo / Uzcard (Avto) to'ldirish
 
 Mijoz «⚡ Humo / Uzcard (Avto)» ni tanlaydi (kartangiz HUMO bo'lsa ham, mijoz Humo yoki Uzcard dan o'tkaza oladi) → bot **noyob summa** beradi (masalan 10 017 so'm) → mijoz shuni kartangizga o'tkazadi →
