@@ -130,8 +130,9 @@ class JobSteps
         return "Siz o'zbek tilida ilmiy-akademik uslubda {$p['docLabel']} yozuvchi yordamchisiz. "
             . "Faqat ishonchli, umumiy tan olingan ma'lumotlardan foydalaning. Aniq statistik raqam, muallif ismi yoki sana "
             . "bilmasangiz — buni O'YLAB TOPMANG, umumiy tarzda yozing. Boshqa bo'limlarda aytilgan fikr va misollarni TAKRORLAMANG. "
-            . "FAQAT oddiy matn yozing: markdown belgilari (#, *, **), sarlavha, ro'yxat raqamlari, JSON, \"Albatta\" kabi kirish "
-            . "gaplar yoki izohlar BO'LMASIN. Abzatslarni bo'sh qator bilan ajrating." . I18n::directive($p['lang'] ?? 'uz');
+            . "FAQAT oddiy matn yozing: markdown belgilari (#, *, **), sarlavha, JSON, \"Albatta\" kabi kirish "
+            . "gaplar yoki izohlar BO'LMASIN. Abzatslarni bo'sh qator bilan ajrating. Mazmunan zarur bo'lsa (bo'limda ko'pi bilan bitta) "
+            . "3-5 punktli qisqa ro'yxat qo'shish mumkin: har punkt alohida qatorda \"• \" belgisi bilan boshlansin." . I18n::directive($p['lang'] ?? 'uz');
     }
 
     /** Bob sarlavhalari rejasi (PlanReview «Boshqa reja» uchun ham ochiq). */
@@ -286,7 +287,7 @@ class JobSteps
         $t = preg_replace('/```[a-z]*\n?|```/i', '', $t) ?? $t;
         $t = preg_replace('/^\s{0,3}#{1,6}\s*/m', '', $t) ?? $t;
         $t = preg_replace('/(\*\*|__|\*|`)/', '', $t) ?? $t;
-        $t = preg_replace('/^\s*[-•]\s+/m', '', $t) ?? $t;
+        $t = preg_replace('/^\s*[-•*]\s+/mu', '• ', $t) ?? $t;            // ro'yxat punktlari DOCX'da haqiqiy ro'yxatga aylanadi
         $t = preg_replace("/^(Albatta|Mana|Quyida)[^\n]{0,80}:\s*\n/iu", '', $t) ?? $t;
         $t = preg_replace("/\r\n?/", "\n", $t) ?? $t;
         $t = preg_replace("/\n{3,}/", "\n\n", $t) ?? $t;

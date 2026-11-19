@@ -20,7 +20,7 @@ class I18n
             'agenda' => 'Reja', 'thanks' => 'Rahmat!', 'thanks_sub' => "E'tiboringiz uchun rahmat",
             'executor' => 'Bajaruvchi', 'group' => 'Guruh', 'topic' => 'Mavzu', 'plan_upper' => 'REJA:',
             'intro' => 'Kirish', 'conclusion' => 'Xulosa', 'biblio' => 'Foydalanilgan adabiyotlar', 'biblio_match' => 'adabiyot',
-            'year_suffix' => "o'quv yili", 'default_panel' => "Mavzu bo'yicha asosiy xulosalar",
+            'year_suffix' => "o'quv yili", 'checked_by' => 'Qabul qildi', 'contents' => 'MUNDARIJA', 'note_word' => 'Eslatma', 'default_panel' => "Mavzu bo'yicha asosiy xulosalar",
             'doc_MUSTAQIL ISH' => 'MUSTAQIL ISH', 'doc_REFERAT' => 'REFERAT',
             'biblio_text' => "1. Mavzuga oid darsliklar va o'quv qo'llanmalari.\n"
                 . "2. Tegishli ilmiy jurnallardagi maqolalar va tadqiqot ishlari.\n"
@@ -36,7 +36,7 @@ class I18n
             'agenda' => 'План', 'thanks' => 'Спасибо!', 'thanks_sub' => 'Благодарим за внимание',
             'executor' => 'Исполнитель', 'group' => 'Группа', 'topic' => 'Тема', 'plan_upper' => 'ПЛАН:',
             'intro' => 'Введение', 'conclusion' => 'Заключение', 'biblio' => 'Список использованной литературы', 'biblio_match' => 'литератур',
-            'year_suffix' => 'учебный год', 'default_panel' => 'Основные выводы по теме',
+            'year_suffix' => 'учебный год', 'checked_by' => 'Принял(а)', 'contents' => 'СОДЕРЖАНИЕ', 'note_word' => 'Примечание', 'default_panel' => 'Основные выводы по теме',
             'doc_MUSTAQIL ISH' => 'САМОСТОЯТЕЛЬНАЯ РАБОТА', 'doc_REFERAT' => 'РЕФЕРАТ',
             'biblio_text' => "1. Учебники и учебные пособия по теме.\n"
                 . "2. Статьи в научных журналах и исследовательские работы по теме.\n"
@@ -52,7 +52,7 @@ class I18n
             'agenda' => 'Agenda', 'thanks' => 'Thank you!', 'thanks_sub' => 'Thank you for your attention',
             'executor' => 'Prepared by', 'group' => 'Group', 'topic' => 'Topic', 'plan_upper' => 'CONTENTS:',
             'intro' => 'Introduction', 'conclusion' => 'Conclusion', 'biblio' => 'References', 'biblio_match' => 'reference',
-            'year_suffix' => 'academic year', 'default_panel' => 'Key takeaways on the topic',
+            'year_suffix' => 'academic year', 'checked_by' => 'Checked by', 'contents' => 'CONTENTS', 'note_word' => 'Note', 'default_panel' => 'Key takeaways on the topic',
             'doc_MUSTAQIL ISH' => 'INDEPENDENT STUDY PAPER', 'doc_REFERAT' => 'ESSAY',
             'biblio_text' => "1. Textbooks and study guides on the subject.\n"
                 . "2. Articles in relevant academic journals and research papers.\n"
