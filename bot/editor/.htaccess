@@ -1,0 +1,18 @@
+Options -Indexes
+# Faqat index.php va api.php ochiladi, boshqa hamma narsa yopiq
+<IfModule mod_authz_core.c>
+  <FilesMatch "^(?!(index|api)\.php$).+$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+  <FilesMatch "^(?!(index|api)\.php$).+$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+</IfModule>
+
+# Authorization sarlavhasi PHP'ga yetib borsin (Payme to'lovlari va tahrirlovchi sessiyasi uchun; FastCGI/CGI da bo'lmasa "Ruxsat yo'q" xatosi chiqadi)
+<IfModule mod_setenvif.c>
+  SetEnvIfNoCase Authorization "(.+)" HTTP_AUTHORIZATION=$1
+</IfModule>

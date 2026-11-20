@@ -1,0 +1,57 @@
+// === config.php ga QO'SHING (eski qiymatlarni o'zgartirmang) ===
+
+// 1) AI_PROVIDERS ichida groq blokiga 'priority' => 1, va YANGI Gemini blokini qo'shing:
+//    [
+//        'name' => 'gemini',
+//        'priority' => 2,
+//        'endpoint' => 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+//        'models' => ['gemini-flash-latest', 'gemini-flash-lite-latest'],
+//        'max_parallel' => 1,
+//        'keys' => ['SIZNING_GEMINI_KALITINGIZ'],
+//    ],
+//    openrouter blokiga: 'priority' => 3,
+
+// 2) Pastdagilarni oxiriga qo'shing:
+define('PLAN_REVIEW_ENABLED', true);
+define('PLAN_REVIEW_SECONDS', 300);
+define('TOPUP_BONUS_PERCENT', 0);        // hamma to'ldirishga bonus % (0 = o'chiq)
+define('TOPUP_BONUS_MIN_AMOUNT', 0);
+define('PROMO_MAX_BONUS', 100000);
+define('EDITOR_AI_ENABLED', true);
+define('EDITOR_AI_PER_HOUR', 20);
+define('PDF_ENGINE', 'auto');
+// Ixtiyoriy: rus/ingliz titul varag'i uchun vazirlik nomi
+// define('MINISTRY_NAME_RU', '...'); define('MINISTRY_NAME_EN', '...');
+
+// Admin xabarlari (ixtiyoriy; ko'rsatilgan qiymatlar — standart)
+define('ADMIN_NOTIFY_ORDERS', true);
+define('ADMIN_NOTIFY_FAILS', true);
+define('ADMIN_NOTIFY_PROMO', true);
+define('ADMIN_NOTIFY_TOPUPS', true);
+define('ADMIN_NOTIFY_USERS', false);   // har yangi mijozda Telegram xabari (panelda baribir yoziladi)
+
+// PRO taqdimotlar (ixtiyoriy; ko'rsatilgan qiymatlar — standart)
+define('PRO_ENABLED', true);
+define('PRO_SURCHARGE_PERCENT', 60);      // PRO narxi oddiy narxdan necha foiz qimmat
+define('IMAGE_AI_FALLBACK', true);        // rasm kalitlari bo'lmasa AI rasm yaratish (kalitsiz)
+define('IMAGE_WIKIMEDIA_FALLBACK', true); // oxirgi zaxira: Wikimedia Commons
+define('PPTX_TRANSITION_STYLE', 'fade');  // fade | push | wipe | cover | split | dissolve | none
+// Yaxshi rasmlar uchun config.php dagi IMAGE_PROVIDERS ga bepul kalit qo'ying: Unsplash yoki Pexels (pexels.com/api)
+
+// === 14-5: HUMO avto-to'ldirish (config.php ga qo'shing) ===
+
+// ==== HUMO AVTO-TO'LDIRISH (Telegram Business + @HUMOcardbot) ====
+// Mijoz noyob summani HUMO kartaga o'tkazadi, @HUMOcardbot admin akkauntiga "➕ To'ldirish" xabarini yuboradi,
+// bot (Business orqali ulangan) shu xabarni o'qib balansni o'zi to'ldiradi.
+// Sozlash: 1) @BotFather → Bot Settings → Business Mode — yoqing.  2) Telegram (Premium) → Sozlamalar → Business → Chatbotlar →
+// botni qo'shing: faqat @HUMOcardbot chatiga ruxsat bering, «Xabarlarni o'qish» huquqi yetarli.  3) Quyidagilarni to'ldirib, /humo yozing.
+// Muhim: webhook'ni allowed_updates bilan qayta o'rnating (README/TUZATISHLAR da).
+define('HUMO_ENABLED', true);   // karta raqamini yozgach true qiling
+define('HUMO_BOT_USERNAME', 'HUMOcardbot');
+define('HUMO_BOT_ID', 0);                 // ixtiyoriy: @HUMOcardbot ning ID si
+define('HUMO_CARD_NUMBER', '');           // mijozga ko'rsatiladigan karta raqami, masalan '9860 1234 5678 6287'
+define('HUMO_CARD_HOLDER', '');           // karta egasi (ixtiyoriy)
+define('HUMO_CARD_LAST4', '');            // bo'sh bo'lsa karta raqamining oxirgi 4 tasi olinadi
+define('HUMO_TTL_MINUTES', 30);           // mijozga aytiladigan muddat
+define('HUMO_KEEP_HOURS', 24);            // shundan keyin kutilayotgan so'rov yopiladi
+define('HUMO_NOTIFY_UNMATCHED', true);    // kutayotgan mijoz bor-u summa mos kelmasa adminga xabar
