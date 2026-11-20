@@ -70,7 +70,7 @@ const L = {
   job: { pending: ['Navbatda', ''], processing: ['Jarayonda', 'acc'], done: ['Bajarildi', 'ok'], failed: ['Xato', 'bad'], cancelled: ['Bekor', 'warn'], awaiting_payment: ["To'lov kutilmoqda", 'warn'] },
   type: { mustaqil_ish: 'Mustaqil ish', referat: 'Referat', slayd: 'Taqdimot', kurs_ishi: 'Kurs ishi', maqola: 'Ilmiy maqola', tezis: 'Tezis' },
   topup: { pending: ['Kutilmoqda', 'warn'], approved: ['Tasdiqlangan', 'ok'], rejected: ['Rad etilgan', 'bad'], refunded: ['Qaytarilgan', 'warn'] },
-  method: { click: 'Click', payme: 'Payme', manual: 'Chek', humo: 'Humo/Uzcard' },
+  method: { click: 'Click', payme: 'Payme', manual: 'Chek', humo: 'Humo/Uzcard', stars: 'Telegram Stars' },
   audit: { auth_ok: ['Kirish', 'ok'], auth_fail: ['Kirish urinishi (rad etildi)', 'bad'], pin_fail: ['PIN xato', 'bad'], balance_adjust: ["Balans o'zgartirildi", 'warn'], topup_approve: ["To'lov tasdiqlandi", 'ok'], topup_reject: ["To'lov rad etildi", 'bad'], job_cancel: ['Buyurtma bekor', 'warn'], ban: ['Bloklandi', 'bad'], unban: ['Blokdan chiqarildi', 'ok'], send_msg: ['Xabar yuborildi', ''], view_receipt: ["Chek ko'rildi", ''], link_issued: ['Havola berildi', ''], logout: ['Chiqish', ''], promo_create: ['Promokod yaratildi', 'ok'], promo_on: ['Promokod yoqildi', 'ok'], promo_off: ["Promokod o'chirildi", 'warn'], promo_delete: ["Promokod o'chirib tashlandi", 'bad'], broadcast: ['Rassilka boshlandi', 'acc'], broadcast_stop: ["Rassilka to'xtatildi", 'warn'], bad_link: ["Noto'g'ri havola", 'bad'], bad_origin: ['Begona manba', 'bad'], session_ua_mismatch: ['Sessiya brauzeri o\'zgargan', 'bad'] },
 };
 const badge = (t, c) => h('span', { class: 'badge ' + (c || '') }, t);

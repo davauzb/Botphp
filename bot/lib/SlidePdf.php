@@ -187,6 +187,29 @@ class SlidePdf
 
     // ============================================================== GD → PDF
 
+    /** Tanlangan slaydlar JPEG baytlari (Telegram preview uchun, LibreOffice bo'lmaganda). */
+    public static function slideJpegs(string $pid, array $indexes): array
+    {
+        $p = EditorStore::get($pid);
+        if (!$p || !self::gdReady()) {
+            return [];
+        }
+        $imgs = EditorStore::imageMap($pid);
+        $ids = EditorStore::imageIds($pid);
+        self::$k = (self::BASE_W * self::SS) / self::W;
+        self::$pt = (self::BASE_W * self::SS) / 10.0 / 72.0;
+        self::$wc = [];
+        $out = [];
+        foreach ($indexes as $i) {
+            $s = $p['slides'][$i] ?? null;
+            $c = $s ? PptxElements::sanitizeSlide($s, $ids) : null;
+            if ($c) {
+                $out[] = self::renderSlide($c, $imgs);
+            }
+        }
+        return $out;
+    }
+
     private static function viaGd(array $slides, array $imgs, string $title): string
     {
         self::$k = (self::BASE_W * self::SS) / self::W;

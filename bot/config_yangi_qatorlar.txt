@@ -55,3 +55,23 @@ define('HUMO_CARD_LAST4', '');            // bo'sh bo'lsa karta raqamining oxirg
 define('HUMO_TTL_MINUTES', 30);           // mijozga aytiladigan muddat
 define('HUMO_KEEP_HOURS', 24);            // shundan keyin kutilayotgan so'rov yopiladi
 define('HUMO_NOTIFY_UNMATCHED', true);    // kutayotgan mijoz bor-u summa mos kelmasa adminga xabar
+
+// === 14-8: yangi imkoniyatlar (HAMMASI IXTIYORIY — qo'shmasangiz ham standart qiymatlar bilan ishlaydi) ===
+define('KURS_ISHI_ENABLED', true);        // 🎓 Kurs ishi (narx/hajm: KURS_ISHI_VOLUMES bilan o'zgartirish mumkin, lib/DocTypes.php dagi namunaga qarang)
+define('MAQOLA_ENABLED', true);           // 📰 Ilmiy maqola (MAQOLA_VOLUMES)
+define('TEZIS_ENABLED', true);            // 🧾 Tezis (TEZIS_VOLUMES)
+define('REAL_BIBLIO', true);              // haqiqiy adabiyotlar (Crossref, kalit kerak emas)
+define('DOC_IMAGES', true);               // mustaqil ish/kurs ishi/referatga rasm
+define('DOC_TABLES', true);               // 2-bobga bitta jadval
+define('SLIDE_PREVIEW', true);            // taqdimotdan 4 ta lavha (albom) fayldan oldin
+define('STARS_ENABLED', true);            // ⭐ Telegram Stars orqali to'ldirish
+define('STARS_RATE', 200);                // 1 yulduz = necha so'm
+define('DB_BACKUP_DAILY', true);          // har kuni baza zaxirasi adminga (Telegram)
+define('DB_BACKUP_HOUR', 3);              // Toshkent vaqti bilan shu soatdan keyin
+define('BROADCAST_RATE', 15);             // rassilka: soniyasiga nechta xabar
+define('UPDATER_ENABLED', true);          // /yangilash — botni GitHub'dan yangilash (faqat asosiy admin)
+// Narxlarni o'zgartirish namunasi:
+// define('KURS_ISHI_VOLUMES', [
+//     '25-30' => ['label' => '25-30 bet', 'chapters' => 3, 'sub' => 3, 'min_words' => 6500, 'max_words' => 7500, 'price' => 18000],
+//     '30-40' => ['label' => '30-40 bet', 'chapters' => 3, 'sub' => 3, 'min_words' => 8500, 'max_words' => 10000, 'price' => 24000],
+// ]);

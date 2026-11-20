@@ -5,6 +5,8 @@ require_once __DIR__ . '/lib/Telegram.php';
 require_once __DIR__ . '/lib/Queue.php';
 require_once __DIR__ . '/lib/TopupHelpers.php';
 require_once __DIR__ . '/lib/HumoAuto.php';
+require_once __DIR__ . '/lib/StarsPay.php';
+require_once __DIR__ . '/lib/Updater.php';
 require_once __DIR__ . '/lib/ClickTopupPayment.php';
 require_once __DIR__ . '/lib/PaymeTopupPayment.php';
 require_once __DIR__ . '/lib/EditorStore.php';
@@ -47,6 +49,11 @@ register_shutdown_function(function () {
 try {
     $update = json_decode(file_get_contents('php://input'), true);
     if (!$update) {
+        exit;
+    }
+
+    // ⭐ Telegram Stars: to'lovdan oldingi tekshiruv va muvaffaqiyatli to'lov
+    if (StarsPay::handleUpdate($update)) {
         exit;
     }
 
@@ -237,7 +244,7 @@ function topupMethodKeyboard(): array
             [['text' => '💳 Click orqali', 'callback_data' => 'topup_method:click']],
             [['text' => '💳 Payme orqali', 'callback_data' => 'topup_method:payme']],
             [['text' => "🧾 Chek yuborish (qo'lda tasdiqlash)", 'callback_data' => 'topup_method:manual']],
-        ]),
+        ], StarsPay::enabled() ? [[['text' => '⭐ Telegram Stars (kartasiz)', 'callback_data' => 'topup_method:stars']]] : []),
     ];
 }
 
@@ -273,6 +280,22 @@ function handleMessage(array $user, int $chatId, string $text): void
 
     if (preg_match('#^/tekshir(?:\s+(\d+))?$#', $text, $mm) && ADMIN_CHAT_ID && $chatId === (int)ADMIN_CHAT_ID) {
         Diagnostics::run($chatId, (int)($mm[1] ?? 0));   // /tekshir — umumiy; /tekshir 60 — hosting 60s lik so'rovni uzmasligini ham sinaydi
+        return;
+    }
+
+    // /yangilash — botni GitHub'dan yangilash (faqat asosiy admin)
+    if ($text === '/yangilash' && ADMIN_CHAT_ID && $chatId === (int)ADMIN_CHAT_ID && Updater::enabled()) {
+        $l = Updater::latest();
+        $cur = Updater::current();
+        if (!$l) {
+            Telegram::sendMessage($chatId, "⚠️ GitHub'ga ulanib bo'lmadi. Keyinroq urinib ko'ring.");
+            return;
+        }
+        $same = $cur !== '' && $cur === $l['sha'];
+        Telegram::sendMessage($chatId, "🔄 <b>Bot yangilanishi</b>\n\nO'rnatilgan: <code>" . ($cur ?: "noma'lum") . "</code>\nGitHub'dagi oxirgi: <code>{$l['sha']}</code> · "
+            . Telegram::escape(mb_substr($l['date'], 0, 10)) . "\n«" . Telegram::escape(mb_substr($l['msg'], 0, 160)) . "»\n\n"
+            . ($same ? "✅ Siz allaqachon oxirgi versiyadasiz." : "Yangilashdan oldin avtomatik zaxira olinadi. config.php va baza o'zgarmaydi."),
+            $same ? null : ['inline_keyboard' => [[['text' => '🚀 Yangilash', 'callback_data' => 'upd:go']]]]);
         return;
     }
 
@@ -619,6 +642,21 @@ function handleCallbackQuery(array $cb): void
         resendJobFile($chatId, (int)($cb['from']['id'] ?? 0), (int)substr($data, 3), (string)($cb['id'] ?? ''));
         return;
     }
+    if ($data === 'upd:go') {
+        if (ADMIN_CHAT_ID && $chatId === (int)ADMIN_CHAT_ID && Updater::enabled()) {
+            if (!empty($cb['message']['message_id'])) {
+                Telegram::call('editMessageReplyMarkup', ['chat_id' => $chatId, 'message_id' => (int)$cb['message']['message_id'], 'reply_markup' => json_encode(['inline_keyboard' => []])]);
+            }
+            Telegram::sendMessage($chatId, '⏳ Yangilanmoqda… (10-30 soniya)');
+            [, $msg] = Updater::run();
+            Telegram::sendMessage($chatId, $msg . "\n\nTekshirish: /tekshir");
+        }
+        return;
+    }
+    if (str_starts_with($data, 'ro:') || str_starts_with($data, 'rt:')) {
+        handleReorder($chatId, $data);
+        return;
+    }
     if (str_starts_with($data, 'ord:')) {
         sendOrderList($chatId, (int)substr($data, 4), (int)($cb['message']['message_id'] ?? 0) ?: null);
         return;
@@ -902,6 +940,11 @@ function handleTopupMethodChosen(int $chatId, string $method): void
         return;
     }
 
+    if ($method === 'stars' && StarsPay::enabled()) {
+        StarsPay::start($chatId, $amount, $resumeType, $resumeVolumeKey);
+        return;
+    }
+
     if (!in_array($method, ['click', 'payme'], true)) {
         return;
     }
@@ -1141,6 +1184,59 @@ function sendAdminStats(int $chatId): void
     Telegram::sendMessage($chatId, implode("\n", $lines));
 }
 
+/**
+ * «🔁 Qayta buyurtma»: oldingi buyurtmaning turi, hajmi, dizayni va talaba ma'lumotlari bilan yangi buyurtma.
+ * ro:<id> — yangi mavzu so'raladi; rt:<id> — xuddi shu mavzu bilan (yangi matn) darhol buyurtma.
+ * Narx va balans tekshiruvi odatdagidek handleTopicSubmission() da (atomik) bajariladi.
+ */
+function handleReorder(int $chatId, string $data): void
+{
+    [$kind, $id] = explode(':', $data, 2);
+    $st = db()->prepare('SELECT * FROM jobs WHERE id = ? AND telegram_id = ?');
+    $st->execute([(int)$id, $chatId]);
+    $job = $st->fetch(PDO::FETCH_ASSOC);
+    $vols = $job ? volumesFor((string)$job['type']) : null;
+    if (!$job || !$vols || !isset($vols[$job['volume_key']])) {
+        Telegram::sendMessage($chatId, "⚠️ Bu buyurtmani takrorlab bo'lmaydi (tarif o'zgargan bo'lishi mumkin). Menyudan yangidan boshlang.", mainMenu());
+        return;
+    }
+    $type = (string)$job['type'];
+    $vk = (string)$job['volume_key'];
+    // talaba ma'lumotlari — o'sha buyurtmadagidek (titul varag'i)
+    $stu = json_decode((string)($job['student'] ?? ''), true);
+    if (is_array($stu) && !empty($stu['full_name'])) {
+        $draft = ['first' => (string)($stu['first_name'] ?? ''), 'last' => (string)($stu['last_name'] ?? $stu['full_name']), 'group' => (string)($stu['group_name'] ?? ''), 'univ' => (string)($stu['university'] ?? '')];
+        db()->prepare('UPDATE users SET order_student = ? WHERE telegram_id = ?')->execute([json_encode($draft, JSON_UNESCAPED_UNICODE), $chatId]);
+    }
+    if ($type === 'slayd') {
+        $dk = (string)($job['design_key'] ?? '');
+        db()->prepare('UPDATE users SET pending_design_key = ? WHERE telegram_id = ?')->execute([isset(pptxDesigns()[$dk]) ? $dk : DEFAULT_PPTX_DESIGN, $chatId]);
+    }
+    $state = "awaiting_topic:{$type}:{$vk}";
+    setUserState($chatId, $state);
+    if ($kind === 'rt') {
+        $u = db()->prepare('SELECT * FROM users WHERE telegram_id = ?');
+        $u->execute([$chatId]);
+        $user = $u->fetch(PDO::FETCH_ASSOC);
+        if ($user) {
+            handleTopicSubmission($user, $chatId, $type, $vk, (string)$job['topic']);
+        }
+        return;
+    }
+    $price = (int)$vols[$vk]['price'];
+    if ($type === 'slayd' && isProDesign((string)($job['design_key'] ?? ''))) {
+        $price = ProDeck::price($price);
+    }
+    $design = $type === 'slayd' ? "\n🎨 Dizayn: " . Telegram::escape(preg_replace('/^\d+\.\s*/u', '', (string)(pptxDesigns()[$job['design_key']]['label'] ?? '')) ?? '') : '';
+    Telegram::sendMessage(
+        $chatId,
+        "🔁 <b>Qayta buyurtma</b>: " . DocTypes::label($type) . " · " . Telegram::escape((string)$vols[$vk]['label']) . " · " . number_format($price, 0, '', ' ') . " so'm"
+        . $design . "\n👤 Titul ma'lumotlari — o'sha buyurtmadagidek.\n\n✏️ Yangi mavzuni yozing" . I18n::hintLine($chatId)
+        . "\n\nYoki o'sha mavzuni yangi matn bilan qayta tayyorlash:",
+        ['inline_keyboard' => [[['text' => '♻️ «' . mb_substr((string)$job['topic'], 0, 40) . '» — qayta', 'callback_data' => 'rt:' . (int)$job['id']]]]]
+    );
+}
+
 function sendOrderList(int $chatId, int $page = 0, ?int $editMessageId = null): void
 {
     $perPage = 5;
@@ -1192,6 +1288,9 @@ function sendOrderList(int $chatId, int $page = 0, ?int $editMessageId = null): 
             if ($btns) {
                 $kb[] = $btns;
             }
+        }
+        if (in_array($r['status'], ['done', 'failed', 'cancelled'], true) && DocTypes::exists((string)$r['type'])) {
+            $kb[] = [['text' => "🔁 #{$r['id']} kabi yangi buyurtma", 'callback_data' => 'ro:' . $r['id']]];
         }
     }
     $nav = [];

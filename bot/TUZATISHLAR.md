@@ -1,3 +1,34 @@
+# studybot 14-8 — YANGI TURLAR, HAQIQIY ADABIYOTLAR, RASSILKA, STARS, AVTO-YANGILASH
+
+Eski `config.php` bilan ishlaydi (yangi sozlamalar ixtiyoriy — `config_yangi_qatorlar.txt` oxirida). Baza o'zi yangilanadi.
+
+## 📚 Hujjatlar
+- **Yangi turlar:** 🎓 **Kurs ishi** (25-30 / 30-40 bet, 3 bob × 3 band), 📰 **Ilmiy maqola** (annotatsiya, kalit so'zlar, metodologiya,
+  natijalar va muhokama; titulsiz jurnal andozasi), 🧾 **Tezis** (konferensiya uchun). Narxlar `lib/DocTypes.php` da, config'dan o'zgartiriladi.
+- **Haqiqiy adabiyotlar ro'yxati** — Crossref ochiq ilmiy bazasidan mavzu bo'yicha *haqiqatda mavjud* maqola/kitoblar (muallif, nom, jurnal,
+  yil, tom, sahifa, DOI), alifbo tartibida. Topilmasa — avvalgi umumiy ro'yxat. Kalit kerak emas, 30 kun keshlanadi.
+- **Kichik bo'limlar (1.1, 1.2, 1.3)** — mustaqil ish (10+ bet) va kurs ishida; Rejada bandlar ham bet raqami bilan.
+- **Rasm va jadval** — boblarga mavzuga oid rasm («1-rasm. …» izohi bilan), 2-bobda bitta taqqoslash jadvali («1-jadval»).
+  Tahrirlovchidan qayta eksport qilinganda ham rasmlar saqlanadi.
+
+## 📊 Taqdimot
+- **Oldindan ko'rinish:** fayldan oldin 4 ta slayd rasmi albom bo'lib keladi (LibreOffice bo'lsa — barcha dizaynlarda; bo'lmasa — oddiy dizaynlarda).
+
+## 🛡 Admin panel
+- **📣 Rassilka:** segmentlar (hamma / 7 va 30 kunda faol / buyurtma berganlar / bermaganlar / balansi borlar), **qalin**/__kursiv__,
+  havola tugmasi, «Menga sinov», jonli progress (yetkazildi / bloklagan / xato), to'xtatish. Fon rejimida yuboriladi, tugagach hisobot keladi.
+
+## 💳 To'lov va mijoz
+- **⭐ Telegram Stars** orqali balansni to'ldirish (kartasiz). Webhook sozlamasi kerak bo'lsa bot o'zi tuzatadi.
+- **🔁 Qayta buyurtma** («Buyurtmalarim»da): tur, hajm, dizayn va titul ma'lumotlari eslab qolinadi; «♻️ o'sha mavzu — qayta» tugmasi ham bor.
+
+## 🔧 Xizmat
+- **Kunlik baza zaxirasi** adminga Telegram orqali (03:00 dan keyin), oxirgi 3 tasi serverda.
+- **Avtomatik tozalash** (soatiga): eski fayllar, katta loglar, eski zaxiralar, eski hujjat rasmlari.
+- **/yangilash** — botni GitHub'dan bir tugma bilan yangilash (zaxira bilan; config va baza o'zgarmaydi).
+
+---
+
 # studybot 14-7 — TEZROQ, ARZONROQ (kamroq AI token) VA YANGI IMKONIYATLAR
 
 Eski `config.php` bilan ishlaydi, baza o'zgarmaydi.

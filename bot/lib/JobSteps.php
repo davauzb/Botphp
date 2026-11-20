@@ -7,6 +7,7 @@ require_once __DIR__ . '/I18n.php';
 require_once __DIR__ . '/SpeechDoc.php';
 require_once __DIR__ . '/Bibliography.php';
 require_once __DIR__ . '/DocTypes.php';
+require_once __DIR__ . '/SlidePreview.php';
 
 /**
  * Ish turlari uchun reja (qadamlar) va har bir qadamni bajarish.
@@ -106,6 +107,9 @@ class JobSteps
             }
             $steps[] = ['id' => 'images', 'k' => 'slide_images', 'w' => 2.0, 'label' => 'Rasmlar tanlanmoqda'];
             $steps[] = ['id' => 'build', 'k' => 'slide_build', 'w' => 3.0, 'label' => 'Taqdimot (PPTX) shakllantirilmoqda'];
+            if (SlidePreview::enabled()) {
+                $steps[] = ['id' => 'preview', 'k' => 'slide_preview', 'w' => 1.0, 'label' => 'Slaydlar ko\'rinishi tayyorlanmoqda'];
+            }
             $steps[] = ['id' => 'deliver', 'k' => 'deliver', 'w' => 1.5, 'label' => 'Telegram’ga yuborilmoqda'];
         } else {
             throw new RuntimeException("Noma'lum job turi: $type");
@@ -155,6 +159,9 @@ class JobSteps
                 break;
             case 'slide_build':
                 self::stepSlideBuild($job, $state);
+                break;
+            case 'slide_preview':
+                self::stepSlidePreview($state);
                 break;
             case 'deliver':
                 self::stepDeliver($job, $state);
@@ -763,6 +770,37 @@ class JobSteps
         unset($state['res']['ai'], $state['res']['outline']);
     }
 
+    /** Telegram albomi uchun 4 ta slayd rasmi (xato bo'lsa — jim o'tkaziladi, fayl baribir yuboriladi). */
+    private static function stepSlidePreview(array &$state): void
+    {
+        if (isset($state['res']['pv'])) {
+            return;
+        }
+        $file = (string)($state['res']['file'] ?? '');
+        $state['res']['pv'] = [];
+        if ($file === '' || !is_file($file)) {
+            return;
+        }
+        $left = AIClient::$deadline !== null ? AIClient::$deadline - microtime(true) - 5 : 40;
+        if ($left < 12) {
+            unset($state['res']['pv']);
+            throw new StepContinueException();
+        }
+        $z = new ZipArchive();
+        $total = 0;
+        if ($z->open($file) === true) {
+            for ($i = 0; $i < $z->numFiles; $i++) {
+                $total += (int)preg_match('#^ppt/slides/slide\d+\.xml$#', (string)$z->getNameIndex($i));
+            }
+            $z->close();
+        }
+        $pv = SlidePreview::make($file, SlidePreview::pick($total), !empty($state['res']['pres']) ? (string)$state['res']['pres'] : null, min(45, $left));
+        $state['res']['pv'] = $pv;
+        foreach ($pv as $f) {
+            $state['res']['tmp'][] = $f;
+        }
+    }
+
     // ---- yuborish va yakun ----
 
     private static function stepDeliver(array $job, array &$state): void
@@ -785,6 +823,14 @@ class JobSteps
             : "⚠️ Matn AI yordamida yaratildi — faktlar va sanalarni topshirishdan oldin albatta o'zingiz tekshirib chiqing.";
         $caption = "✅ \"{$topic}\" mavzusidagi {$what} tayyor ($label).{$real}\n$warn";
         $kb = !empty($state['res']['pres']) ? ['inline_keyboard' => [[['text' => '✏️ Tahrirlash', 'callback_data' => 'edit:' . $state['res']['pres']]]]] : null;
+        if (!empty($state['res']['pv']) && empty($state['res']['pv_sent'])) {
+            $state['res']['pv_sent'] = true;          // albom bir marta (qayta urinishda takrorlanmaydi)
+            try {
+                SlidePreview::send($chatId, $state['res']['pv'], "👀 <b>Taqdimotingizdan lavhalar</b>\nTo'liq fayl — pastda 👇");
+            } catch (Throwable $e) {
+                logError('steps', 'Preview yuborilmadi: ' . $e->getMessage());
+            }
+        }
         if (!Telegram::sendDocument($chatId, $file, $caption, $kb)) {
             throw new RuntimeException('Fayl Telegram orqali yuborilmadi');
         }
