@@ -40,7 +40,7 @@ function maybeRewardReferrer(int $chatId, bool $wasFree): void
         $pdo->prepare('UPDATE users SET referral_rewarded = 1 WHERE telegram_id = :id')->execute(['id' => $chatId]);
         $pdo->prepare(
             'UPDATE users SET balance = balance + :b, referral_count = referral_count + 1, referral_earned = referral_earned + :b WHERE telegram_id = :id'
-        )->execute(['b' => REFERRAL_BONUS, 'id' => $referrerId]);
+        )->execute(['b' => (int)Engine::c('REFERRAL_BONUS', 3000), 'id' => $referrerId]);
 
         $pdo->exec('COMMIT');
     } catch (Throwable $e) {
@@ -53,7 +53,7 @@ function maybeRewardReferrer(int $chatId, bool $wasFree): void
         Telegram::sendMessage(
             $referrerId,
             "🎉 Sizning taklifingiz bilan kelgan foydalanuvchi birinchi buyurtmasini berdi!\n"
-            . "Balansingizga " . number_format(REFERRAL_BONUS, 0, '', ' ') . " so'm qo'shildi."
+            . "Balansingizga " . number_format((int)Engine::c('REFERRAL_BONUS', 3000), 0, '', ' ') . " so'm qo'shildi."
         );
     } catch (Throwable $e) {
         logError('referral', 'Referal xabarini yuborishda xato: ' . $e->getMessage());

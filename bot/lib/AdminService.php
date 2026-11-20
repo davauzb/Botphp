@@ -164,7 +164,11 @@ class AdminService
         $q = trim(self::cut($q, 60));
         $where = '1=1';
         $p = [];
-        if ($q !== '') {
+        if ($q !== '' && $q[0] === '#') {                 // #vip — teg bo'yicha qidirish
+            $tag = mb_strtolower(preg_replace('/[^\p{L}\p{N}_\-]+/u', '', mb_substr($q, 1)) ?? '');
+            $where = "(',' || COALESCE(u.tags,'') || ',') LIKE :t";
+            $p['t'] = '%,' . $tag . ',%';
+        } elseif ($q !== '') {
             $clean = ltrim($q, '@');
             $like = '%' . self::likeEscape($clean) . '%';
             if (ctype_digit($clean)) {
@@ -175,7 +179,7 @@ class AdminService
             }
             $p['l'] = $like;
         }
-        $sql = "SELECT u.telegram_id, u.username, u.full_name, u.balance, u.free_used, u.banned, u.created_at, u.last_request_at,
+        $sql = "SELECT u.telegram_id, u.username, u.full_name, u.balance, u.free_used, u.banned, u.created_at, u.last_request_at, u.tags,
                        (SELECT COUNT(*) FROM jobs j WHERE j.telegram_id = u.telegram_id) AS jobs
                 FROM users u WHERE $where ORDER BY u.last_request_at DESC, u.id DESC LIMIT " . (self::PAGE + 1) . ' OFFSET ' . max(0, $offset);
         $st = db()->prepare($sql);
@@ -185,6 +189,7 @@ class AdminService
         $rows = array_slice($rows, 0, self::PAGE);
         foreach ($rows as &$r) {
             $r = self::normUser($r);
+            $r['tags'] = AdminPro::tags($r['tags'] ?? '');
         }
         return ['items' => $rows, 'more' => $more];
     }
@@ -202,13 +207,15 @@ class AdminService
     public static function user(int $tgId): ?array
     {
         $st = db()->prepare('SELECT telegram_id, username, full_name, first_name, last_name, university, group_name, balance, free_used, banned,
-                referred_by, referral_count, referral_earned, created_at, last_request_at FROM users WHERE telegram_id = ?');
+                referred_by, referral_count, referral_earned, created_at, last_request_at, admin_note, tags FROM users WHERE telegram_id = ?');
         $st->execute([$tgId]);
         $u = $st->fetch(PDO::FETCH_ASSOC);
         if (!$u) {
             return null;
         }
         $u = self::normUser($u);
+        $u['tags'] = AdminPro::tags($u['tags'] ?? '');
+        $u['support_count'] = (int)db()->query('SELECT COUNT(*) FROM support_msgs WHERE tg = ' . (int)$tgId)->fetchColumn();
         foreach (['referred_by', 'referral_count', 'referral_earned'] as $k) {
             $u[$k] = (int)($u[$k] ?? 0);
         }
@@ -385,7 +392,7 @@ class AdminService
 
     private static function normJob(array $r): array
     {
-        foreach (['id', 'telegram_id', 'price', 'is_free', 'created_at', 'updated_at', 'rating', 'retries'] as $k) {
+        foreach (['id', 'telegram_id', 'price', 'is_free', 'created_at', 'updated_at', 'rating', 'retries', 'has_file', 'tokens', 'progress'] as $k) {
             if (array_key_exists($k, $r) && $r[$k] !== null) {
                 $r[$k] = (int)$r[$k];
             }
@@ -432,7 +439,7 @@ class AdminService
     public static function job(int $id): ?array
     {
         $st = db()->prepare('SELECT j.id, j.telegram_id, j.type, j.topic, j.volume_key, j.price, j.is_free, j.design_key, j.rating, j.status,
-                j.retries, j.error_message, j.created_at, j.updated_at, u.username, u.full_name
+                j.retries, j.error_message, j.created_at, j.updated_at, j.tg_file_id IS NOT NULL AS has_file, COALESCE(j.tokens,0) AS tokens, j.progress, u.username, u.full_name
             FROM jobs j LEFT JOIN users u ON u.telegram_id = j.telegram_id WHERE j.id = ?');
         $st->execute([$id]);
         $j = $st->fetch(PDO::FETCH_ASSOC);

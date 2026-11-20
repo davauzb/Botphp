@@ -52,6 +52,11 @@ class AdminSecurity
                 $ids[] = (int)$id;
             }
         }
+        if (class_exists('AdminPro', false)) {            // paneldan qo'shilgan adminlar/operatorlar
+            foreach (AdminPro::dbAdmins() as $id) {
+                $ids[] = $id;
+            }
+        }
         return array_values(array_unique($ids));
     }
 

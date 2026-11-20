@@ -15,7 +15,7 @@ class SlidePreview
 {
     public static function enabled(): bool
     {
-        return (bool)(defined('SLIDE_PREVIEW') ? SLIDE_PREVIEW : true);
+        return (bool)Engine::c('SLIDE_PREVIEW', true);
     }
 
     /** Ko'rsatiladigan slaydlar: muqova + taqdimot bo'ylab tekis 3 ta (reja va «Rahmat» dan tashqari). */

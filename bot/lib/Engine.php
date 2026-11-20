@@ -18,7 +18,8 @@ class Engine
 
     public static function c(string $name, $default)
     {
-        return defined($name) ? constant($name) : $default;
+        // admin paneldagi «Sozlamalar» (bazada) > config.php > standart
+        return class_exists('Settings', false) ? Settings::get($name, $default) : (defined($name) ? constant($name) : $default);
     }
 
     public static function secret(): string
@@ -434,6 +435,7 @@ class Engine
     private static function runJob(array $job, string $tickId, float $budgetEnd, float $hardEnd): void
     {
         $jobId = (int)$job['id'];
+        AIClient::$jobId = $jobId;                 // AI token sarfi shu buyurtmaga yoziladi
         $state = $job['state'] ? json_decode((string)$job['state'], true) : null;
         if (!is_array($state) || empty($state['steps'])) {
             try {

@@ -40,7 +40,7 @@ final class DocTypes
     public static function enabled(string $t): bool
     {
         $f = self::T[$t]['flag'] ?? null;
-        return $f === null || !defined($f) || (bool)constant($f);
+        return $f === null || (bool)Engine::c($f, true);
     }
 
     /** Yoqilgan turlar (menyu tartibida). */
@@ -49,13 +49,29 @@ final class DocTypes
         return array_keys(array_filter(self::T, fn($v, $k) => self::enabled($k), ARRAY_FILTER_USE_BOTH));
     }
 
-    public static function volumes(string $t): ?array
+    /** Hajm/narx jadvali. $withPrices = true — admin paneldagi narxlar qo'llanadi. */
+    public static function volumes(string $t, bool $withPrices = true): ?array
     {
         if (!isset(self::T[$t])) {
             return null;
         }
         $c = self::T[$t]['const'];
-        return defined($c) ? constant($c) : (self::T[$t]['volumes'] ?? null);
+        $v = defined($c) ? constant($c) : (self::T[$t]['volumes'] ?? null);
+        if ($v && $withPrices && class_exists('Settings', false)) {
+            foreach ($v as $k => $row) {
+                $v[$k]['price'] = Settings::price($t, (string)$k, (int)$row['price']);
+            }
+        }
+        return $v;
+    }
+
+    /** Bepul birinchi buyurtma tarifi (admin o'chirgan bo'lsa — null). */
+    public static function freeKey(string $t): ?string
+    {
+        if (!(bool)Engine::c('FREE_TRIAL', true) || !defined('FREE_TIER_KEY')) {
+            return null;
+        }
+        return FREE_TIER_KEY[$t] ?? null;
     }
 
     public static function label(string $t): string

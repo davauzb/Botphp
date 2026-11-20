@@ -200,6 +200,7 @@ function mainMenu(): array
                 [['text' => '📋 Buyurtmalarim'], ['text' => '💰 Balans']],
                 [['text' => '🎁 Referal'], ['text' => '🎟 Promokod']],
                 [['text' => '⚙️ Profil'], ['text' => '🌐 Til']],
+                [['text' => '💬 Yordam']],
             ]
         ),
         'resize_keyboard' => true,
@@ -209,7 +210,7 @@ function mainMenu(): array
 function volumeKeyboard(string $type, array $user): array
 {
     $volumes = volumesFor($type) ?? [];
-    $freeKey = FREE_TIER_KEY[$type] ?? null;
+    $freeKey = DocTypes::freeKey($type);
     $freeAvailable = (int)$user['free_used'] === 0;
 
     $buttons = [];
@@ -270,6 +271,19 @@ function handleMessage(array $user, int $chatId, string $text): void
             . "Quyidagi menyudan boshlang 👇",
             mainMenu()
         );
+        return;
+    }
+
+    // 🛠 Texnik ishlar rejimi (admin paneldan yoqiladi): mijozlar yangi buyurtma bera olmaydi, «💬 Yordam» ishlayveradi
+    if (Settings::maintenance() && !AdminSecurity::isAdmin($chatId) && $text !== '💬 Yordam' && $text !== '/yordam' && !str_starts_with((string)$user['state'], 'awaiting_support')) {
+        Telegram::sendMessage($chatId, Telegram::escape((string)Engine::c('MAINTENANCE_TEXT', "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!")), ['keyboard' => [[['text' => '💬 Yordam']]], 'resize_keyboard' => true]);
+        return;
+    }
+
+    if ($text === '💬 Yordam' || $text === '/yordam') {
+        setUserState($chatId, 'awaiting_support');
+        Telegram::sendMessage($chatId, "💬 <b>Yordam</b>\n\nSavolingiz yoki muammoingizni bitta xabarda yozing (buyurtma raqami bo'lsa, uni ham qo'shing). Administrator shu yerda javob beradi.",
+            ['inline_keyboard' => [[['text' => '✖️ Bekor qilish', 'callback_data' => 'sup:cancel']]]]);
         return;
     }
 
@@ -421,8 +435,8 @@ function handleMessage(array $user, int $chatId, string $text): void
         $maxTopup = defined('MAX_TOPUP_AMOUNT') ? (int)MAX_TOPUP_AMOUNT : 5000000;
         // Juda uzun raqam (int overflow) va haddan katta summalarni rad etamiz
         $amount = strlen($digits) > 12 ? PHP_INT_MAX : (int)$digits;
-        if ($amount < MIN_TOPUP_AMOUNT) {
-            Telegram::sendMessage($chatId, "⚠️ Juda kichik summa. Kamida " . number_format(MIN_TOPUP_AMOUNT, 0, '', ' ') . " so'm kiriting:");
+        if ($amount < (int)Engine::c('MIN_TOPUP_AMOUNT', 1000)) {
+            Telegram::sendMessage($chatId, "⚠️ Juda kichik summa. Kamida " . number_format((int)Engine::c('MIN_TOPUP_AMOUNT', 1000), 0, '', ' ') . " so'm kiriting:");
             return;
         }
         if ($amount > $maxTopup) {
@@ -457,6 +471,14 @@ function handleMessage(array $user, int $chatId, string $text): void
     // --- Dizayn kutilmoqda, lekin user tugma bosish o'rniga matn yubordi ---
     if (str_starts_with($user['state'], 'awaiting_design:')) {
         Telegram::sendMessage($chatId, "👆 Iltimos, yuqoridagi rasmdagi raqamlardan birini tugma orqali tanlang.");
+        return;
+    }
+
+    // --- Yordam: mijoz savoli → admin panelning «Yordam» bo'limiga ---
+    if ($user['state'] === 'awaiting_support' && $text !== '') {
+        setUserState($chatId, 'idle');
+        AdminPro::supportIncoming($chatId, $text);
+        Telegram::sendMessage($chatId, "✅ Xabaringiz administratorga yetkazildi. Javob shu chatga keladi.", mainMenu());
         return;
     }
 
@@ -514,7 +536,7 @@ function handleTopicSubmission(array $user, int $chatId, string $type, string $v
 
     $volume = $volumes[$volumeKey];
     $price = (int)$volume['price'];
-    $freeKey = FREE_TIER_KEY[$type] ?? null;
+    $freeKey = DocTypes::freeKey($type);
     $isFree = false;
     $isPro = false;
     if ($type === 'slayd') {
@@ -642,6 +664,20 @@ function handleCallbackQuery(array $cb): void
         resendJobFile($chatId, (int)($cb['from']['id'] ?? 0), (int)substr($data, 3), (string)($cb['id'] ?? ''));
         return;
     }
+    if ($data === 'sup:reply' || $data === 'sup:cancel') {
+        if ($data === 'sup:cancel') {
+            setUserState($chatId, 'idle');
+            Telegram::sendMessage($chatId, "Bekor qilindi.", mainMenu());
+        } else {
+            setUserState($chatId, 'awaiting_support');
+            Telegram::sendMessage($chatId, "✍️ Javobingizni yozing:", ['inline_keyboard' => [[['text' => '✖️ Bekor qilish', 'callback_data' => 'sup:cancel']]]]);
+        }
+        return;
+    }
+    if (Settings::maintenance() && !AdminSecurity::isAdmin($chatId) && preg_match('/^(vol|design|designpro|designstd|ro|rt):/', $data)) {
+        Telegram::sendMessage($chatId, Telegram::escape((string)Engine::c('MAINTENANCE_TEXT', "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!")));
+        return;
+    }
     if ($data === 'upd:go') {
         if (ADMIN_CHAT_ID && $chatId === (int)ADMIN_CHAT_ID && Updater::enabled()) {
             if (!empty($cb['message']['message_id'])) {
@@ -756,7 +792,7 @@ function proceedAfterProfileReady(int $chatId, string $type, string $volumeKey):
     $stmt->execute(['id' => $chatId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $freeKey = FREE_TIER_KEY[$type] ?? null;
+    $freeKey = DocTypes::freeKey($type);
     $isFreeEligible = (int)$user['free_used'] === 0 && $volumeKey === $freeKey;
 
     if (!$isFreeEligible) {
@@ -794,7 +830,7 @@ function proceedAfterProfileReady(int $chatId, string $type, string $volumeKey):
  */
 function sendDesignPicker(int $chatId, string $volumeKey): void
 {
-    if (!isset(SLAYD_VOLUMES[$volumeKey])) {
+    if (!isset(volumesFor('slayd')[$volumeKey])) {
         return;
     }
     setUserState($chatId, "awaiting_design:{$volumeKey}");
@@ -823,11 +859,11 @@ function sendDesignPicker(int $chatId, string $volumeKey): void
 /** PRO dizaynlar kollaji (oldindan tayyorlangan assets/pro_preview.jpg) + narx. */
 function sendProDesignPicker(int $chatId, string $volumeKey): void
 {
-    if (!ProDeck::enabled() || !isset(SLAYD_VOLUMES[$volumeKey])) {
+    if (!ProDeck::enabled() || !isset(volumesFor('slayd')[$volumeKey])) {
         return;
     }
     setUserState($chatId, "awaiting_design:{$volumeKey}");
-    $base = (int)SLAYD_VOLUMES[$volumeKey]['price'];
+    $base = (int)volumesFor('slayd')[$volumeKey]['price'];
     $price = ProDeck::price($base);
     $cap = "⭐ <b>PRO taqdimot</b> — 16:9 keng ekran\n"
         . "• mavzuga oid katta rasmli fonlar\n• slaydlar orasida o'tish effekti va elementlar animatsiyasi\n"
@@ -851,7 +887,7 @@ function handleDesignChosen(int $chatId, string $data): void
     $designKey = substr($rest, 0, $lastColon);
     $volumeKey = substr($rest, $lastColon + 1);
 
-    if (!isset(pptxDesigns()[$designKey]) || !isset(SLAYD_VOLUMES[$volumeKey])) {
+    if (!isset(pptxDesigns()[$designKey]) || !isset(volumesFor('slayd')[$volumeKey])) {
         Telegram::sendMessage($chatId, "⚠️ Xatolik, /start orqali qaytadan boshlang.");
         return;
     }
@@ -869,7 +905,7 @@ function handleDesignChosen(int $chatId, string $data): void
 
     if (isProDesign($designKey)) {
         // PRO — qimmatroq va bepul tarifga kirmaydi: balans yetmasa, buyurtma tugamasdan oldin to'ldirishga yo'naltiramiz
-        $price = ProDeck::price((int)SLAYD_VOLUMES[$volumeKey]['price']);
+        $price = ProDeck::price((int)volumesFor('slayd')[$volumeKey]['price']);
         $balance = getUserBalance($chatId);
         if ($balance < $price) {
             $needed = $price - $balance;
@@ -897,7 +933,7 @@ function handleTopupAmountChosen(int $chatId, string $val): void
         setUserState($chatId, 'awaiting_topup_custom_amount:_none:-');
         Telegram::sendMessage(
             $chatId,
-            "✏️ To'ldirish summasini raqamda kiriting (so'mda, kamida " . number_format(MIN_TOPUP_AMOUNT, 0, '', ' ') . " so'm):"
+            "✏️ To'ldirish summasini raqamda kiriting (so'mda, kamida " . number_format((int)Engine::c('MIN_TOPUP_AMOUNT', 1000), 0, '', ' ') . " so'm):"
         );
         return;
     }
@@ -919,7 +955,7 @@ function handleTopupMethodChosen(int $chatId, string $method): void
     [, $amountStr, $resumeType, $resumeVolumeKey] = array_pad(explode(':', $state, 4), 4, null);
     $amount = (int)$amountStr;
     $maxTopup = defined('MAX_TOPUP_AMOUNT') ? (int)MAX_TOPUP_AMOUNT : 5000000;
-    if ($amount < MIN_TOPUP_AMOUNT || $amount > $maxTopup) {
+    if ($amount < (int)Engine::c('MIN_TOPUP_AMOUNT', 1000) || $amount > $maxTopup) {
         Telegram::sendMessage($chatId, "Xatolik yuz berdi, /balans orqali qaytadan boshlang.");
         return;
     }
@@ -1104,7 +1140,7 @@ function sendReferralInfo(int $chatId): void
         $chatId,
         "🎁 <b>Do'stlaringizni taklif qiling — pul ishlang!</b>\n\n"
         . "Har bir do'stingiz taklifingiz orqali kirib, birinchi PULLIK buyurtmasini bersa — "
-        . "sizning balansingizga <b>" . number_format(REFERRAL_BONUS, 0, '', ' ') . " so'm</b> tushadi.\n\n"
+        . "sizning balansingizga <b>" . number_format((int)Engine::c('REFERRAL_BONUS', 3000), 0, '', ' ') . " so'm</b> tushadi.\n\n"
         . "🔗 Sizning havolangiz:\n<code>{$link}</code>\n\n"
         . "📊 Statistikangiz:\n"
         . "— Taklif qilinganlar: <b>{$u['referral_count']}</b>\n"

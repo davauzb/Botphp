@@ -102,7 +102,13 @@ try {
     $action = (string)($_GET['a'] ?? '');
     $allowed = ['auth', 'ping', 'logout', 'stats', 'users', 'user', 'adjust', 'ban', 'msg', 'topups', 'topup_decide',
         'receipt', 'jobs', 'job', 'job_cancel', 'audit', 'promos', 'promo_save', 'promo_toggle', 'promo_delete', 'promo_uses',
-        'events', 'events_read'];
+        'events', 'events_read',
+        // rassilka
+        'bc_count', 'bc_list', 'bc_test', 'bc_create', 'bc_cancel',
+        // admin pro: sozlamalar, rollar, yordam, eslatmalar, hisobotlar, navbat
+        'me', 'settings', 'settings_save', 'settings_reset', 'roles_list', 'roles_save', 'roles_delete',
+        'support_list', 'support_thread', 'support_reply', 'support_close', 'user_meta',
+        'finance', 'finance_export', 'funnel', 'ai_usage', 'queue', 'job_resend', 'job_retry'];
     if ($method !== 'POST' || !in_array($action, $allowed, true)) {
         AdminSecurity::deny();
     }
@@ -168,7 +174,7 @@ try {
             Telegram::deleteMessage((int)$row['chat_id'], (int)$row['message_id']);   // havola xabari o'chiriladi
         }
         AdminSecurity::notifyAdmins('🔐 Admin panelga kirildi · <code>' . $admin . '</code> · IP <code>' . htmlspecialchars($ip) . '</code> · ' . gmdate('H:i', time() + ADMIN_TZ_OFFSET));
-        out(['ok' => true, 'session' => $sess, 'admin' => $admin, 'idle' => ADMIN_SESSION_IDLE, 'pin' => AdminSecurity::pinRequired(),
+        out(['ok' => true, 'session' => $sess, 'admin' => $admin, 'role' => AdminPro::role($admin), 'idle' => ADMIN_SESSION_IDLE, 'pin' => AdminSecurity::pinRequired(),
             'stepup' => ADMIN_STEPUP_AMOUNT, 'max_adjust' => ADMIN_MAX_ADJUST]);
     }
 
@@ -180,6 +186,10 @@ try {
     $admin = $s['tg_id'];
     if (!AdminSecurity::rate('s:' . $s['hash'], 240, 60)) {
         AdminSecurity::fail('rate', 429, 'Juda tez-tez so\'rov. Biroz kuting');
+    }
+    // Rol bo'yicha ruxsat: operator faqat cheklar/buyurtmalar/yordam; rollarni faqat owner boshqaradi
+    if (!AdminPro::can($admin, $action)) {
+        AdminSecurity::fail('forbidden', 403, "Bu bo'lim uchun huquqingiz yo'q");
     }
 
     switch ($action) {
@@ -311,6 +321,90 @@ try {
                 }
                 return $r;
             });
+
+        case 'me':
+            out(['ok' => true, 'admin' => $admin, 'role' => AdminPro::role($admin), 'support_unread' => AdminPro::supportUnread(), 'maintenance' => Settings::maintenance()]);
+
+        // ---------------- sozlamalar va narxlar
+        case 'settings':
+            out(['ok' => true] + Settings::all());
+
+        case 'settings_save':
+            mutate($admin, $b, function () use ($admin, $b) {
+                $changes = is_array($b['changes'] ?? null) ? array_slice($b['changes'], 0, 80, true) : [];
+                $done = Settings::save($admin, $changes);
+                if ($done) {
+                    $txt = implode(', ', array_map(fn($k, $v) => "$k=$v", array_keys($done), $done));
+                    AdminSecurity::audit('settings', $admin, (string)count($done), mb_substr($txt, 0, 380));
+                    AdminSecurity::notifyAdmins('⚙️ Sozlamalar o\'zgartirildi (<code>' . $admin . '</code>): ' . htmlspecialchars(mb_substr($txt, 0, 600)));
+                }
+                return ['ok' => true, 'changed' => count($done), 'msg' => $done ? count($done) . ' ta o\'zgarish saqlandi' : 'O\'zgarish yo\'q'];
+            });
+
+        case 'settings_reset':
+            mutate($admin, $b, function () use ($admin, $b) {
+                $k = strv($b['k'] ?? '', 80);
+                if (!isset(Settings::SCHEMA[$k]) && !preg_match('/^PRICE:[a-z_]+:[0-9A-Za-z_\-]{1,12}$/', $k)) {
+                    return ['ok' => false, 'error' => 'bad', 'msg' => 'Noto\'g\'ri kalit'];
+                }
+                Settings::reset($k);
+                AdminSecurity::audit('settings_reset', $admin, $k);
+                return ['ok' => true, 'msg' => 'config.php qiymatiga qaytarildi'];
+            });
+
+        // ---------------- rollar (faqat owner)
+        case 'roles_list':
+            out(['ok' => true, 'items' => AdminPro::rolesList(), 'roles' => AdminPro::ROLES]);
+
+        case 'roles_save':
+            mutate($admin, $b, fn() => AdminPro::roleSave($admin, intv($b['tg'] ?? 0, 1, PHP_INT_MAX), strv($b['role'] ?? '', 20), strv($b['name'] ?? '', 60)));
+
+        case 'roles_delete':
+            mutate($admin, $b, fn() => AdminPro::roleDelete($admin, intv($b['tg'] ?? 0, 1, PHP_INT_MAX)));
+
+        // ---------------- yordam qutisi
+        case 'support_list':
+            out(['ok' => true] + AdminPro::supportList(strv($b['filter'] ?? 'open', 10), intv($b['offset'] ?? 0, 0, 100000)));
+
+        case 'support_thread':
+            out(['ok' => true] + AdminPro::supportThread(intv($b['tg'] ?? 0, 1, PHP_INT_MAX)));
+
+        case 'support_reply':
+            mutate($admin, $b, fn() => AdminPro::supportReply($admin, intv($b['tg'] ?? 0, 1, PHP_INT_MAX), strv($b['text'] ?? '', 2000)));
+
+        case 'support_close':
+            mutate($admin, $b, fn() => AdminPro::supportClose($admin, intv($b['tg'] ?? 0, 1, PHP_INT_MAX)));
+
+        // ---------------- mijoz eslatmasi / teglar
+        case 'user_meta':
+            mutate($admin, $b, fn() => AdminPro::userMeta($admin, intv($b['tg'] ?? 0, 1, PHP_INT_MAX), strv($b['note'] ?? '', 1000),
+                array_map(fn($t) => strv($t, 20), is_array($b['tags'] ?? null) ? $b['tags'] : [])));
+
+        // ---------------- hisobotlar
+        case 'finance':
+            out(['ok' => true] + AdminPro::finance(intv($b['months'] ?? 12, 1, 24)));
+
+        case 'finance_export':
+            if (!AdminSecurity::rate('export:' . $admin, 6, 600)) {
+                AdminSecurity::fail('rate', 429, 'Juda tez-tez. Biroz kuting');
+            }
+            out(AdminPro::export($admin, strv($b['kind'] ?? 'finance', 10) === 'orders' ? 'orders' : 'finance', intv($b['months'] ?? 12, 1, 24)));
+
+        case 'funnel':
+            out(['ok' => true] + AdminPro::funnel(intv($b['days'] ?? 30, 0, 3650)));
+
+        case 'ai_usage':
+            out(['ok' => true] + AdminPro::aiUsage(intv($b['days'] ?? 14, 7, 30)));
+
+        // ---------------- navbat va buyurtma amallari
+        case 'queue':
+            out(['ok' => true] + AdminPro::queue());
+
+        case 'job_resend':
+            mutate($admin, $b, fn() => AdminPro::resend($admin, intv($b['id'] ?? 0, 1, PHP_INT_MAX)));
+
+        case 'job_retry':
+            mutate($admin, $b, fn() => AdminPro::retry($admin, intv($b['id'] ?? 0, 1, PHP_INT_MAX), !empty($b['gift'])));
 
         case 'audit':
             out(['ok' => true] + AdminService::audit(intv($b['offset'] ?? 0, 0, 100000)));

@@ -19,7 +19,7 @@ class Bibliography
 
     public static function enabled(): bool
     {
-        return (bool)(defined('REAL_BIBLIO') ? REAL_BIBLIO : true) && function_exists('curl_init');
+        return (bool)Engine::c('REAL_BIBLIO', true) && function_exists('curl_init');
     }
 
     /** @return string[] tayyor yozuvlar (raqamsiz) */

@@ -14,7 +14,7 @@ foreach (['ADMIN_NOTIFY_ORDERS' => true, 'ADMIN_NOTIFY_FAILS' => true, 'ADMIN_NO
  */
 class AdminEvents
 {
-    public const KINDS = ['order' => '🆕', 'order_fail' => '❌', 'promo' => '🎟', 'user' => '👤', 'topup' => '💰', 'receipt' => '🧾'];
+    public const KINDS = ['order' => '🆕', 'order_fail' => '❌', 'promo' => '🎟', 'user' => '👤', 'topup' => '💰', 'receipt' => '🧾', 'support' => '💬'];
     private const KEEP = 500;
 
     public static function ensureSchema(PDO $pdo): void
@@ -33,6 +33,7 @@ class AdminEvents
             'promo' => (bool)ADMIN_NOTIFY_PROMO,
             'user' => (bool)ADMIN_NOTIFY_USERS,
             'topup' => (bool)ADMIN_NOTIFY_TOPUPS,
+            'support' => true,
             default => false,
         };
     }
@@ -114,6 +115,17 @@ class AdminEvents
         $sum = number_format($amount, 0, '', ' ') . " so'm";
         self::add('topup', "Balans to'ldirildi #{$topupId}", $sum . ($bonus > 0 ? ' + bonus ' . number_format($bonus, 0, '', ' ') : '') . ' · ' . $method . ' · user ' . $uid, $topupId, $uid,
             "💰 <b>Balans to'ldirildi #{$topupId}</b>\n" . $sum . ($bonus > 0 ? ' + 🎁 ' . number_format($bonus, 0, '', ' ') : '') . ' · ' . Telegram::escape($method) . " · user <code>{$uid}</code>");
+    }
+
+    /** Mijoz «💬 Yordam» orqali yozdi. */
+    public static function support(int $uid, string $text): void
+    {
+        $st = db()->prepare('SELECT full_name, username FROM users WHERE telegram_id = ?');
+        $st->execute([$uid]);
+        $u = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+        $who = (string)($u['full_name'] ?: (!empty($u['username']) ? '@' . $u['username'] : 'ID ' . $uid));
+        self::add('support', 'Yordam: ' . $who, mb_substr($text, 0, 300), null, $uid,
+            "💬 <b>Yangi savol</b> — " . Telegram::escape($who) . " (<code>{$uid}</code>)\n\n" . Telegram::escape(mb_substr($text, 0, 600)) . "\n\nJavob: /admin → «Yordam»");
     }
 
     // ------------------------------------------------------------------ panel uchun

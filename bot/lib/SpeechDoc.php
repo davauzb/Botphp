@@ -28,7 +28,7 @@ class SpeechDoc
 
     public static function enabled(): bool
     {
-        return (bool)(defined('KONSPEKT_ENABLED') ? KONSPEKT_ENABLED : true) && class_exists('ZipArchive');
+        return (bool)Engine::c('KONSPEKT_ENABLED', true) && class_exists('ZipArchive');
     }
 
     /** $final — JobSteps::stepSlideBuild dagi tayyor slaydlar ro'yxati. Qaytadi: .docx yo'li. */

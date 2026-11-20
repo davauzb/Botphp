@@ -1,3 +1,30 @@
+# studybot 14-9 — ADMIN PANEL PRO
+
+Yangilash: botga `/yangilash` yozing → «🚀 Yangilash». Baza o'zi yangilanadi, config.php o'zgarmaydi.
+
+## Yangi bo'limlar
+- **💬 Yordam qutisi** — mijoz menyudagi «💬 Yordam» orqali yozadi → panelda chat ko'rinishida; javobingiz mijozga Telegram'da boradi
+  («✍️ Javob yozish» tugmasi bilan), tayyor javob shablonlari, suhbatni yopish, o'qilmaganlar soni.
+- **📈 Hisobotlar**: 💰 *Moliya* (3/6/12 oy: kirim, sotuv, o'rtacha chek, qaytarilganlar, yangi mijozlar; oylar grafigi; to'lov usullari va
+  buyurtma turlari ulushi; eng ko'p sotilgan tariflar; jadval; **Excel'ga eksport** — fayl Telegram'ingizga keladi),
+  🔻 *Voronka* (ro'yxatdan o'tdi → buyurtma boshladi → fayl oldi → to'ladi → qayta buyurtma; eng zaif bosqich va maslahat),
+  🤖 *AI sarfi* (kunlik token/so'rov, provayder/model bo'yicha, har tur bo'yicha bitta buyurtmaga o'rtacha).
+- **⚙️ Sozlamalar** (config.php ni ochmasdan): **narxlar** (har tur va hajm), bepul birinchi buyurtma, to'ldirish bonusi, referal bonusi,
+  eng kam to'lov, PRO narxi, Stars kursi, funksiyalarni yoqish/o'chirish, **🛠 texnik ishlar rejimi** (mijozlar buyurtma bera olmaydi,
+  «Yordam» ishlaydi). Har o'zgarish jurnalga yoziladi va adminlarga xabar boradi; «↺» — config qiymatiga qaytarish.
+- **🛡 Admin va operatorlar** (faqat egasi): Telegram ID bo'yicha qo'shish/olib tashlash. *Operator* — faqat cheklar, buyurtmalar, mijozlar va yordam.
+
+## Mavjud bo'limlarga qo'shimchalar
+- Bosh sahifa: **jonli navbat** (qaysi buyurtma qaysi bosqichda, foiz, avtomatik yangilanadi), texnik rejim ogohlantirishi, tezkor tugmalar.
+- Buyurtma: **📎 faylni qayta yuborish**, **🔁 qayta ishga tushirish** (mijoz balansidan yoki 🎁 bepul), AI tokenlari soni.
+- Mijoz: **teglar** (#vip, #shubhali …) va **ichki eslatma**; qidiruvda `#vip`; yozishmalarga o'tish.
+- Mobil: pastda 5 asosiy bo'lim + «Ko'proq» menyusi.
+
+## Tuzatish
+- 14-8 da qo'shilgan **rassilka** amallari API ruxsat ro'yxatiga kiritilmagan edi (panelda rassilka ochilmas edi) — tuzatildi.
+
+---
+
 # studybot 14-8 — YANGI TURLAR, HAQIQIY ADABIYOTLAR, RASSILKA, STARS, AVTO-YANGILASH
 
 Eski `config.php` bilan ishlaydi (yangi sozlamalar ixtiyoriy — `config_yangi_qatorlar.txt` oxirida). Baza o'zi yangilanadi.

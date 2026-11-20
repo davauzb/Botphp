@@ -14,12 +14,12 @@ class StarsPay
 {
     public static function enabled(): bool
     {
-        return (bool)(defined('STARS_ENABLED') ? STARS_ENABLED : true);
+        return (bool)Engine::c('STARS_ENABLED', true);
     }
 
     public static function rate(): int
     {
-        return max(50, (int)(defined('STARS_RATE') ? STARS_RATE : 200));
+        return max(50, (int)Engine::c('STARS_RATE', 200));
     }
 
     public static function starsFor(int $som): int

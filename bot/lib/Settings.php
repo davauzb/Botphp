@@ -1,0 +1,157 @@
+<?php
+
+/**
+ * Admin paneldan o'zgartiriladigan SOZLAMALAR (config.php ni tahrirlamasdan).
+ * Qiymat bazada bo'lsa — u ishlatiladi, bo'lmasa config.php dagi (yoki standart) qiymat.
+ * Faqat shu ro'yxatdagi kalitlarni o'zgartirish mumkin (oq ro'yxat), har o'zgarish jurnalga yoziladi.
+ * Narxlar: "PRICE:<tur>:<hajm>" kalitlari (masalan PRICE:slayd:10-15).
+ */
+class Settings
+{
+    /** kalit => [tur, guruh, nomi, izoh, min, max] */
+    public const SCHEMA = [
+        'MAINTENANCE_MODE' => ['bool', 'mode', 'Texnik ishlar rejimi', "Yoqilsa, mijozlar buyurtma bera olmaydi (adminlar ishlayveradi)", 0, 1],
+        'MAINTENANCE_TEXT' => ['text', 'mode', 'Texnik ishlar xabari', "Mijozga ko'rsatiladigan matn", 0, 500],
+        'FREE_TRIAL' => ['bool', 'money', 'Birinchi buyurtma bepul', "Har bir mijozga eng arzon tarif bir marta bepul", 0, 1],
+        'TOPUP_BONUS_PERCENT' => ['int', 'money', "To'ldirishga bonus, %", "Hamma uchun aksiya (0 — o'chiq)", 0, 100],
+        'TOPUP_BONUS_MIN_AMOUNT' => ['int', 'money', "Bonus uchun eng kam to'lov, so'm", '', 0, 10000000],
+        'REFERRAL_BONUS' => ['int', 'money', "Referal bonusi, so'm", "Taklif qilingan do'st birinchi pullik buyurtma berganda", 0, 1000000],
+        'MIN_TOPUP_AMOUNT' => ['int', 'money', "Eng kam to'ldirish, so'm", '', 100, 1000000],
+        'PRO_SURCHARGE_PERCENT' => ['int', 'money', "PRO taqdimot qo'shimcha narxi, %", '', 0, 500],
+        'STARS_RATE' => ['int', 'money', "1 ⭐ = necha so'm", 'Telegram Stars kursi', 50, 2000],
+        'PRO_ENABLED' => ['bool', 'feat', '⭐ PRO taqdimotlar', '', 0, 1],
+        'KURS_ISHI_ENABLED' => ['bool', 'feat', '🎓 Kurs ishi', '', 0, 1],
+        'MAQOLA_ENABLED' => ['bool', 'feat', '📰 Ilmiy maqola', '', 0, 1],
+        'TEZIS_ENABLED' => ['bool', 'feat', '🧾 Tezis', '', 0, 1],
+        'STARS_ENABLED' => ['bool', 'feat', '⭐ Telegram Stars to\'lovi', '', 0, 1],
+        'PLAN_REVIEW_ENABLED' => ['bool', 'feat', 'Reja tasdiqlash', 'Mijozga reja ko\'rsatilib, tasdiqlash so\'raladi', 0, 1],
+        'REAL_BIBLIO' => ['bool', 'feat', 'Haqiqiy adabiyotlar (Crossref)', '', 0, 1],
+        'DOC_IMAGES' => ['bool', 'feat', 'Hujjatga rasm', '', 0, 1],
+        'DOC_TABLES' => ['bool', 'feat', 'Hujjatga jadval', '', 0, 1],
+        'SECTION_SLIDES' => ['bool', 'feat', "Bo'lim ajratuvchi slaydlar", '', 0, 1],
+        'SLIDE_PREVIEW' => ['bool', 'feat', 'Taqdimotdan lavhalar (albom)', '', 0, 1],
+        'KONSPEKT_ENABLED' => ['bool', 'feat', 'Himoya konspekti', '', 0, 1],
+        'EDITOR_AI_ENABLED' => ['bool', 'feat', '✨ Tahrirlovchida AI', '', 0, 1],
+        'DB_BACKUP_DAILY' => ['bool', 'feat', 'Kunlik baza zaxirasi', '', 0, 1],
+    ];
+
+    private static ?array $cache = null;
+
+    public static function ensureSchema(PDO $pdo): void
+    {
+        $pdo->exec('CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT, admin INTEGER, updated_at INTEGER)');
+    }
+
+    private static function load(): array
+    {
+        if (self::$cache === null) {
+            self::$cache = [];
+            try {
+                foreach (db()->query('SELECT k, v FROM settings')->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                    self::$cache[$r['k']] = $r['v'];
+                }
+            } catch (Throwable $e) {
+            }
+        }
+        return self::$cache;
+    }
+
+    /** Bazadagi qiymat (bo'lmasa null). */
+    public static function raw(string $k): ?string
+    {
+        $all = self::load();
+        return array_key_exists($k, $all) ? $all[$k] : null;
+    }
+
+    /** Engine::c() shu orqali o'tadi: avval baza, keyin config, keyin standart. */
+    public static function get(string $k, $default)
+    {
+        $v = self::raw($k);
+        if ($v !== null && isset(self::SCHEMA[$k])) {
+            return match (self::SCHEMA[$k][0]) {
+                'bool' => $v === '1',
+                'int' => (int)$v,
+                default => $v,
+            };
+        }
+        return defined($k) ? constant($k) : $default;
+    }
+
+    public static function price(string $type, string $vk, int $default): int
+    {
+        $v = self::raw("PRICE:$type:$vk");
+        return $v !== null ? max(0, (int)$v) : $default;
+    }
+
+    /** Admin panel uchun: guruhlangan ro'yxat + joriy qiymatlar + narxlar. */
+    public static function all(): array
+    {
+        $defaults = ['MAINTENANCE_MODE' => false, 'MAINTENANCE_TEXT' => "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!", 'FREE_TRIAL' => true,
+            'TOPUP_BONUS_PERCENT' => 0, 'TOPUP_BONUS_MIN_AMOUNT' => 0, 'REFERRAL_BONUS' => 3000, 'MIN_TOPUP_AMOUNT' => 1000, 'PRO_SURCHARGE_PERCENT' => 60,
+            'STARS_RATE' => 200];
+        $items = [];
+        foreach (self::SCHEMA as $k => [$type, $group, $label, $hint, $min, $max]) {
+            $items[] = ['k' => $k, 'type' => $type, 'group' => $group, 'label' => $label, 'hint' => $hint, 'min' => $min, 'max' => $max,
+                'value' => self::get($k, $defaults[$k] ?? true), 'custom' => self::raw($k) !== null];
+        }
+        $prices = [];
+        foreach (DocTypes::T as $t => $def) {
+            $base = DocTypes::volumes($t, false) ?? [];
+            foreach ($base as $vk => $v) {
+                $prices[] = ['type' => $t, 'title' => $def['title'], 'vk' => (string)$vk, 'label' => (string)$v['label'], 'base' => (int)$v['price'],
+                    'price' => self::price($t, (string)$vk, (int)$v['price']), 'enabled' => DocTypes::enabled($t)];
+            }
+        }
+        return ['items' => $items, 'prices' => $prices];
+    }
+
+    /** Qaytadi: o'zgargan kalitlar ro'yxati. $changes = [k => v], narxlar: ['PRICE:slayd:10-15' => 7000]. */
+    public static function save(int $admin, array $changes): array
+    {
+        $done = [];
+        $st = db()->prepare('INSERT INTO settings (k, v, admin, updated_at) VALUES (?,?,?,?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, admin = excluded.admin, updated_at = excluded.updated_at');
+        foreach ($changes as $k => $v) {
+            $k = (string)$k;
+            if (preg_match('/^PRICE:([a-z_]+):([0-9A-Za-z_\-]{1,12})$/', $k, $m)) {
+                $vols = DocTypes::volumes($m[1], false);
+                if (!$vols || !isset($vols[$m[2]]) || !is_numeric($v)) {
+                    continue;
+                }
+                $val = (string)max(0, min(10000000, (int)$v));
+            } elseif (isset(self::SCHEMA[$k])) {
+                [$type, , , , $min, $max] = self::SCHEMA[$k];
+                if ($type === 'bool') {
+                    $val = $v ? '1' : '0';
+                } elseif ($type === 'int') {
+                    if (!is_numeric($v)) {
+                        continue;
+                    }
+                    $val = (string)max($min, min($max, (int)$v));
+                } else {
+                    $val = mb_substr(trim((string)$v), 0, $max);
+                }
+            } else {
+                continue;
+            }
+            if (self::raw($k) === $val) {
+                continue;
+            }
+            $st->execute([$k, $val, $admin, time()]);
+            $done[$k] = $val;
+        }
+        self::$cache = null;
+        return $done;
+    }
+
+    /** Narxni yoki sozlamani config.php dagi asl qiymatga qaytarish. */
+    public static function reset(string $k): void
+    {
+        db()->prepare('DELETE FROM settings WHERE k = ?')->execute([$k]);
+        self::$cache = null;
+    }
+
+    public static function maintenance(): bool
+    {
+        return (bool)self::get('MAINTENANCE_MODE', false);
+    }
+}

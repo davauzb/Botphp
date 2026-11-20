@@ -19,6 +19,8 @@ class AIClient
 {
     /** Hozirgi tick uchun "shu vaqtgacha tugash kerak" chegarasi (unix, float). null = cheklov yo'q. */
     public static ?float $deadline = null;
+    /** Joriy buyurtma (token hisobini buyurtmaga yozish uchun; Engine o'rnatadi). */
+    public static ?int $jobId = null;
     public static int $defaultTimeout = 110;
     public static int $maxWaitInline = 6;     // hamma marshrut band bo'lsa, shuncha soniya o'zimiz kutamiz
 
@@ -381,6 +383,10 @@ class AIClient
         }
 
         $data = json_decode($body, true);
+        $usage = $data['usage'] ?? null;
+        if (is_array($usage) && class_exists('AdminPro', false)) {
+            AdminPro::recordUsage((string)$r['provider'], (string)$r['model'], (int)($usage['prompt_tokens'] ?? 0), (int)($usage['completion_tokens'] ?? 0), self::$jobId);
+        }
         $text = $data['choices'][0]['message']['content'] ?? null;
         if (!is_string($text) || trim($text) === '') {
             throw new AIRouteException("Bo'sh javob", 'empty', 45, false);
