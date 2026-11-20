@@ -17,7 +17,7 @@ class DocStore
     public const MAX_HEADING = 200;
     public const MAX_TEXT = 60000;        // bitta bo'lim
     public const MAX_TOTAL = 400000;      // butun hujjat (belgi)
-    public const TYPES = ['MUSTAQIL ISH', 'REFERAT'];
+    public const TYPES = ['MUSTAQIL ISH', 'REFERAT', 'KURS ISHI', 'MAQOLA', 'TEZIS'];
 
     public static function ensureSchema(PDO $pdo): void
     {
@@ -96,7 +96,28 @@ class DocStore
     // ------------------------------------------------------------------ yaratish (worker chaqiradi)
 
     /** Yaratilgan hujjatdan tahrirlanadigan nusxa. Xato bo'lsa null (hujjat baribir yuboriladi). */
-    public static function createFromGenerated(int $tgId, string $title, string $docType, string $lang, array $student, array $sections): ?string
+    /** Hujjat rasmlari papkasi (matndagi «[RASM n: …]» qatorlari uchun). */
+    private static function imgDir(): string
+    {
+        return rtrim(EDITOR_STORAGE_DIR, '/') . '/docimg/';
+    }
+
+    /** Hujjatga tegishli rasmlar: [raqam => yo'l]. */
+    public static function images(string $pid): array
+    {
+        $out = [];
+        if (!EditorStore::validPid($pid)) {
+            return $out;
+        }
+        foreach (glob(self::imgDir() . $pid . '_*.{jpg,png}', GLOB_BRACE) ?: [] as $f) {
+            if (preg_match('/_(\d+)\.(jpg|png)$/', $f, $m)) {
+                $out[(int)$m[1]] = $f;
+            }
+        }
+        return $out;
+    }
+
+    public static function createFromGenerated(int $tgId, string $title, string $docType, string $lang, array $student, array $sections, array $images = []): ?string
     {
         try {
             if (!self::enabled()) {
@@ -114,6 +135,17 @@ class DocStore
                     in_array($docType, self::TYPES, true) ? $docType : 'MUSTAQIL ISH', I18n::norm($lang),
                     json_encode($san['student'], JSON_UNESCAPED_UNICODE), json_encode($san['sections'], JSON_UNESCAPED_UNICODE), $now, $now,
                 ]);
+            if ($images) {               // rasmlar tahrirlovchidan qayta eksport qilinganda ham saqlansin
+                $dir = self::imgDir();
+                if (is_dir($dir) || @mkdir($dir, 0755, true)) {
+                    foreach ($images as $n => $src) {
+                        $ext = strtolower(pathinfo((string)$src, PATHINFO_EXTENSION)) === 'png' ? 'png' : 'jpg';
+                        if (is_file((string)$src)) {
+                            @copy((string)$src, $dir . $pid . '_' . (int)$n . '.' . $ext);
+                        }
+                    }
+                }
+            }
             EditorSecurity::cleanup();
             return $pid;
         } catch (Throwable $e) {
@@ -208,7 +240,8 @@ class DocStore
             throw new RuntimeException('Hujjat bo\'sh');
         }
         // Mijoz adabiyotlar bo'limini o'chirgan bo'lsa — hurmat qilamiz (avtomatik qayta qo'shilmaydi)
-        return DocxGenerator::generate((string)$doc['title'], $san['sections'], $san['student'], (string)$doc['doc_type'], (string)$doc['lang'], false);
+        return DocxGenerator::generate((string)$doc['title'], $san['sections'], $san['student'], (string)$doc['doc_type'], (string)$doc['lang'], false,
+            ['images' => self::images((string)($doc['id'] ?? ''))]);
     }
 }
 

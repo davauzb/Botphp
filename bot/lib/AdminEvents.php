@@ -57,7 +57,7 @@ class AdminEvents
 
     private static function typeLabel(string $t): string
     {
-        return ['mustaqil_ish' => 'Mustaqil ish', 'referat' => 'Referat', 'slayd' => 'Taqdimot'][$t] ?? $t;
+        return DocTypes::title($t);
     }
 
     public static function newOrder(int $jobId, int $uid, string $type, string $topic, string $vk, int $price, bool $free, array $student, ?string $username): void

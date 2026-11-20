@@ -123,7 +123,8 @@ class DocApi
         $y = (int)date('Y');
         $start = (int)date('n') >= 9 ? $y : $y - 1;
         return [
-            'ministry' => I18n::ministry($lang), 'type' => I18n::t('doc_' . ($docType === 'REFERAT' ? 'REFERAT' : 'MUSTAQIL ISH'), $lang),
+            'ministry' => I18n::ministry($lang), 'type' => I18n::t('doc_' . (in_array($docType, DocStore::TYPES, true) ? $docType : 'MUSTAQIL ISH'), $lang),
+            'article' => in_array($docType, ['MAQOLA', 'TEZIS'], true),
             'topic' => I18n::t('topic', $lang), 'executor' => I18n::t('executor', $lang), 'group' => I18n::t('group', $lang),
             'checked' => I18n::t('checked_by', $lang), 'plan' => rtrim(I18n::t('plan_upper', $lang), ':'),
             'year' => $start . '–' . ($start + 1) . ' ' . I18n::t('year_suffix', $lang),

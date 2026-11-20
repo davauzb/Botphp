@@ -46,6 +46,12 @@ class ImageSearch
         return null;
     }
 
+    /** Inglizcha ibora (keshlangan tarjima) — adabiyotlar qidiruvi uchun ham. */
+    public static function english(string $text): string
+    {
+        return self::translateToEnglish($text);
+    }
+
     private static function translateToEnglish(string $text): string
     {
         $ck = 'imgq_' . md5(mb_strtolower(trim($text)));

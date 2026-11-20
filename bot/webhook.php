@@ -39,6 +39,7 @@ register_shutdown_function(function () {
     try {
         Engine::watchdog();
         Engine::inlineIfNeeded();
+        Maintenance::run(microtime(true) + 3);       // soatlik tozalash, kunlik baza zaxirasi (rassilkani asosan tick yuboradi)
     } catch (Throwable $e) {
     }
 });
@@ -153,23 +154,13 @@ function markFreeUsed(int $chatId): void
 /** Job/volume "type" kalitini odam o'qiy oladigan nomga aylantiradi. */
 function typeLabel(string $type): string
 {
-    return match ($type) {
-        'mustaqil_ish' => 'mustaqil ish',
-        'slayd' => 'taqdimot',
-        'referat' => 'referat',
-        default => $type,
-    };
+    return DocTypes::label($type);
 }
 
 /** "type" kaliti bo'yicha tegishli hajm/narx jadvalini qaytaradi (yoki topilmasa null). */
 function volumesFor(string $type): ?array
 {
-    return match ($type) {
-        'mustaqil_ish' => MUSTAQIL_ISH_VOLUMES,
-        'slayd' => SLAYD_VOLUMES,
-        'referat' => REFERAT_VOLUMES,
-        default => null,
-    };
+    return DocTypes::exists($type) ? DocTypes::volumes($type) : null;
 }
 
 function isProfileComplete(array $user): bool
@@ -196,13 +187,14 @@ function saveProfileField(int $chatId, string $field, string $value): void
 function mainMenu(): array
 {
     return [
-        'keyboard' => [
-            [['text' => '📄 Mustaqil ish'], ['text' => '📊 Slayd (taqdimot)']],
-            [['text' => '📝 Referat'], ['text' => '📋 Buyurtmalarim']],
-            [['text' => '💰 Balans'], ['text' => '🎁 Referal']],
-            [['text' => '🎟 Promokod'], ['text' => '⚙️ Profil']],
-            [['text' => '🌐 Til']],
-        ],
+        'keyboard' => array_merge(
+            array_chunk(array_map(fn($t) => ['text' => DocTypes::T[$t]['menu']], DocTypes::all()), 2),
+            [
+                [['text' => '📋 Buyurtmalarim'], ['text' => '💰 Balans']],
+                [['text' => '🎁 Referal'], ['text' => '🎟 Promokod']],
+                [['text' => '⚙️ Profil'], ['text' => '🌐 Til']],
+            ]
+        ),
         'resize_keyboard' => true,
     ];
 }
@@ -262,11 +254,12 @@ function handleMessage(array $user, int $chatId, string $text): void
         Telegram::sendMessage(
             $chatId,
             "👋 <b>Assalomu alaykum!</b>\n\n"
-            . "Men — <b>StudyBot</b>. Sizga bir necha daqiqada tayyor <b>mustaqil ish</b>, "
-            . "<b>referat</b> va <b>taqdimot (slayd)</b> yaratib beraman.\n\n"
+            . "Men — <b>StudyBot</b>. Sizga bir necha daqiqada tayyor <b>mustaqil ish</b>, <b>referat</b>, "
+            . "<b>kurs ishi</b>, <b>ilmiy maqola</b>, <b>tezis</b> va <b>taqdimot (slayd)</b> yaratib beraman.\n\n"
             . "📏 Narx hajmga (bet/slayd soniga) qarab belgilanadi\n"
             . "🎁 Har bir tur bo'yicha birinchi buyurtma <b>bepul</b>\n"
-            . "🎨 Taqdimotda 12 xil professional dizayndan tanlaysiz\n\n"
+            . "🎨 Taqdimotda 17 xil professional dizayn (5 tasi ⭐ PRO)\n"
+            . "📚 Haqiqiy ilmiy manbalardan adabiyotlar ro'yxati\n\n"
             . "Quyidagi menyudan boshlang 👇",
             mainMenu()
         );
@@ -325,21 +318,14 @@ function handleMessage(array $user, int $chatId, string $text): void
         return;
     }
 
-    if ($text === '📄 Mustaqil ish' || $text === '/mustaqil_ish') {
+    if (($orderType = DocTypes::fromText($text)) !== null) {
         setUserState($chatId, 'idle');
-        Telegram::sendMessage($chatId, "📏 Kerakli hajmni tanlang:", volumeKeyboard('mustaqil_ish', $user));
-        return;
-    }
-
-    if ($text === '📊 Slayd (taqdimot)' || $text === '/slayd') {
-        setUserState($chatId, 'idle');
-        Telegram::sendMessage($chatId, "📏 Kerakli hajmni tanlang:", volumeKeyboard('slayd', $user));
-        return;
-    }
-
-    if ($text === '📝 Referat' || $text === '/referat') {
-        setUserState($chatId, 'idle');
-        Telegram::sendMessage($chatId, "📏 Kerakli hajmni tanlang:", volumeKeyboard('referat', $user));
+        $intro = [
+            'kurs_ishi' => "🎓 <b>Kurs ishi</b>: titul, reja, kirish, 3 bob (har biri 1.1, 1.2, 1.3 bandlar bilan), xulosa va haqiqiy adabiyotlar ro'yxati.\n\n",
+            'maqola' => "📰 <b>Ilmiy maqola</b>: sarlavha, muallif, annotatsiya, kalit so'zlar, kirish, metodologiya, natijalar va muhokama, xulosa, haqiqiy adabiyotlar.\n\n",
+            'tezis' => "🧾 <b>Tezis</b> (konferensiya uchun): sarlavha, muallif, qisqa ilmiy matn va adabiyotlar.\n\n",
+        ][$orderType] ?? '';
+        Telegram::sendMessage($chatId, $intro . "📏 Kerakli hajmni tanlang:", volumeKeyboard($orderType, $user));
         return;
     }
 

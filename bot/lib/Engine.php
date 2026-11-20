@@ -230,6 +230,12 @@ class Engine
                 self::kick(0);
                 return;
             }
+            // 2b) rassilka bor-u, uni yuboradigan tick yo'q
+            if ($active === 0 && Maintenance::pending()) {
+                self::kvSet('last_kick', '1');
+                self::kick(0);
+                return;
+            }
             // 3) faqat kechiktirilgan ishlar bor va uxlab turgan tick yo'q
             if ($runnable === 0 && $active === 0) {
                 $d = self::nextDelay();
@@ -253,7 +259,7 @@ class Engine
         if (!$m || $m['v'] !== 'inline') {
             return;
         }
-        if (self::runnableCount() > 0 && self::activeTicks() < self::maxParallel()) {
+        if ((self::runnableCount() > 0 || Maintenance::pending()) && self::activeTicks() < self::maxParallel()) {
             self::runTick(0);
         }
     }
@@ -330,8 +336,18 @@ class Engine
                 $pdo->prepare('UPDATE engine_ticks SET beat = ?, expires = ? WHERE id = ?')->execute([time(), time() + $hard + 10, $tickId]);
             }
         } finally {
-            $finish();
             AIClient::setDeadline(null);
+        }
+        // Fon xizmatlari (rassilka, tozalash, baza zaxirasi) — ishlar navbatidan keyin, qolgan vaqt ichida
+        try {
+            $mEnd = min($hardEnd, microtime(true) + 20);
+            if ($mEnd - microtime(true) > 3) {
+                Maintenance::run($mEnd);
+            }
+        } catch (Throwable $e) {
+            logError('engine', 'maintenance: ' . $e->getMessage());
+        } finally {
+            $finish();
         }
 
         // zanjir: ish qolgan bo'lsa o'zimizni (va kerak bo'lsa yana ticklarni) davom ettiramiz
@@ -342,6 +358,8 @@ class Engine
                 for ($i = 0; $i < max(1, min(2, $want)); $i++) {
                     self::kick(0);
                 }
+            } elseif (Maintenance::pending()) {
+                self::kick(1);                                   // rassilka davom etmoqda
             } else {
                 $d = self::nextDelay();
                 if ($d !== null) {
@@ -682,13 +700,11 @@ class Engine
     {
         $vk = (string)$job['volume_key'];
         $label = '';
-        $map = ['mustaqil_ish' => ['📄 Mustaqil ish', 'MUSTAQIL_ISH_VOLUMES'], 'referat' => ['📑 Referat', 'REFERAT_VOLUMES'], 'slayd' => ['📊 Taqdimot', 'SLAYD_VOLUMES']];
-        $m = $map[$job['type']] ?? ['📄 Buyurtma', ''];
-        if ($m[1] !== '' && defined($m[1])) {
-            $vols = constant($m[1]);
-            $label = $vols[$vk]['label'] ?? '';
-        }
-        return $m[0] . ($label !== '' ? " · $label" : '');
+        $t = (string)$job['type'];
+        $head = isset(DocTypes::T[$t]) ? DocTypes::T[$t]['menu'] : '📄 Buyurtma';
+        $vols = DocTypes::volumes($t) ?? [];
+        $label = (string)($vols[$vk]['label'] ?? '');
+        return $head . ($label !== '' ? " · $label" : '');
     }
 
     public static function queuePosition(array $job): int

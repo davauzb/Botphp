@@ -113,3 +113,10 @@ textarea{resize:none;line-height:1.5;min-height:96px;overflow:hidden}
   .modes{order:5;width:100%}.modes button{flex:1;padding:7px 6px}
   .overview{gap:6px}.overview div{padding:8px 9px;border-radius:12px}.overview b{font-size:16px}.overview span{font-size:11px}
 }
+.page .in h4{margin:.6em 0 .3em;font-size:1em;color:#1f2a44;text-indent:1.25cm}
+.page .in .fig{text-align:center;margin:.6em 0}.page .in .fig .ph{height:9em;background:linear-gradient(135deg,#dfe6f3,#eef1f8);border:1px dashed #9aa6bd;display:grid;place-items:center;font-size:2em;width:80%;margin:0 auto}
+.page .in .fig .cap,.page .in .tcap{font-size:.92em;text-align:center}.page .in .fig .cap{font-style:italic}.page .in .tcap{font-weight:700}
+.page .in .tno{text-align:right;font-style:italic;font-size:.9em}
+.page .in table.tb{width:100%;border-collapse:collapse;font-size:.9em;margin:.2em 0 .8em}.page .in table.tb th,.page .in table.tb td{border:1px solid #8a94a8;padding:.15em .35em;text-align:left}.page .in table.tb th{background:#e6ecf5;text-align:center}
+.page .in .atitle{text-align:center;font-size:1.05em;margin:0 0 .6em;color:#1f2a44}.page .in .aauth{text-align:right;font-style:italic;margin-bottom:1em;font-size:.95em}
+.page .in .abs{margin:.3em 1.2cm;font-size:.92em;text-align:justify}.page .in h3.ah{margin:1em 0 .5em}

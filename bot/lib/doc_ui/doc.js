@@ -240,13 +240,43 @@ function preview(){
     h('div',{class:'who'},h('div',null,h('b',null,(L.executor||'Bajaruvchi')+': '),st.full_name||'________'),h('div',null,h('b',null,(L.group||'Guruh')+': '),st.group_name||'____'),h('div',null,h('b',null,(L.checked||'Qabul qildi')+': '),'__________')),
     h('div',{class:'yr'},L.year||'')]));
   const PER=1850; // bir betga sig'adigan taxminiy belgilar soni (14pt, 1.5 interval)
+  // Matnni bloklarga: abzats, ro'yxat, band (1.1), jadval (| a | b |), rasm ([RASM n: izoh])
+  const blocks=text=>{ const out=[]; let rows=null; const fl=()=>{ if(rows){ out.push({t:'table',rows,len:rows.length*90}); rows=null; } };
+    (text||'').split(/\n/).map(x=>x.trim()).forEach(l=>{
+      if(!l){ fl(); return; }
+      if(l.startsWith('|')){ if(/^\|[\s:\-|]+\|?$/.test(l)) return; (rows=rows||[]).push(l.replace(/^\||\|$/g,'').split('|').map(c=>c.trim())); return; }
+      fl();
+      let m;
+      if((m=l.match(/^\[(?:RASM|РИСУНОК|FIGURE)\s*(\d+)\s*:\s*(.*)\]$/i))) out.push({t:'img',cap:m[2],len:700});
+      else if((m=l.match(/^(?:JADVAL|ТАБЛИЦА|TABLE)\s*\d*\s*[:.]\s*(.+)$/i))) out.push({t:'tcap',text:m[1],len:60});
+      else if(/^\d+\.\d+\.?\s+\S/.test(l)&&!/[.!?…:;]$/.test(l)) out.push({t:'h4',text:l,len:120});
+      else if(/^[•\-–]\s+/.test(l)) out.push({t:'li',text:l.replace(/^[•\-–]\s+/,''),len:l.length+60});
+      else out.push({t:'p',text:l,len:l.length+70});
+    }); fl(); return out; };
+  let figN=0, tabN=0;
+  const el=b=>{ if(b.t==='p') return h('p',null,b.text); if(b.t==='li') return h('ul',null,h('li',null,b.text)); if(b.t==='h4') return h('h4',{class:'h4'},b.text);
+    if(b.t==='tcap') return h('div',{class:'tcap'},b.text);
+    if(b.t==='img'){ figN++; return h('div',{class:'fig'},h('div',{class:'ph'},'🖼'),h('div',{class:'cap'},figN+'-rasm. '+b.cap)); }
+    if(b.t==='table'){ tabN++; return h('div',null,h('div',{class:'tno'},tabN+'-jadval'),h('table',{class:'tb'},b.rows.map((r,i)=>h('tr',null,r.map(c=>h(i?'td':'th',null,c)))))); }
+    return null; };
   const pages=[]; let pn=3;
+  if(L.article){
+    let cur=[h('h2',{class:'atitle'},(S.title||'').toUpperCase()),h('div',{class:'aauth'},h('b',null,st.full_name||''),h('div',null,[st.university,st.group_name&&((L.group||'Guruh')+': '+st.group_name)].filter(Boolean).join(', ')))], used=400; pn=1;
+    S.sections.forEach(sec=>{
+      const hd=(sec.heading||'').trim(), low=hd.toLowerCase();
+      if(low==='annotatsiya'||low==='аннотация'||low==='abstract'||/kalit so|ключевые|keywords/.test(low)){ cur.push(h('div',{class:'abs'},h('b',null,hd+(/kalit|ключ|key/.test(low)?': ':'. ')),h('i',null,sec.text))); used+=sec.text.length+80; return; }
+      if(hd&&hd!=='—'){ cur.push(h('h3',{class:'ah'},/^\s*\d/.test(hd)?hd:hd.toUpperCase())); used+=120; }
+      blocks(sec.text).forEach(b=>{ if(used+b.len>PER*1.15&&cur.length>1){ pages.push([cur,pn++]); cur=[]; used=0; } const e=el(b); if(e) cur.push(e); used+=b.len; });
+    });
+    pages.push([cur,pn++]);
+    const wrapA=h('div',{class:'pv'}); pages.forEach(([kids,n])=>wrapA.append(page('',kids,String(n))));
+    wrapA.append(h('div',{class:'pvnote'},'Bu taxminiy ko‘rinish. Yakuniy fayl jurnal andozasida (Times New Roman 14, 1.15 interval) yaratiladi.'));
+    return wrapA;
+  }
   S.sections.forEach(sec=>{
     const chapter=/^\s*\d+\s*[.)]/.test(sec.heading); const title=chapter?sec.heading:(sec.heading||'').toUpperCase();
-    const paras=(sec.text||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
     let cur=[h('h3',null,title)], used=180; const start=pn;
-    paras.forEach(p=>{ const len=p.length+70; if(used+len>PER&&cur.length>1){ pages.push([cur,pn++]); cur=[]; used=0; }
-      cur.push(/^[•\-–]\s+/.test(p)?h('ul',null,h('li',null,p.replace(/^[•\-–]\s+/,''))):h('p',null,p)); used+=len; });
+    blocks(sec.text).forEach(b=>{ if(used+b.len>PER&&cur.length>1){ pages.push([cur,pn++]); cur=[]; used=0; } const e=el(b); if(e) cur.push(e); used+=b.len; });
     pages.push([cur,pn++]); sec._page=start;
   });
   wrap.append(page('',[h('h3',null,L.plan||'REJA'),h('div',{class:'toc'},S.sections.map(sec=>h('div',null,h('span',{style:/^\s*\d/.test(sec.heading)?'':'font-weight:700'},sec.heading),h('i'),h('span',null,String(sec._page)))))],'2'));

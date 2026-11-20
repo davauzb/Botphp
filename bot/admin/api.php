@@ -279,6 +279,39 @@ try {
             AdminEvents::markAllRead();
             out(['ok' => true]);
 
+        case 'bc_count':
+            $seg = strv($b['segment'] ?? 'all', 20);
+            out(['ok' => true, 'count' => Maintenance::countSegment($seg), 'segments' => Maintenance::SEGMENTS]);
+
+        case 'bc_list':
+            out(['ok' => true] + Maintenance::list(intv($b['offset'] ?? 0, 0, 100000)));
+
+        case 'bc_test':
+            if (!AdminSecurity::rate('bctest:' . $admin, 10, 300)) {
+                AdminSecurity::fail('rate', 429, 'Juda tez-tez. Biroz kuting');
+            }
+            out(Maintenance::test($admin, strv($b['text'] ?? '', 3500), strv($b['btn_text'] ?? '', 40), strv($b['btn_url'] ?? '', 300)));
+
+        case 'bc_create':
+            mutate($admin, $b, function () use ($admin, $b) {
+                $seg = strv($b['segment'] ?? 'all', 20);
+                $r = Maintenance::create($admin, strv($b['text'] ?? '', 3500), strv($b['btn_text'] ?? '', 40), strv($b['btn_url'] ?? '', 300), $seg);
+                if (!empty($r['ok'])) {
+                    AdminSecurity::audit('broadcast', $admin, '#' . $r['id'], $seg . ' · ' . $r['total'] . ' ta');
+                }
+                return $r;
+            });
+
+        case 'bc_cancel':
+            mutate($admin, $b, function () use ($admin, $b) {
+                $id = intv($b['id'] ?? 0, 1, PHP_INT_MAX);
+                $r = Maintenance::cancel($id);
+                if (!empty($r['ok'])) {
+                    AdminSecurity::audit('broadcast_stop', $admin, '#' . $id);
+                }
+                return $r;
+            });
+
         case 'audit':
             out(['ok' => true] + AdminService::audit(intv($b['offset'] ?? 0, 0, 100000)));
     }

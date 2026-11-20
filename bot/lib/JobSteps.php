@@ -5,6 +5,8 @@ require_once __DIR__ . '/PlanReview.php';
 require_once __DIR__ . '/DocStore.php';
 require_once __DIR__ . '/I18n.php';
 require_once __DIR__ . '/SpeechDoc.php';
+require_once __DIR__ . '/Bibliography.php';
+require_once __DIR__ . '/DocTypes.php';
 
 /**
  * Ish turlari uchun reja (qadamlar) va har bir qadamni bajarish.
@@ -34,31 +36,57 @@ class JobSteps
         $lang = I18n::norm($job['lang'] ?? I18n::userLang($chatId));
         $p = ['topic' => (string)$job['topic'], 'student' => self::jobStudent($job, $chatId), 'lang' => $lang];
 
-        if ($type === 'mustaqil_ish' || $type === 'referat') {
-            $vols = $type === 'referat' ? REFERAT_VOLUMES : MUSTAQIL_ISH_VOLUMES;
+        if (DocTypes::isDoc($type)) {
+            $vols = DocTypes::volumes($type) ?? [];
             $v = $vols[$job['volume_key']] ?? reset($vols);
-            $chapters = max(1, (int)$v['chapters']);
-            $per = max(150, (int)round($v['min_words'] / ($chapters + 1)));
-            $parts = max(1, (int)ceil($per / self::PART_WORDS));
-            $partWords = (int)ceil($per / $parts);
-            $p += [
-                'docType' => $type === 'referat' ? 'REFERAT' : 'MUSTAQIL ISH', 'docLabel' => $type === 'referat' ? 'referat' : 'mustaqil ish',
-                'chapters' => $chapters, 'per' => $per, 'parts' => $parts, 'partWords' => $partWords,
-            ];
-            $steps[] = ['id' => 'outline', 'k' => 'outline', 'w' => 1.5, 'label' => 'Reja va bob sarlavhalari tuzilmoqda'];
-            if (PlanReview::enabled()) {
-                $steps[] = PlanReview::stepDef();
-            }
-            $steps[] = ['id' => 'intro', 'k' => 'intro', 'w' => max(1.0, $per * 0.7 / 100), 'label' => 'Kirish qismi yozilmoqda'];
-            for ($c = 1; $c <= $chapters; $c++) {
-                for ($j = 1; $j <= $parts; $j++) {
-                    $steps[] = ['id' => "c{$c}p{$j}", 'k' => 'chapter', 'c' => $c, 'j' => $j, 'w' => max(1.0, $partWords / 100),
-                        'label' => "{$c}-bob yozilmoqda" . ($parts > 1 ? " ({$j}/{$parts} qism)" : '')];
+            $kind = DocTypes::kind($type);
+            $p += ['docType' => DocTypes::docType($type), 'docLabel' => DocTypes::label($type), 'kind' => $kind, 'dtype' => $type];
+            $res = [];
+            if ($type === 'tezis') {
+                $words = max(400, (int)$v['min_words']);
+                $p += ['chapters' => 0, 'per' => $words, 'parts' => 1, 'partWords' => $words, 'sub' => 0];
+                $steps[] = ['id' => 'tezis', 'k' => 'tezis', 'w' => max(2.0, $words / 100), 'label' => 'Tezis matni yozilmoqda'];
+            } else {
+                if ($kind === 'article') {          // maqola: tuzilma qat'iy — reja uchun AI so'rovi yuborilmaydi
+                    $chapters = 2;
+                    $res['titles'] = [I18n::t('art_method', $lang), I18n::t('art_results', $lang)];
+                    $res['subs'] = [];
+                    $per = max(300, (int)round($v['min_words'] / 3.2));
+                    $sub = 0;
+                } else {
+                    $chapters = max(1, (int)$v['chapters']);
+                    $per = max(150, (int)round($v['min_words'] / ($chapters + 1)));
+                    $sub = array_key_exists('sub', $v) ? (int)$v['sub'] : ($type === 'referat' ? 0 : ($per >= 1200 ? 3 : ($per >= 450 ? 2 : 0)));
+                }
+                $parts = $sub > 0 ? $sub : max(1, (int)ceil($per / self::PART_WORDS));
+                $partWords = (int)ceil($per / $parts);
+                $p += ['chapters' => $chapters, 'per' => $per, 'parts' => $parts, 'partWords' => $partWords, 'sub' => $sub];
+                if ($kind === 'paper') {
+                    $steps[] = ['id' => 'outline', 'k' => 'outline', 'w' => 1.5, 'label' => 'Reja va bob sarlavhalari tuzilmoqda'];
+                    if (PlanReview::enabled()) {
+                        $steps[] = PlanReview::stepDef();
+                    }
+                }
+                $steps[] = ['id' => 'intro', 'k' => 'intro', 'w' => max(1.0, $per * 0.7 / 100), 'label' => 'Kirish qismi yozilmoqda'];
+                for ($c = 1; $c <= $chapters; $c++) {
+                    for ($j = 1; $j <= $parts; $j++) {
+                        $steps[] = ['id' => "c{$c}p{$j}", 'k' => 'chapter', 'c' => $c, 'j' => $j, 'w' => max(1.0, $partWords / 100),
+                            'label' => ($kind === 'article' ? ($c === 1 ? 'Metodologiya' : 'Natijalar va muhokama') : "{$c}-bob") . ' yozilmoqda'
+                                . ($parts > 1 ? ($sub > 0 ? " ({$c}.{$j}-band)" : " ({$j}/{$parts} qism)") : '')];
+                    }
+                }
+                $steps[] = ['id' => 'concl', 'k' => 'concl', 'w' => max(1.0, $per * 0.7 / 100), 'label' => 'Xulosa yozilmoqda'];
+                if ($kind === 'article') {
+                    $steps[] = ['id' => 'abstract', 'k' => 'abstract', 'w' => 1.0, 'label' => 'Annotatsiya va kalit so\'zlar'];
                 }
             }
-            $steps[] = ['id' => 'concl', 'k' => 'concl', 'w' => max(1.0, $per * 0.7 / 100), 'label' => 'Xulosa yozilmoqda'];
+            $steps[] = ['id' => 'biblio', 'k' => 'biblio', 'w' => 1.0, 'label' => 'Haqiqiy ilmiy manbalar qidirilmoqda'];
+            if (DocTypes::images($type) > 0 && (bool)Engine::c('DOC_IMAGES', true)) {
+                $steps[] = ['id' => 'dimg', 'k' => 'doc_images', 'w' => 1.5, 'label' => 'Rasmlar tanlanmoqda'];
+            }
             $steps[] = ['id' => 'build', 'k' => 'build_doc', 'w' => 2.0, 'label' => 'Hujjat (DOCX) shakllantirilmoqda'];
             $steps[] = ['id' => 'deliver', 'k' => 'deliver', 'w' => 1.5, 'label' => 'Telegram’ga yuborilmoqda'];
+            return ['v' => 1, 'type' => $type, 'steps' => $steps, 'i' => 0, 'p' => $p, 'res' => $res, 'att' => [], 'dur' => [], 'shrink' => []];
         } elseif ($type === 'slayd') {
             $v = SLAYD_VOLUMES[$job['volume_key']] ?? array_values(SLAYD_VOLUMES)[0];
             // Muqova + Reja + "Rahmat!" slaydlari avtomatik qo'shiladi (+3), shuning uchun AI'dan shuncha kam so'raymiz —
@@ -104,6 +132,18 @@ class JobSteps
             case 'build_doc':
                 self::stepBuildDoc($job, $state);
                 break;
+            case 'tezis':
+                self::stepTezis($state);
+                break;
+            case 'abstract':
+                self::stepAbstract($state);
+                break;
+            case 'biblio':
+                self::stepBiblio($state);
+                break;
+            case 'doc_images':
+                self::stepDocImages($state);
+                break;
             case 'slide_outline':
                 $state['res']['outline'] = generateSlideOutline($state['p']['topic'], (int)$state['p']['count'], [], (string)($state['p']['lang'] ?? 'uz'));
                 break;
@@ -136,10 +176,14 @@ class JobSteps
             . "3-5 punktli qisqa ro'yxat qo'shish mumkin: har punkt alohida qatorda \"• \" belgisi bilan boshlansin." . I18n::directive($p['lang'] ?? 'uz');
     }
 
-    /** Bob sarlavhalari rejasi (PlanReview «Boshqa reja» uchun ham ochiq). */
+    /**
+     * Bob sarlavhalari rejasi (PlanReview «Boshqa reja» uchun ham ochiq). Bitta AI so'rovida: boblar, har bob ichidagi
+     * bandlar (1.1, 1.2 …), mavzuning inglizcha nomi (adabiyotlar qidiruvi uchun) va boblar uchun inglizcha rasm iboralari.
+     */
     public static function outline(array &$state): void
     {
         $p = $state['p'];
+        $sub = (int)($p['sub'] ?? 0);
         $angles = array_slice(I18n::angles($p['lang'] ?? 'uz', chapterAngles()), 0, $p['chapters']);
         while (count($angles) < $p['chapters']) {
             $angles[] = 'mavzuning qo\'shimcha jihatlari va amaliy ahamiyati';
@@ -147,19 +191,39 @@ class JobSteps
         $list = implode("\n", array_map(fn($i, $a) => ($i + 1) . ". $a", array_keys($angles), $angles));
         $prompt = "\"{$p['topic']}\" mavzusidagi {$p['docLabel']} uchun ANIQ {$p['chapters']} ta bob sarlavhasini tuzing. "
             . "Boblar quyidagi yo'nalishlarda bo'lsin (har biri o'z yo'nalishiga mos, qisqa va aniq sarlavha):\n$list\n\n"
-            . 'Faqat JSON qaytaring: {"boblar":["1. ...","2. ..."]}';
+            . ($sub > 0 ? "Har bob ichida ANIQ $sub ta band (kichik bo'lim) sarlavhasi bo'lsin — bob mavzusini mantiqiy bo'laklarga ajratsin, bir-birini takrorlamasin. " : '')
+            . "Yana: \"en\" — mavzuning inglizcha qisqa nomi (ilmiy manbalar qidirish uchun, 2-6 so'z); har bobga \"rasm\" — shu bob uchun "
+            . "fotosurat qidirish iborasi INGLIZ tilida (2-5 so'z).\n"
+            . 'Faqat JSON qaytaring: {"en":"...","boblar":[{"nom":"1. ...",' . ($sub > 0 ? '"bandlar":["...","..."],' : '') . '"rasm":"..."}]}';
         if (!empty($state['res']['plan_avoid'])) {      // foydalanuvchi «Boshqa reja» so'ragan — oldingisidan farq qilsin
             $prompt .= "\n\nFOYDALANUVCHIGA OLDINGI REJA YOQMADI. Quyidagi sarlavhalarni TAKRORLAMANG, boshqacha, yangicha so'zlar va yondashuv bilan yozing:\n- "
                 . implode("\n- ", $state['res']['plan_avoid']);
         }
         $prompt .= I18n::directive($p['lang'] ?? 'uz');
         $titles = [];
+        $subs = [];
+        $rasm = [];
+        $en = '';
         try {
-            $raw = AIClient::generateText($prompt, "Faqat JSON formatda javob bering.", 700, ['temperature' => 0.4]);
+            $raw = AIClient::generateText($prompt, "Faqat JSON formatda javob bering.", 700 + $p['chapters'] * ($sub > 0 ? 160 : 60), ['temperature' => 0.4]);
             $data = json_decode(extractJson($raw), true);
+            $en = cleanImageQuery((string)($data['en'] ?? ''));
             foreach (($data['boblar'] ?? []) as $t) {
                 if (is_string($t) && trim($t) !== '') {
                     $titles[] = trim($t);
+                    $subs[] = [];
+                    $rasm[] = '';
+                } elseif (is_array($t) && trim((string)($t['nom'] ?? '')) !== '') {
+                    $titles[] = trim((string)$t['nom']);
+                    $bs = [];
+                    foreach ((array)($t['bandlar'] ?? []) as $bnd) {
+                        $bnd = trim(preg_replace('/^\s*\d+(\.\d+)*[\.\)]?\s*/u', '', (string)$bnd) ?? '');
+                        if (mb_strlen($bnd) >= 3) {
+                            $bs[] = mb_substr($bnd, 0, 140);
+                        }
+                    }
+                    $subs[] = $bs;
+                    $rasm[] = cleanImageQuery((string)($t['rasm'] ?? ''));
                 }
             }
         } catch (AIUnavailableException $e) {
@@ -168,6 +232,7 @@ class JobSteps
             logError('steps', 'outline: ' . $e->getMessage());
         }
         $final = [];
+        $finalSubs = [];
         for ($i = 0; $i < $p['chapters']; $i++) {
             $t = $titles[$i] ?? null;
             if ($t === null || mb_strlen($t) < 4) {
@@ -176,8 +241,15 @@ class JobSteps
             }
             $t = preg_replace('/^\s*\d+[\.\)]\s*/u', '', $t);
             $final[] = ($i + 1) . '. ' . mb_substr($t, 0, 140);
+            $bs = array_slice($subs[$i] ?? [], 0, $sub);
+            $finalSubs[] = $sub > 0 && count($bs) === $sub ? $bs : [];
         }
         $state['res']['titles'] = $final;
+        $state['res']['subs'] = $finalSubs;
+        $state['res']['rasm'] = array_slice($rasm, 0, $p['chapters']);
+        if ($en !== '') {
+            $state['res']['en'] = $en;
+        }
     }
 
     private static function stepWrite(array $step, array &$state): void
@@ -208,9 +280,28 @@ class JobSteps
                     $others[] = $t;
                 }
             }
-            $prompt = "\"{$p['topic']}\" mavzusidagi {$p['docLabel']}ning quyidagi bobini yozing: «{$title}». Taxminan $target so'z. "
-                . "Bu bob FAQAT o'z mavzusiga qaratilsin; quyidagi boshqa boblarning mazmunini takrorlamang:\n" . implode("\n", $others);
-            if ($p['parts'] > 1) {
+            $subList = $state['res']['subs'][$c - 1] ?? [];
+            $subTitle = $subList[$j - 1] ?? '';
+            if ($subTitle !== '') {
+                $siblings = [];
+                foreach ($subList as $k => $st) {
+                    if ($k !== $j - 1) {
+                        $siblings[] = $c . '.' . ($k + 1) . '. ' . $st;
+                    }
+                }
+                $prompt = "\"{$p['topic']}\" mavzusidagi {$p['docLabel']}ning «{$title}» bobidagi «{$c}.{$j}. {$subTitle}» bandini yozing. Taxminan $target so'z. "
+                    . "Band sarlavhasini yozmang (u avtomatik qo'yiladi). Faqat shu band mavzusini yoriting; shu bobning boshqa bandlari (ularni takrorlamang):\n"
+                    . implode("\n", $siblings) . "\nBoshqa boblar:\n" . implode("\n", $others);
+            } else {
+                $prompt = "\"{$p['topic']}\" mavzusidagi {$p['docLabel']}ning quyidagi bobini yozing: «{$title}». Taxminan $target so'z. "
+                    . "Bu bob FAQAT o'z mavzusiga qaratilsin; quyidagi boshqa boblarning mazmunini takrorlamang:\n" . implode("\n", $others);
+            }
+            if ($c === 2 && $j === 1 && (bool)Engine::c('DOC_TABLES', true) && empty($state['res']['table_asked'])) {
+                $prompt .= "\n\nMatn ichida mavzuga mos BITTA kichik jadval bering (raqamlarsiz, sifat bo'yicha taqqoslash yoki tasnif: 3-5 qator, 2-4 ustun). "
+                    . "Jadval FAQAT shu formatda (boshqa markdown ishlatmang):\nJADVAL: jadval nomi\n| Ustun 1 | Ustun 2 |\n| qiymat | qiymat |\n"
+                    . "Jadvaldan oldin uni tanishtiruvchi va keyin izohlovchi oddiy abzats bo'lsin.";
+            }
+            if ($p['parts'] > 1 && $subTitle === '') {
                 $prompt .= "\n\nBu bobning {$j}/{$p['parts']} qismi.";
                 if ($j > 1) {
                     $prev = $state['res']['t']["c{$c}p" . ($j - 1)] ?? '';
@@ -295,41 +386,181 @@ class JobSteps
         return trim($t);
     }
 
-    private static function stepBuildDoc(array $job, array &$state): void
+    /** Deadline yaqin bo'lsa — keyingi tickda davom. */
+    private static function needTime(int $sec): void
+    {
+        if (AIClient::$deadline !== null && microtime(true) > AIClient::$deadline - $sec) {
+            throw new StepContinueException();
+        }
+    }
+
+    /** Tezis: bitta so'rovda butun matn (sarlavhasiz ilmiy uslub). */
+    private static function stepTezis(array &$state): void
+    {
+        $p = $state['p'];
+        $target = (int)round($p['per'] * (float)($state['shrink']['tezis'] ?? 1.0));
+        $prompt = "\"{$p['topic']}\" mavzusida ilmiy konferensiya uchun TEZIS yozing (taxminan $target so'z). Tuzilishi: mavzuning dolzarbligi, "
+            . "tadqiqot maqsadi, asosiy fikrlar va natijalar, qisqa xulosa va taklif. 4-6 abzats, ilmiy-rasmiy uslubda, sarlavhalarsiz.";
+        $raw = AIClient::generateText($prompt . I18n::directive($p['lang'] ?? 'uz'), self::system($p), min(5000, (int)($target * 2.6) + 600));
+        $text = self::cleanBody($raw);
+        if (countWords($text) < $target * 0.5) {
+            $e = new StepRetryException('Tezis juda qisqa');
+            $e->maxAttempts = 2;
+            $e->acceptAfterRetries = true;
+            $e->acceptFn = function (array &$st) use ($text) {
+                $st['res']['t']['tezis'] = $text;
+            };
+            throw $e;
+        }
+        $state['res']['t']['tezis'] = $text;
+    }
+
+    /** Maqola: annotatsiya, kalit so'zlar va inglizcha nom — kirish va xulosa asosida (kichik so'rov). */
+    private static function stepAbstract(array &$state): void
     {
         $p = $state['p'];
         $t = $state['res']['t'] ?? [];
-        $sections = [];
-        if (!empty($t['intro'])) {
-            $sections[] = ['heading' => I18n::t('intro', $p['lang'] ?? 'uz'), 'text' => $t['intro']];
+        $intro = mb_substr((string)($t['intro'] ?? ''), 0, 900);
+        $concl = mb_substr((string)($t['concl'] ?? ''), 0, 700);
+        $prompt = "\"{$p['topic']}\" mavzusidagi ilmiy maqola uchun annotatsiya va kalit so'zlar tuzing.\nKirish: «{$intro}»\nXulosa: «{$concl}»\n"
+            . 'JSON: {"annotatsiya":"60-90 so\'zli annotatsiya: maqsad, usul, natija","kalit":["5-7 ta kalit so\'z"],"en":"mavzuning inglizcha qisqa nomi"}'
+            . I18n::directive($p['lang'] ?? 'uz');
+        try {
+            $d = json_decode(extractJson(AIClient::generateText($prompt, 'Faqat JSON formatda javob bering.', 900, ['temperature' => 0.4])), true) ?: [];
+        } catch (AIUnavailableException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            $d = [];
         }
+        $state['res']['abstract'] = trim((string)($d['annotatsiya'] ?? ''));
+        $kw = array_values(array_filter(array_map(fn($k) => trim((string)$k), (array)($d['kalit'] ?? []))));
+        $state['res']['keywords'] = array_slice($kw, 0, 8);
+        $en = cleanImageQuery((string)($d['en'] ?? ''));
+        if ($en !== '') {
+            $state['res']['en'] = $en;
+        }
+    }
+
+    /** Haqiqiy adabiyotlar (Crossref). Topilmasa — umumiy ro'yxat qoladi. */
+    private static function stepBiblio(array &$state): void
+    {
+        if (isset($state['res']['biblio']) || !Bibliography::enabled()) {
+            return;
+        }
+        self::needTime(20);
+        $en = (string)($state['res']['en'] ?? '');
+        if ($en === '') {
+            $en = ImageSearch::english((string)$state['p']['topic']);
+        }
+        $n = ['kurs_ishi' => 12, 'mustaqil_ish' => 8, 'maqola' => 10, 'referat' => 6, 'tezis' => 5][$state['p']['dtype'] ?? ''] ?? 8;
+        $refs = [];
+        try {
+            $refs = Bibliography::find($en, $n);
+        } catch (Throwable $e) {
+            logError('steps', 'Adabiyotlar: ' . $e->getMessage());
+        }
+        $state['res']['biblio'] = count($refs) >= 3 ? $refs : [];
+    }
+
+    /** Hujjat uchun 1-3 rasm (boblar mavzusiga). */
+    private static function stepDocImages(array &$state): void
+    {
+        $p = $state['p'];
+        $max = min(DocTypes::images((string)($p['dtype'] ?? '')), count($state['res']['titles'] ?? []));
+        for ($i = 0; $i < $max; $i++) {
+            if (isset($state['res']['dimg'][$i])) {
+                continue;
+            }
+            self::needTime(14);
+            $title = preg_replace('/^\d+\.\s*/u', '', (string)$state['res']['titles'][$i]);
+            $en = (string)($state['res']['rasm'][$i] ?? '');
+            $path = null;
+            try {
+                $path = ImageSearch::fetchImage(mb_substr((string)$p['topic'], 0, 80) . ': ' . $title, true, $en);
+            } catch (Throwable $e) {
+                logError('steps', 'Hujjat rasmi: ' . $e->getMessage());
+            }
+            $state['res']['dimg'][$i] = $path ? ['path' => $path, 'cap' => mb_substr($title, 0, 120)] : null;
+            if ($path) {
+                $state['res']['tmp'][] = $path;
+            }
+        }
+    }
+
+    private static function stepBuildDoc(array $job, array &$state): void
+    {
+        $p = $state['p'];
+        $lang = (string)($p['lang'] ?? 'uz');
+        $t = $state['res']['t'] ?? [];
+        $kind = (string)($p['kind'] ?? 'paper');
+        $sections = [];
+        $images = [];
+        if ($kind === 'article' && !empty($state['res']['abstract'])) {
+            $sections[] = ['heading' => I18n::t('annotation', $lang), 'text' => $state['res']['abstract']];
+            if (!empty($state['res']['keywords'])) {
+                $sections[] = ['heading' => I18n::t('keywords', $lang), 'text' => implode(', ', $state['res']['keywords'])];
+            }
+        }
+        if (!empty($t['tezis'])) {
+            $sections[] = ['heading' => '—', 'text' => $t['tezis']];
+        }
+        if (!empty($t['intro'])) {
+            $sections[] = ['heading' => I18n::t('intro', $lang), 'text' => $t['intro']];
+        }
+        $imgN = 0;
         foreach (($state['res']['titles'] ?? []) as $i => $title) {
             $c = $i + 1;
+            $subs = $state['res']['subs'][$i] ?? [];
             $texts = [];
-            for ($j = 1; $j <= $p['parts']; $j++) {
-                if (!empty($t["c{$c}p{$j}"])) {
-                    $texts[] = $t["c{$c}p{$j}"];
+            for ($j = 1; $j <= ($p['parts'] ?? 1); $j++) {
+                $body = trim((string)($t["c{$c}p{$j}"] ?? ''));
+                if ($body === '') {
+                    continue;
+                }
+                $sub = $subs[$j - 1] ?? '';
+                if ($sub !== '') {
+                    // AI ba'zan band sarlavhasini o'zi ham yozib yuboradi — takrorlanmasin
+                    $body = preg_replace('/^\s*' . preg_quote("{$c}.{$j}", '/') . '\.?\s*[^\n]{0,160}\n+/u', '', $body) ?? $body;
+                    $texts[] = "{$c}.{$j}. {$sub}\n\n" . $body;
+                } else {
+                    $texts[] = $body;
                 }
             }
-            if ($texts) {
-                $sections[] = ['heading' => $title, 'text' => implode("\n\n", $texts)];
+            if (!$texts) {
+                continue;
             }
+            $img = $state['res']['dimg'][$i] ?? null;
+            if ($img && is_file((string)$img['path'])) {
+                $imgN++;
+                $images[$imgN] = $img['path'];
+                // rasm bobning birinchi abzatsidan keyin (band sarlavhasi bo'lsa — undan keyingi abzatsdan keyin)
+                $first = $texts[0];
+                $parts = preg_split("/\n\n/u", $first, 3);
+                $at = ($subs && count($parts) >= 2) ? 2 : 1;
+                $head = implode("\n\n", array_slice($parts, 0, $at));
+                $tail = implode("\n\n", array_slice($parts, $at));
+                $texts[0] = $head . "\n\n[RASM {$imgN}: {$img['cap']}]" . ($tail !== '' ? "\n\n" . $tail : '');
+            }
+            $sections[] = ['heading' => $title, 'text' => implode("\n\n", $texts)];
         }
         if (!empty($t['concl'])) {
-            $sections[] = ['heading' => I18n::t('conclusion', $p['lang'] ?? 'uz'), 'text' => $t['concl']];
+            $sections[] = ['heading' => I18n::t('conclusion', $lang), 'text' => $t['concl']];
         }
         if (!$sections) {
             throw new RuntimeException('Hujjat uchun matn yo\'q');
         }
-        $lang = (string)($p['lang'] ?? 'uz');
-        $sections = DocxGenerator::withBiblio($sections, $lang);          // adabiyotlar ro'yxati tahrirlanadigan nusxaga ham kirsin
-        $state['res']['file'] = DocxGenerator::generate($p['topic'], $sections, $p['student'], $p['docType'], $lang, false);
+        $refs = $state['res']['biblio'] ?? [];
+        if ($refs) {
+            $sections[] = ['heading' => I18n::t('biblio', $lang), 'text' => Bibliography::sectionText($refs, $lang)];
+        } else {
+            $sections = DocxGenerator::withBiblio($sections, $lang);          // umumiy ro'yxat (manba topilmasa)
+        }
+        $state['res']['file'] = DocxGenerator::generate($p['topic'], $sections, $p['student'], $p['docType'], $lang, false, ['images' => $images]);
         try {                // tahrirlash uchun nusxa; xato bo'lsa ham hujjat yuboriladi
-            $state['res']['pres'] = DocStore::createFromGenerated((int)$job['telegram_id'], $p['topic'], $p['docType'], $lang, $p['student'], $sections);
+            $state['res']['pres'] = DocStore::createFromGenerated((int)$job['telegram_id'], $p['topic'], $p['docType'], $lang, $p['student'], $sections, $images);
         } catch (Throwable $e) {
             logError('steps', 'Hujjat nusxasi: ' . $e->getMessage());
         }
-        $state['res']['tmp'] = [];
         unset($state['res']['t']);        // bazadagi holat kichik bo'lib qolsin
     }
 
@@ -545,13 +776,14 @@ class JobSteps
             throw new RuntimeException('Tayyor fayl topilmadi');
         }
         $topic = Telegram::escape((string)$state['p']['topic']);
-        $vols = $job['type'] === 'slayd' ? SLAYD_VOLUMES : ($job['type'] === 'referat' ? REFERAT_VOLUMES : MUSTAQIL_ISH_VOLUMES);
+        $vols = DocTypes::volumes((string)$job['type']) ?? [];
         $label = $vols[$job['volume_key']]['label'] ?? '';
-        $what = ['mustaqil_ish' => 'mustaqil ish', 'referat' => 'referat', 'slayd' => 'taqdimot'][$job['type']] ?? 'hujjat';
-        $warn = $job['type'] === 'mustaqil_ish'
-            ? "⚠️ Matn AI yordamida yaratildi — faktlar, sanalar va adabiyotlar ro'yxatini topshirishdan oldin albatta o'zingiz tekshirib chiqing."
-            : ($job['type'] === 'slayd' ? "⚠️ Matn AI yordamida yaratildi — himoyadan oldin mazmunini bir bor ko'zdan kechiring." : "⚠️ Matn AI yordamida yaratildi — topshirishdan oldin albatta o'zingiz tekshirib chiqing.");
-        $caption = "✅ \"{$topic}\" mavzusidagi {$what} tayyor ($label).\n$warn";
+        $what = DocTypes::label((string)$job['type']);
+        $real = !empty($state['res']['biblio']) ? "\n📚 Adabiyotlar ro'yxatida " . count($state['res']['biblio']) . " ta haqiqiy ilmiy manba (Crossref) bor." : '';
+        $warn = $job['type'] === 'slayd'
+            ? "⚠️ Matn AI yordamida yaratildi — himoyadan oldin mazmunini bir bor ko'zdan kechiring."
+            : "⚠️ Matn AI yordamida yaratildi — faktlar va sanalarni topshirishdan oldin albatta o'zingiz tekshirib chiqing.";
+        $caption = "✅ \"{$topic}\" mavzusidagi {$what} tayyor ($label).{$real}\n$warn";
         $kb = !empty($state['res']['pres']) ? ['inline_keyboard' => [[['text' => '✏️ Tahrirlash', 'callback_data' => 'edit:' . $state['res']['pres']]]]] : null;
         if (!Telegram::sendDocument($chatId, $file, $caption, $kb)) {
             throw new RuntimeException('Fayl Telegram orqali yuborilmadi');

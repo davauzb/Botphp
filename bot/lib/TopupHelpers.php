@@ -137,12 +137,7 @@ function resumeOrderIfPending(int $chatId, ?string $type, ?string $volumeKey): v
 
     // webhook.php dagi volumesFor() bu yerda mavjud emas (click.php/payme.php orqali ham chaqiriladi) — o'zimiz tanlaymiz.
     // Avval "referat" turi e'tiborga olinmagan edi: referat uchun balans to'ldirilgach buyurtma davom ettirilmay qolardi.
-    $volumes = match ($type) {
-        'mustaqil_ish' => MUSTAQIL_ISH_VOLUMES,
-        'referat' => REFERAT_VOLUMES,
-        'slayd' => SLAYD_VOLUMES,
-        default => [],
-    };
+    $volumes = DocTypes::volumes((string)$type) ?? [];
     if (!isset($volumes[$volumeKey])) {
         return;
     }
@@ -183,6 +178,6 @@ function resumeOrderIfPending(int $chatId, ?string $type, ?string $volumeKey): v
     }
 
     $stateStmt->execute(['s' => "awaiting_topic:{$type}:{$volumeKey}", 'id' => $chatId]);
-    $label = ['mustaqil_ish' => 'mustaqil ish', 'referat' => 'referat', 'slayd' => 'taqdimot'][$type] ?? 'hujjat';
+    $label = DocTypes::label((string)$type);
     Telegram::sendMessage($chatId, "Endi buyurtmangizni davom ettiramiz. " . ucfirst($label) . " mavzusini yozing:");
 }

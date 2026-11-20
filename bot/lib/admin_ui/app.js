@@ -53,6 +53,8 @@ const ICONS = {
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
   user: 'M20 21v-1a5 5 0 0 0-5-5H9a5 5 0 0 0-5 5v1M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
+  mega: 'M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13',
+  send: 'M22 2L11 13M22 2l-7 20-4-9-9-4z',
 };
 function icon(name) { const s = sv('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }); s.append(sv('path', { d: ICONS[name] || '' })); return s; }
 const fmt = n => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -66,16 +68,16 @@ const initial = u => (nm(u).replace(/^@/, '')[0] || '?').toUpperCase();
 function newKey() { const a = new Uint8Array(16); (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => a[i] = Math.random() * 256); return Array.from(a, b => p2(b.toString(16))).join(''); }
 const L = {
   job: { pending: ['Navbatda', ''], processing: ['Jarayonda', 'acc'], done: ['Bajarildi', 'ok'], failed: ['Xato', 'bad'], cancelled: ['Bekor', 'warn'], awaiting_payment: ["To'lov kutilmoqda", 'warn'] },
-  type: { mustaqil_ish: 'Mustaqil ish', referat: 'Referat', slayd: 'Taqdimot' },
+  type: { mustaqil_ish: 'Mustaqil ish', referat: 'Referat', slayd: 'Taqdimot', kurs_ishi: 'Kurs ishi', maqola: 'Ilmiy maqola', tezis: 'Tezis' },
   topup: { pending: ['Kutilmoqda', 'warn'], approved: ['Tasdiqlangan', 'ok'], rejected: ['Rad etilgan', 'bad'], refunded: ['Qaytarilgan', 'warn'] },
   method: { click: 'Click', payme: 'Payme', manual: 'Chek', humo: 'Humo/Uzcard' },
-  audit: { auth_ok: ['Kirish', 'ok'], auth_fail: ['Kirish urinishi (rad etildi)', 'bad'], pin_fail: ['PIN xato', 'bad'], balance_adjust: ["Balans o'zgartirildi", 'warn'], topup_approve: ["To'lov tasdiqlandi", 'ok'], topup_reject: ["To'lov rad etildi", 'bad'], job_cancel: ['Buyurtma bekor', 'warn'], ban: ['Bloklandi', 'bad'], unban: ['Blokdan chiqarildi', 'ok'], send_msg: ['Xabar yuborildi', ''], view_receipt: ["Chek ko'rildi", ''], link_issued: ['Havola berildi', ''], logout: ['Chiqish', ''], promo_create: ['Promokod yaratildi', 'ok'], promo_on: ['Promokod yoqildi', 'ok'], promo_off: ["Promokod o'chirildi", 'warn'], promo_delete: ["Promokod o'chirib tashlandi", 'bad'], bad_link: ["Noto'g'ri havola", 'bad'], bad_origin: ['Begona manba', 'bad'], session_ua_mismatch: ['Sessiya brauzeri o\'zgargan', 'bad'] },
+  audit: { auth_ok: ['Kirish', 'ok'], auth_fail: ['Kirish urinishi (rad etildi)', 'bad'], pin_fail: ['PIN xato', 'bad'], balance_adjust: ["Balans o'zgartirildi", 'warn'], topup_approve: ["To'lov tasdiqlandi", 'ok'], topup_reject: ["To'lov rad etildi", 'bad'], job_cancel: ['Buyurtma bekor', 'warn'], ban: ['Bloklandi', 'bad'], unban: ['Blokdan chiqarildi', 'ok'], send_msg: ['Xabar yuborildi', ''], view_receipt: ["Chek ko'rildi", ''], link_issued: ['Havola berildi', ''], logout: ['Chiqish', ''], promo_create: ['Promokod yaratildi', 'ok'], promo_on: ['Promokod yoqildi', 'ok'], promo_off: ["Promokod o'chirildi", 'warn'], promo_delete: ["Promokod o'chirib tashlandi", 'bad'], broadcast: ['Rassilka boshlandi', 'acc'], broadcast_stop: ["Rassilka to'xtatildi", 'warn'], bad_link: ["Noto'g'ri havola", 'bad'], bad_origin: ['Begona manba', 'bad'], session_ua_mismatch: ['Sessiya brauzeri o\'zgargan', 'bad'] },
 };
 const badge = (t, c) => h('span', { class: 'badge ' + (c || '') }, t);
 const haptic = (k) => { try { TG && TG.HapticFeedback && (k === 'ok' || k === 'bad' ? TG.HapticFeedback.notificationOccurred(k === 'ok' ? 'success' : 'error') : TG.HapticFeedback.impactOccurred(k || 'light')); } catch (e) {} };
 const AV_COLORS = ['#4f6bff', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'];
 function avStyle(seed) { let x = 0; String(seed).split('').forEach(c => { x = (x * 31 + c.charCodeAt(0)) >>> 0; }); const c = AV_COLORS[x % AV_COLORS.length]; return { color: c, background: c + '1f' }; }
-const TYPE_IC = { mustaqil_ish: 'doc', referat: 'file', slayd: 'slides' };
+const TYPE_IC = { mustaqil_ish: 'doc', referat: 'file', slayd: 'slides', kurs_ishi: 'layers', maqola: 'list', tezis: 'file' };
 function emptyBox(text, ic) { return h('div', { class: 'empty' }, h('div', { class: 'big' }, icon(ic || 'box')), text); }
 function skeleton(n, hgt) { return h('div', { class: 'list' }, Array.from({ length: n || 4 }, () => h('div', { class: 'sk', style: { height: (hgt || 66) + 'px' } }))); }
 function pct(a, b) { if (!b) return a ? null : 0; return Math.round((a - b) / b * 100); }
@@ -285,6 +287,9 @@ async function viewHome(box) {
       kpi('alert', 'bad', 'Xatolar (24 soat)', fmt(r.jobs.failed_24h), 'Jami xato: ' + r.jobs.failed, () => { S.jobFilter = 'failed'; go('jobs'); }, r.jobs.failed_24h > 0),
       kpi('star', '', 'O\'rtacha baho', r.jobs.rating == null ? '—' : r.jobs.rating + ' ★', 'Bajarilgan: ' + fmt(r.jobs.done)),
       kpi('shield', '', 'Bloklangan', fmt(r.users.banned || 0), 'Xavfsizlik jurnali', () => go('audit'))),
+    h('div', { class: 'btns', style: { marginTop: '10px' } },
+      h('button', { class: 'btn line', onclick: () => go('broadcast') }, icon('mega'), 'Rassilka'),
+      h('button', { class: 'btn line', onclick: () => go('audit') }, icon('list'), 'Jurnal')),
     h('div', { class: 'sec' }, 'Dinamika · ' + days + ' kun'),
     h('div', { class: 'cols' },
       areaChart('Kirim', r.series, 'revenue', true, cmp.revenue),
@@ -528,6 +533,63 @@ function viewEvents(box) {
   box.replaceChildren(h('div', { class: 'wrap' }, markBtn, res));
 }
 
+/* ------------------------------------------------------------------ rassilka */
+const BC_ST = { running: ['Yuborilmoqda', 'acc'], done: ['Tugadi', 'ok'], cancelled: ["To'xtatilgan", 'warn'] };
+function bcCard(b, reload) {
+  const st = BC_ST[b.status] || [b.status, ''];
+  const pctDone = b.total ? Math.round((b.sent + b.failed + b.blocked) / b.total * 100) : 100;
+  const bar = h('div', { class: 'bar', style: { margin: '10px 0 6px' } }, h('i', { style: { width: pctDone + '%' } }));
+  return h('div', { class: 'card', style: { padding: '12px 14px' } },
+    h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' } }, h('b', {}, '#' + b.id + ' · ' + b.segment_label), badge(st[0], st[1])),
+    h('div', { class: 't2', style: { whiteSpace: 'pre-line', marginTop: '6px', maxHeight: '4.4em', overflow: 'hidden' } }, b.text),
+    bar,
+    h('div', { class: 't2' }, '✅ ' + fmt(b.sent) + ' · 🚫 ' + fmt(b.blocked) + ' · ⚠️ ' + fmt(b.failed) + ' / ' + fmt(b.total) + ' · ' + dt(b.created_at)),
+    b.status === 'running' ? h('button', { class: 'btn sm bad', style: { marginTop: '10px' }, onclick: async () => {
+      const ok = await confirmBox("Rassilkani to'xtatish", 'Qolgan ' + fmt(b.total - b.sent - b.failed - b.blocked) + ' kishiga yuborilmaydi.', "To'xtatish", 'bad'); if (!ok) return;
+      const r = await act('bc_cancel', { id: b.id }); toast(r.ok ? r.msg : (r.msg || 'Xatolik'), r.ok ? 'ok' : 'bad'); reload();
+    } }, "⏹ To'xtatish") : '');
+}
+function viewBroadcast(box) {
+  let seg = 'all', segs = {};
+  const text = h('textarea', { class: 'inp', maxlength: '3500', placeholder: "Xabar matni…\n\n**qalin** va __kursiv__ yozish mumkin." });
+  const bt = h('input', { class: 'inp', type: 'text', maxlength: '40', placeholder: 'Tugma matni (ixtiyoriy), masalan: Kanalimiz' });
+  const bu = h('input', { class: 'inp', type: 'url', maxlength: '300', placeholder: 'https://t.me/...' });
+  const cnt = h('span', { class: 'badge acc' }, '…');
+  const segBox = h('div', { class: 'seg', style: { flexWrap: 'wrap' } });
+  const counter = h('div', { class: 't2', style: { textAlign: 'right', marginTop: '4px' } }, '0 / 3500');
+  text.addEventListener('input', () => { counter.textContent = text.value.length + ' / 3500'; });
+  const loadCount = async () => { cnt.textContent = '…'; const r = await api('bc_count', { segment: seg }); if (r.ok) { segs = r.segments; drawSeg(); cnt.textContent = fmt(r.count) + ' kishi'; } };
+  const drawSeg = () => segBox.replaceChildren(...Object.keys(segs).map(k => h('button', { class: k === seg ? 'on' : '', onclick: () => { seg = k; drawSeg(); loadCount(); } }, segs[k])));
+  const payload = () => ({ text: text.value.trim(), btn_text: bt.value.trim(), btn_url: bu.value.trim(), segment: seg });
+  const test = h('button', { class: 'btn line', onclick: async () => {
+    if (!text.value.trim()) { toast('Matnni yozing', 'bad'); return; }
+    test.disabled = true; const r = await api('bc_test', payload()); test.disabled = false; toast(r.msg || (r.ok ? 'Yuborildi' : 'Xatolik'), r.ok ? 'ok' : 'bad');
+  } }, icon('send'), 'Menga sinov');
+  const go1 = h('button', { class: 'btn pri', onclick: async () => {
+    if (!text.value.trim()) { toast('Matnni yozing', 'bad'); return; }
+    const ok = await confirmBox('Rassilkani boshlash', (segs[seg] || seg) + ' — ' + cnt.textContent + '\n\nYuborilgan xabarni qaytarib bo\'lmaydi. Avval «Menga sinov» bilan tekshirganingizga ishonch hosil qiling.', 'Yuborish', 'ok'); if (!ok) return;
+    go1.disabled = true; const r = await act('bc_create', payload()); go1.disabled = false;
+    if (r.ok) { toast(r.msg, 'ok'); text.value = ''; counter.textContent = '0 / 3500'; pg.reload(); } else if (r.error !== 'cancel') toast(r.msg || 'Xatolik', 'bad');
+  } }, icon('mega'), 'Yuborish');
+  const res = h('div', {}); let pg = null;
+  box.replaceChildren(h('div', { class: 'wrap' },
+    h('div', { class: 'cols c3' },
+      h('div', {}, h('div', { class: 'sec', style: { marginTop: '6px' } }, 'Yangi xabar', cnt),
+        h('div', { class: 'card', style: { padding: '12px 14px' } },
+          h('div', { class: 'field' }, h('label', {}, 'Kimga'), segBox),
+          h('div', { class: 'field' }, h('label', {}, 'Matn'), text, counter),
+          h('div', { class: 'grid', style: { gridTemplateColumns: '1fr 1fr' } }, h('div', { class: 'field' }, h('label', {}, 'Tugma'), bt), h('div', { class: 'field' }, h('label', {}, 'Havola'), bu)),
+          h('div', { class: 'btns', style: { marginTop: '6px' } }, test, go1))),
+      h('div', {}, h('div', { class: 'sec', style: { marginTop: '6px' } }, 'Maslahat'),
+        h('div', { class: 'card', style: { padding: '12px 14px' } }, h('div', { class: 't2', style: { whiteSpace: 'normal', lineHeight: '1.55' } },
+          'Xabarlar navbat bilan, soniyasiga ~15 tadan yuboriladi (Telegram cheklovi). Panelni yopsangiz ham yuborish davom etadi, tugagach Telegram\'ingizga hisobot keladi. Botni bloklagan mijozlar alohida sanaladi.')))),
+    h('div', { class: 'sec' }, 'Oldingi rassilkalar'), res));
+  pg = paged(res, off => api('bc_list', { offset: off }), b => bcCard(b, () => pg.reload()), "Hali rassilka yo'q", 'mega');
+  S.reload = () => pg.reload();
+  loadCount();
+  const t = setInterval(() => { if (S.tab !== 'broadcast') { clearInterval(t); return; } if (!document.hidden && res.querySelector('.badge.acc')) pg.reload(); }, 8000);
+}
+
 /* ------------------------------------------------------------------ jurnal */
 function viewAudit(box) {
   const res = h('div', {});
@@ -542,13 +604,13 @@ function viewAudit(box) {
 /* ------------------------------------------------------------------ asosiy oyna */
 const S = { tab: 'home', reload: null, jobFilter: null, topupFilter: null, days: 14 };
 let mainBox, tabsBox, chipEl, pendingN = 0, unreadN = 0;
-const TABS = [['home', 'Bosh', 'home', viewHome], ['topups', "To'lov", 'wallet', viewTopups], ['users', 'Mijoz', 'users', viewUsers], ['jobs', 'Buyurtma', 'box', viewJobs], ['promos', 'Promo', 'tag', viewPromos], ['events', 'Xabar', 'bell', viewEvents], ['audit', 'Jurnal', 'list', viewAudit, true]];
+const TABS = [['home', 'Bosh', 'home', viewHome], ['topups', "To'lov", 'wallet', viewTopups], ['users', 'Mijoz', 'users', viewUsers], ['jobs', 'Buyurtma', 'box', viewJobs], ['promos', 'Promo', 'tag', viewPromos], ['events', 'Xabar', 'bell', viewEvents], ['broadcast', 'Rassilka', 'mega', viewBroadcast, true], ['audit', 'Jurnal', 'list', viewAudit, true]];
 function setPending(n) { pendingN = n | 0; drawTabs(); }
 async function refreshBadge() { const r = await api('topups', { filter: 'pending', offset: 0 }); if (r.ok) setPending(r.more ? 30 : r.items.length); }
 function drawTabs() {
   const dotN = k => k === 'topups' ? pendingN : (k === 'events' ? unreadN : 0);
   const wide = window.matchMedia && matchMedia('(min-width:860px)').matches;
-  const LONG = { home: 'Bosh sahifa', topups: "To'lovlar", users: 'Mijozlar', jobs: 'Buyurtmalar', promos: 'Promokodlar', events: 'Xabarlar', audit: 'Jurnal' };
+  const LONG = { home: 'Bosh sahifa', topups: "To'lovlar", users: 'Mijozlar', jobs: 'Buyurtmalar', promos: 'Promokodlar', events: 'Xabarlar', broadcast: 'Rassilka', audit: 'Jurnal' };
   tabsBox.replaceChildren(...TABS.filter(t => wide || !t[4]).map(([k, label, ic]) => h('button', { class: S.tab === k ? 'on' : '', 'aria-label': LONG[k], onclick: () => { if (S.tab !== k) haptic('light'); go(k); } }, icon(ic), wide ? LONG[k] : label, dotN(k) > 0 ? h('span', { class: 'dot' }, dotN(k) > 29 ? '30+' : dotN(k)) : '')));
 }
 function go(tab) {
