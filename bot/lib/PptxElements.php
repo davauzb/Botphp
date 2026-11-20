@@ -45,7 +45,7 @@ class PptxElements
         'line' => [],
     ];
 
-    public const KINDS = ['matn', 'tarif', 'bosqichlar', 'xronologiya', 'kartalar', 'taqqoslash', 'xulosa', 'reja', 'title', 'thanks'];
+    public const KINDS = ['matn', 'tarif', 'bosqichlar', 'xronologiya', 'kartalar', 'taqqoslash', 'xulosa', 'reja', 'title', 'thanks', 'bolim'];
     public const TRANSITIONS = ['none', 'fade', 'push', 'wipe', 'cover', 'split'];
     public const DASHES = ['solid', 'dash', 'sysDot', 'dashDot', 'lgDash'];
     public const ENDS = ['none', 'triangle', 'arrow', 'stealth', 'oval', 'diamond'];
@@ -875,7 +875,7 @@ class PptxElements
             $style = (string)Engine::c('PPTX_TRANSITION_STYLE', 'fade');
             $out[] = ['id' => 's' . ($i + 1), 'mode' => 'auto',
                 'tr' => ($pro && Engine::c('PPTX_TRANSITIONS', true)) ? (in_array($style, self::TRANSITIONS, true) ? $style : 'fade') : 'none',
-                'an' => $pro && Engine::c('PPTX_ANIMATIONS', true) && !in_array($sem['kind'], ['title', 'thanks'], true),
+                'an' => $pro && Engine::c('PPTX_ANIMATIONS', true) && !in_array($sem['kind'], ['title', 'thanks', 'bolim'], true),
                 'notes' => PptxNotes::clean((string)($s['notes'] ?? '')),
                 'sem' => $sem, 'els' => $els];
         }

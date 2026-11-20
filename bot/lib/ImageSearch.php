@@ -15,9 +15,10 @@ class ImageSearch
      * @param bool $wide true — PRO taqdimot: katta (kamida ~1200 px), keng (landshaft) rasm kerak; kalitli manbalar topmasa,
      *                   kalitsiz zaxira manbalar (AI rasm yaratish, Wikimedia) ishlatiladi.
      */
-    public static function fetchImage(string $uzbekQuery, bool $wide = false): ?string
+    public static function fetchImage(string $uzbekQuery, bool $wide = false, string $englishQuery = ''): ?string
     {
-        $query = self::translateToEnglish($uzbekQuery);
+        // Inglizcha ibora reja bilan birga kelgan bo'lsa — tarjima uchun alohida AI so'rovi yuborilmaydi (token va vaqt tejaladi)
+        $query = $englishQuery !== '' ? $englishQuery : self::translateToEnglish($uzbekQuery);
         $minW = $wide ? 1100 : 0;
 
         $sources = [
@@ -47,6 +48,16 @@ class ImageSearch
 
     private static function translateToEnglish(string $text): string
     {
+        $ck = 'imgq_' . md5(mb_strtolower(trim($text)));
+        try {                       // bir xil mavzu/sarlavha qayta tarjima qilinmaydi (30 kun)
+            $st = db()->prepare('SELECT v FROM engine_kv WHERE k = ? AND ts > ?');
+            $st->execute([$ck, time() - 30 * 86400]);
+            $hit = $st->fetchColumn();
+            if (is_string($hit) && $hit !== '') {
+                return $hit;
+            }
+        } catch (Throwable $e) {
+        }
         try {
             $translated = AIClient::generateText(
                 "Translate this to a short English image-search phrase (2-5 words), reply with ONLY the phrase: \"$text\"",
@@ -57,6 +68,11 @@ class ImageSearch
             // AI qisqa ibora o'rniga uzun/ko'p qatorli javob bersa — asl so'rov bilan davom etamiz
             if ($translated === '' || mb_strlen($translated) > 90 || str_contains($translated, "\n")) {
                 return $text;
+            }
+            try {
+                db()->prepare('INSERT INTO engine_kv (k, v, ts) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, ts = excluded.ts')
+                    ->execute([$ck, $translated, time()]);
+            } catch (Throwable $e) {
             }
             return $translated;
         } catch (Throwable $e) {

@@ -172,6 +172,9 @@ class PptxGenerator
             if (in_array($slide['kind'], ['title', 'thanks'], true)) {
                 return PptxLayouts::edgeSlide($slide, $design, $slideNum, $totalSlides);
             }
+            if ($slide['kind'] === 'bolim') {
+                return PptxLayouts::sectionSlide($slide, $design, $slideNum, $totalSlides);
+            }
             return PptxLayouts::contentSlide($slide, $design, $slideNum, $totalSlides, $hasImage, $imagePath);
         }
 

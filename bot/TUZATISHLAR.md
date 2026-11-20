@@ -1,3 +1,29 @@
+# studybot 14-7 — TEZROQ, ARZONROQ (kamroq AI token) VA YANGI IMKONIYATLAR
+
+Eski `config.php` bilan ishlaydi, baza o'zgarmaydi.
+
+## ⚡ Tezlik va AI token tejash
+- **«O'ylash» tokenlari kamaytirildi**: gpt-oss (Groq) va Gemini modellariga `reasoning_effort: low` yuboriladi — javob odatda bir necha
+  baravar tezroq, yashirin "o'ylash"ga ketadigan tokenlar ancha kam. Model bu sozlamani tanimasa (400 xato) — bir marta eslab qolinadi va usiz so'raladi.
+  O'zgartirish: `AI_PROVIDERS` dagi provayderga `'reasoning' => 'low'|'medium'|'high'|''`.
+- **Rasm qidiruvi uchun AI tarjima so'rovlari olib tashlandi**: inglizcha qidiruv iboralari endi taqdimot rejasi bilan BIRGA keladi
+  (har taqdimotda ~5-8 ta alohida AI so'rovi kamaydi). Zaxira tarjima keshlanadi (30 kun).
+- Slayd matni so'rovlarida boshqa slaydlar faqat sarlavhasi bilan yuboriladi — har so'rovning kirish tokenlari kamaydi.
+
+## 🎨 Taqdimot
+- **Bo'lim ajratuvchi slaydlar** (katta «01», bo'lim nomi, ichidagi mavzular) — 10-15 slaydda 2 ta, 15-20 va 20-25 da 3 ta.
+  AI so'ralmaydi (bo'lim nomlari rejaga qo'shimcha), slaydlar soni tarif oralig'idan chiqmaydi. 12 oddiy + 5 PRO dizaynda, tahrirlovchida ham
+  («§ Bo'lim ajratuvchi» turi). O'chirish: `define('SECTION_SLIDES', false);`
+- **🎤 Himoya uchun konspekt (DOCX)** — taqdimot bilan birga ikkinchi fayl: har slaydning asosiy fikrlari, PRO'da og'zaki nutq matni ham.
+  AI'siz yig'iladi (qo'shimcha token yo'q). O'chirish: `define('KONSPEKT_ENABLED', false);`
+
+## Qo'shilmaganlari va sababi
+- **Diagramma/grafiklar**: AI raqamlarni o'ylab topadi (hallyutsinatsiya) — ilmiy ishda soxta statistika talabaga zarar. Shuning uchun qo'shilmadi.
+- **Tayyor .pptx shablonlar**: internetdagi shablonlarning ko'pchiligi mualliflik huquqi bilan himoyalangan, botdagi 17 ta o'z dizayni esa
+  tahrirlovchi bilan to'liq mos. Shablonlar tahrirlovchida ishlamaydi.
+
+---
+
 # studybot 14-6 — PRO DIZAYN YANGILANISHI
 
 **Eski `config.php` ni almashtirmang** — yangi kod eski config bilan ishlaydi, baza o'zgarmaydi, yangi sozlama kerak emas.

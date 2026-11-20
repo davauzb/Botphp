@@ -273,7 +273,7 @@ function tabSlayd(B){
   B.append(section('Slayd amallari',h('div',{class:'row wrap'},btn('＋ Yangi',e=>openNewSlideMenu(e.currentTarget)),btn('⧉ Nusxa',()=>dupSlide(App.cur)),btn('🗑 O‘chirish',()=>delSlide(App.cur)),btn('◀ Oldinga',()=>moveSlide(App.cur,App.cur-1)),btn('Orqaga ▶',()=>moveSlide(App.cur,App.cur+1)))));
 }
 function openNewSlideMenu(anchor){
-  const kinds=[['blank','▭ Bo‘sh slayd'],['matn','☰ Matn (raqamli qatorlar)'],['tarif','❝ Ta’rif'],['kartalar','▦ Kartalar'],['bosqichlar','➜ Bosqichlar'],['xronologiya','⏱ Xronologiya'],['taqqoslash','⇄ Taqqoslash'],['xulosa','✔ Xulosa'],['reja','☷ Reja']];
+  const kinds=[['blank','▭ Bo‘sh slayd'],['matn','☰ Matn (raqamli qatorlar)'],['tarif','❝ Ta’rif'],['kartalar','▦ Kartalar'],['bosqichlar','➜ Bosqichlar'],['xronologiya','⏱ Xronologiya'],['taqqoslash','⇄ Taqqoslash'],['xulosa','✔ Xulosa'],['reja','☷ Reja'],['bolim','§ Bo‘lim ajratuvchi']];
   const d=h('div',{class:'menu'},kinds.map(([k,l])=>h('button',{type:'button',onclick:()=>{ closePopover(); addSlide(k); }},l)));
   popover(anchor,d,{up:anchor.dataset.up==='1'});
 }
@@ -321,7 +321,7 @@ function layerName(e){
 }
 
 /* ---------- mazmunni oddiy shaklda tahrirlash ---------- */
-const KIND_LABEL={matn:'Matn',tarif:'Ta’rif',kartalar:'Kartalar',bosqichlar:'Bosqichlar',xronologiya:'Xronologiya',taqqoslash:'Taqqoslash',xulosa:'Xulosa',reja:'Reja',title:'Muqova',thanks:'Yakuniy slayd'};
+const KIND_LABEL={matn:'Matn',tarif:'Ta’rif',kartalar:'Kartalar',bosqichlar:'Bosqichlar',xronologiya:'Xronologiya',taqqoslash:'Taqqoslash',xulosa:'Xulosa',reja:'Reja',bolim:'Bo‘lim ajratuvchi',title:'Muqova',thanks:'Yakuniy slayd'};
 function openContentEditor(){
   const sl=curSlide(); const sem=clone(sl.sem||{kind:'matn',title:'',lead:'',points:[],items:[],bullets:[]});
   sem.points=sem.points||[]; sem.items=sem.items||[]; sem.bullets=sem.bullets||[];
@@ -332,11 +332,12 @@ function openContentEditor(){
     const inp=(label,key,multi)=>{ const i=h(multi?'textarea':'input',multi?{rows:multi,maxlength:700}:{type:'text',maxlength:200}); i.value=sem[key]||''; i.addEventListener('input',()=>{ sem[key]=i.value; }); return field(label,i); };
     box.append(inp('Sarlavha','title'));
     const k=sem.kind;
-    if(!['reja','title','thanks'].includes(k)) box.append(inp(k==='tarif'?'Ta’rif matni':'Izoh (kirish jumla)','lead',3));
+    if(k==='bolim') box.append(inp('Bo‘lim raqami (masalan 01)','lead'));
+    else if(!['reja','title','thanks'].includes(k)) box.append(inp(k==='tarif'?'Ta’rif matni':'Izoh (kirish jumla)','lead',3));
     if(k==='taqqoslash') box.append(h('div',{class:'grid2'},inp('Chap ustun nomi','left_title'),inp('O‘ng ustun nomi','right_title')));
-    if(k==='reja'){ const t=h('textarea',{rows:6,maxlength:1200}); t.value=sem.items.join('\n'); t.addEventListener('input',()=>{ sem.items=t.value.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,10); }); box.append(field('Reja bandlari (har qatorda bittadan)',t)); }
+    if(k==='reja'||k==='bolim'){ const t=h('textarea',{rows:6,maxlength:1200}); t.value=sem.items.join('\n'); t.addEventListener('input',()=>{ sem.items=t.value.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,10); }); box.append(field(k==='bolim'?'Bo‘lim ichidagi mavzular (har qatorda bittadan)':'Reja bandlari (har qatorda bittadan)',t)); }
     if(k==='title'||k==='thanks'){ const t=h('textarea',{rows:3,maxlength:600}); t.value=sem.bullets.join('\n'); t.addEventListener('input',()=>{ sem.bullets=t.value.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,4); }); box.append(field('Qo‘shimcha qatorlar',t)); }
-    if(!['reja','title','thanks'].includes(k)){
+    if(!['reja','title','thanks','bolim'].includes(k)){
       const list=h('div',{class:'plist'});
       sem.points.forEach((p,i)=>{
         const hd=h('input',{type:'text',maxlength:120,placeholder:'Sarlavha',value:p.head||''}); hd.addEventListener('input',()=>{p.head=hd.value;});

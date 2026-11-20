@@ -15,7 +15,7 @@ class I18n
     private const T = [
         'uz' => [
             'tag_matn' => "MA'LUMOT", 'tag_tarif' => "TA'RIF", 'tag_bosqichlar' => 'BOSQICHLAR', 'tag_xronologiya' => 'KETMA-KETLIK',
-            'tag_kartalar' => "ASOSIY YO'NALISHLAR", 'tag_taqqoslash' => 'TAQQOSLASH', 'tag_xulosa' => 'XULOSA', 'tag_reja' => 'REJA',
+            'tag_kartalar' => "ASOSIY YO'NALISHLAR", 'tag_taqqoslash' => 'TAQQOSLASH', 'tag_xulosa' => 'XULOSA', 'tag_reja' => 'REJA', 'tag_bolim' => "BO'LIM",
             'key_features' => 'ASOSIY BELGILARI', 'pill_end' => 'YAKUN', 'pill_presentation' => 'TAQDIMOT',
             'agenda' => 'Reja', 'thanks' => 'Rahmat!', 'thanks_sub' => "E'tiboringiz uchun rahmat",
             'executor' => 'Bajaruvchi', 'group' => 'Guruh', 'topic' => 'Mavzu', 'plan_upper' => 'REJA:',
@@ -31,7 +31,7 @@ class I18n
         ],
         'ru' => [
             'tag_matn' => 'ИНФОРМАЦИЯ', 'tag_tarif' => 'ОПРЕДЕЛЕНИЕ', 'tag_bosqichlar' => 'ЭТАПЫ', 'tag_xronologiya' => 'ХРОНОЛОГИЯ',
-            'tag_kartalar' => 'ОСНОВНЫЕ НАПРАВЛЕНИЯ', 'tag_taqqoslash' => 'СРАВНЕНИЕ', 'tag_xulosa' => 'ВЫВОДЫ', 'tag_reja' => 'ПЛАН',
+            'tag_kartalar' => 'ОСНОВНЫЕ НАПРАВЛЕНИЯ', 'tag_taqqoslash' => 'СРАВНЕНИЕ', 'tag_xulosa' => 'ВЫВОДЫ', 'tag_reja' => 'ПЛАН', 'tag_bolim' => "РАЗДЕЛ",
             'key_features' => 'ОСНОВНЫЕ ПРИЗНАКИ', 'pill_end' => 'ФИНАЛ', 'pill_presentation' => 'ПРЕЗЕНТАЦИЯ',
             'agenda' => 'План', 'thanks' => 'Спасибо!', 'thanks_sub' => 'Благодарим за внимание',
             'executor' => 'Исполнитель', 'group' => 'Группа', 'topic' => 'Тема', 'plan_upper' => 'ПЛАН:',
@@ -47,7 +47,7 @@ class I18n
         ],
         'en' => [
             'tag_matn' => 'INFORMATION', 'tag_tarif' => 'DEFINITION', 'tag_bosqichlar' => 'STAGES', 'tag_xronologiya' => 'TIMELINE',
-            'tag_kartalar' => 'KEY AREAS', 'tag_taqqoslash' => 'COMPARISON', 'tag_xulosa' => 'CONCLUSIONS', 'tag_reja' => 'AGENDA',
+            'tag_kartalar' => 'KEY AREAS', 'tag_taqqoslash' => 'COMPARISON', 'tag_xulosa' => 'CONCLUSIONS', 'tag_reja' => 'AGENDA', 'tag_bolim' => "SECTION",
             'key_features' => 'KEY FEATURES', 'pill_end' => 'THE END', 'pill_presentation' => 'PRESENTATION',
             'agenda' => 'Agenda', 'thanks' => 'Thank you!', 'thanks_sub' => 'Thank you for your attention',
             'executor' => 'Prepared by', 'group' => 'Group', 'topic' => 'Topic', 'plan_upper' => 'CONTENTS:',

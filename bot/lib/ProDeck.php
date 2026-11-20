@@ -96,7 +96,7 @@ class ProDeck
     {
         $f = self::FONT;
         return '<a:r><a:rPr lang="' . (self::$lang === 'ru' ? 'ru-RU' : (self::$lang === 'en' ? 'en-US' : 'uz-UZ')) . '" sz="' . (int)round($sz * 100) . '" b="' . ($b ? 1 : 0) . '" i="' . ($i ? 1 : 0)
-            . '"' . ($spc ? ' spc="' . $spc . '"' : '') . ' dirty="0"><a:solidFill>' . self::clr($color) . '</a:solidFill><a:latin typeface="' . $f . '"/><a:cs typeface="' . $f . '"/></a:rPr><a:t>'
+            . '"' . ($spc ? ' spc="' . $spc . '"' : '') . ' dirty="0">' . (is_array($color) && isset($color['grad']) ? self::fill($color + ['ang' => 0]) : '<a:solidFill>' . self::clr($color) . '</a:solidFill>') . '<a:latin typeface="' . $f . '"/><a:cs typeface="' . $f . '"/></a:rPr><a:t>'
             . self::esc($t) . '</a:t></a:r>';
     }
 
@@ -419,6 +419,39 @@ class ProDeck
         $sub = trim((string)(($s['bullets'][0] ?? '')));
         if ($sub !== '') {
             $out .= self::tbox('Izoh', 1500000, 4550000, $W - 3000000, 600000, self::para(self::run(self::clip($sub, 90), 22, $T['mut']), 'ctr'), 't', true);
+        }
+        return $out . self::chrome($n, $total, '');
+    }
+
+    /** BO'LIM: ulkan gradient raqam, bo'lim nomi va ichidagi slaydlar ro'yxati (AI so'rovisiz). */
+    private static function section(array $s, int $n, int $total): string
+    {
+        $T = self::$T;
+        $W = self::W;
+        $num = preg_replace('/\D/', '', (string)($s['lead'] ?? '')) ?: (string)$n;
+        $num = str_pad(substr($num, 0, 2), 2, '0', STR_PAD_LEFT);
+        $title = self::clip((string)($s['title'] ?? ''), 90);
+        $items = array_slice(array_values(array_filter(array_map(fn($t) => self::clip((string)$t, 70), $s['items'] ?? []))), 0, 5);
+        $x = self::M + 80000;
+        $out = self::tbox('Raqam', $x - 60000, 900000, 5200000, 2500000,
+            self::para(self::run($num, 170, ['grad' => [$T['acc'], $T['acc2']]], true), 'l', 0, 80), 'b');
+        $out .= self::sp('Chiziq', 'roundRect', $x, 3550000, 1300000, 60000, ['grad' => [$T['acc'], $T['acc2']], 'ang' => 0], null, 0, '', 't', [0, 0, 0, 0], 50000, false, null, true);
+        $out .= self::tbox('Teg', $x, 3720000, 7000000, 330000,
+            self::para(self::run(mb_strtoupper(I18n::t('tag_bolim', self::$lang)) . ' ' . (int)$num, 13, $T['acc'], true, false, 300), 'l'), 'ctr', true);
+        [$pt, $th] = self::fit([[$title, true, 1.0, 0]], 7800000, 1500000, 48, 26);
+        $out .= self::sp('Sarlavha', 'rect', $x, 4100000, 7800000, $th + 60000, null, null, 0, self::para(self::run($title, $pt, $T['txt'], true), 'l', 0, 94), 't', [0, 0, 0, 0], null, true, 'title', true);
+        if ($items) {
+            $paras = '';
+            foreach ($items as $it) {
+                $paras .= self::para(self::run('—  ' . $it, 16, $T['mut']), 'l', 5);
+            }
+            $cw = 3400000;
+            $cx = $W - self::M - $cw;
+            $ch = 380000 + count($items) * 420000;
+            $cy = 1400000;
+            $inner = self::card('Karta', $cx, $cy, $cw, $ch, 7000)
+                . self::tbox('Ichida', $cx + 260000, $cy + 190000, $cw - 420000, $ch - 300000, $paras, 'ctr');
+            $out .= self::grp('Bo\'lim ichida', $cx, $cy, $cw, $ch, $inner);
         }
         return $out . self::chrome($n, $total, '');
     }
@@ -880,6 +913,7 @@ class ProDeck
                 $kind === 'title' => self::cover($s, $n, $total),
                 $kind === 'thanks' => self::thanks($s, $n, $total),
                 $kind === 'reja' => self::agenda($s, $n, $total),
+                $kind === 'bolim' => self::section($s, $n, $total),
                 $kind === 'tarif' => self::definition($s, $n, $total),
                 $kind === 'kartalar' => self::cards($s, $n, $total),
                 $kind === 'bosqichlar' => self::steps($s, $n, $total),

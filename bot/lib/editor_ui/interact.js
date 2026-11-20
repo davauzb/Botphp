@@ -79,6 +79,7 @@ function newSem(kind){
     case 'taqqoslash': return {kind,title:'Taqqoslash',lead:'',left_title:'Afzalliklari',right_title:'Kamchiliklari',points:[P('A1','Izoh.','chap'),P('A2','Izoh.','chap'),P('A3','Izoh.','chap'),P('B1','Izoh.','ong'),P('B2','Izoh.','ong'),P('B3','Izoh.','ong')]};
     case 'xulosa': return {kind,title:'Xulosa',lead:'Yakuniy fikr.',points:[P('Xulosa 1','Izoh.'),P('Xulosa 2','Izoh.'),P('Xulosa 3','Izoh.')]};
     case 'reja': return {kind,title:'Reja',items:App.slides.map(s=>s.sem&&s.sem.title).filter(Boolean).slice(0,8)};
+    case 'bolim': return {kind,title:'Yangi bo‘lim',lead:String(App.slides.filter(s=>s.sem&&s.sem.kind==='bolim').length+1).padStart(2,'0'),items:[]};
     default: return {kind:'matn',title:'',points:[]};
   }
 }

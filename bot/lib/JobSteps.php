@@ -4,6 +4,7 @@ require_once __DIR__ . '/JobFunctions.php';
 require_once __DIR__ . '/PlanReview.php';
 require_once __DIR__ . '/DocStore.php';
 require_once __DIR__ . '/I18n.php';
+require_once __DIR__ . '/SpeechDoc.php';
 
 /**
  * Ish turlari uchun reja (qadamlar) va har bir qadamni bajarish.
@@ -393,7 +394,7 @@ class JobSteps
                 }
                 $cp = null;
                 try {
-                    $cp = ImageSearch::fetchImage($topic, true);
+                    $cp = ImageSearch::fetchImage($topic, true, (string)($outline[0]['en_topic'] ?? ''));
                 } catch (Throwable $e) {
                     logError('steps', 'Muqova rasmi: ' . $e->getMessage());
                 }
@@ -435,9 +436,10 @@ class JobSteps
             if ($pro && $topic !== '') {
                 $q = mb_substr($topic, 0, 80) . ': ' . mb_substr((string)$q, 0, 60);
             }
+            $en = (string)($o['rasm'] ?? '');
             $path = null;
             try {
-                $path = ImageSearch::fetchImage($q, $pro);
+                $path = ImageSearch::fetchImage($q, $pro, $en);
             } catch (Throwable $e) {
                 logError('steps', 'Rasm: ' . $e->getMessage());
             }
@@ -487,7 +489,18 @@ class JobSteps
             $titleSlide['image'] = $cover;
             $thanksSlide['image'] = $cover;
         }
-        $final = array_merge([$titleSlide, $agenda], $slides, [$thanksSlide]);
+        // Bo'lim ajratuvchi slaydlar (AI so'rovisiz; 10+ slaydli tariflarda, tarif oralig'i ichida)
+        $sections = buildSections($outline, $slides, sectionCount(count($slides)));
+        $body = [];
+        $k = 0;
+        foreach ($slides as $i => $sl) {
+            if (isset($sections[$i])) {
+                $k++;
+                $body[] = ['kind' => 'bolim', 'title' => $sections[$i]['name'], 'lead' => sprintf('%02d', $k), 'items' => $sections[$i]['titles']];
+            }
+            $body[] = $sl;
+        }
+        $final = array_merge([$titleSlide, $agenda], $body, [$thanksSlide]);
         $design = pptxDesigns()[$p['designKey']] ?? pptxDesigns()[DEFAULT_PPTX_DESIGN];
         $design['lang'] = $lang;
         if ($isPro) {
@@ -507,6 +520,13 @@ class JobSteps
                 $state['res']['pres'] = EditorStore::createFromGenerated((int)$job['telegram_id'], $p['topic'], $p['designKey'], $final, $lang);
             } catch (Throwable $e) {
                 logError('steps', 'Tahrirlash nusxasi: ' . $e->getMessage());
+            }
+        }
+        if (SpeechDoc::enabled()) {
+            try {            // himoya uchun konspekt (AI'siz, tayyor matndan) — xato bo'lsa ham taqdimot yuboriladi
+                $state['res']['extra'] = SpeechDoc::generate($final, (string)$p['topic'], $lang);
+            } catch (Throwable $e) {
+                logError('steps', 'Konspekt: ' . $e->getMessage());
             }
         }
         unset($state['res']['ai'], $state['res']['outline']);
@@ -537,6 +557,18 @@ class JobSteps
             throw new RuntimeException('Fayl Telegram orqali yuborilmadi');
         }
         $state['res']['sent'] = true;
+        $extra = (string)($state['res']['extra'] ?? '');
+        if ($extra !== '' && is_file($extra) && empty($state['res']['sent2'])) {
+            $state['res']['sent2'] = true;
+            $fid = Telegram::$lastFileId;
+            try {
+                Telegram::sendDocument($chatId, $extra, "🎤 Himoya uchun konspekt: har slaydning asosiy fikrlari" . (isProDesign($state['p']['designKey'] ?? null) ? " va og'zaki nutq matni" : '') . ". Chop etib, himoyaga tayyorlanishda foydalaning.");
+            } catch (Throwable $e) {
+                logError('steps', 'Konspekt yuborilmadi: ' . $e->getMessage());
+            }
+            Telegram::$lastFileId = $fid;            // «Buyurtmalarim» uchun asosiy fayl id'si saqlansin
+            @unlink($extra);
+        }
         // «Buyurtmalarim» uchun: fayl keyinroq ham (server nusxasi o'chgach) Telegram'dan qayta yuborilishi mumkin
         if (Telegram::$lastFileId) {
             try {

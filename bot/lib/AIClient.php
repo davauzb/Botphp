@@ -139,11 +139,48 @@ class AIClient
                         'headers' => $p['headers'] ?? [], 'timeout' => (int)($p['timeout'] ?? 0),
                         'max_tokens_cap' => (int)($p['max_tokens_cap'] ?? 0),
                         'priority' => (int)($p['priority'] ?? 5),
+                        'reasoning' => self::reasoningFor($p, $m),
                     ];
                 }
             }
         }
         return $cache;
+    }
+
+    /**
+     * "O'ylash" (reasoning) darajasi. gpt-oss va Gemini modellari javobdan oldin yashirin "o'ylash" tokenlarini yozadi —
+     * matn yozish uchun bu keraksiz: ko'p token sarflanadi va javob 2-4 baravar sekinlashadi. 'low' — tez va tejamkor.
+     * config.php'da provayderga 'reasoning' => 'low'|'medium'|'high'|'' (o'chirish) berib, o'zgartirish mumkin.
+     */
+    private static function reasoningFor(array $p, string $model): string
+    {
+        if (array_key_exists('reasoning', $p)) {
+            return (string)$p['reasoning'];
+        }
+        if (stripos($model, 'gpt-oss') !== false || preg_match('/^o\d|gpt-5/i', $model)) {
+            return 'low';
+        }
+        if (stripos((string)($p['endpoint'] ?? ''), 'generativelanguage.googleapis.com') !== false) {
+            return 'low';
+        }
+        return '';
+    }
+
+    /** reasoning_effort'ni qabul qilmagan marshrutlar (bir marta 400 bersa — keyin yuborilmaydi). */
+    private static function noReasoning(string $route, ?bool $set = null): bool
+    {
+        $k = 'noreason_' . $route;
+        try {
+            if ($set === true) {
+                db()->prepare('INSERT INTO engine_kv (k, v, ts) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET ts = excluded.ts')->execute([$k, '1', time()]);
+                return true;
+            }
+            $st = db()->prepare('SELECT 1 FROM engine_kv WHERE k = ?');
+            $st->execute([$k]);
+            return (bool)$st->fetchColumn();
+        } catch (Throwable $e) {
+            return false;
+        }
     }
 
     private static function isConfigured(string $route): bool
@@ -267,6 +304,17 @@ class AIClient
             $timeout = min($timeout, $r['timeout']);
         }
 
+        $payload = [
+            'model' => $r['model'],
+            'messages' => $messages,
+            'temperature' => $temperature,
+            'max_tokens' => $maxTokens,   // belgilanmasa provider javobni o'rtasida kesib qo'yadi (real xato bo'lgan)
+        ];
+        $withReason = $r['reasoning'] !== '' && !self::noReasoning($r['route']);
+        if ($withReason) {
+            $payload['reasoning_effort'] = $r['reasoning'];
+        }
+
         $respHeaders = [];
         $ch = curl_init($r['endpoint']);
         $headers = ['Content-Type: application/json', 'Authorization: Bearer ' . $r['api_key']];
@@ -287,12 +335,7 @@ class AIClient
                 }
                 return strlen($line);
             },
-            CURLOPT_POSTFIELDS => json_encode([
-                'model' => $r['model'],
-                'messages' => $messages,
-                'temperature' => $temperature,
-                'max_tokens' => $maxTokens,   // belgilanmasa provider javobni o'rtasida kesib qo'yadi (real xato bo'lgan)
-            ]),
+            CURLOPT_POSTFIELDS => json_encode($payload),
         ]);
         $response = curl_exec($ch);
         $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -318,6 +361,11 @@ class AIClient
         if ($code === 429) {
             $daily = (bool)preg_match('/per day|daily|quota|exceeded your current|tokens per day|TPD|RPD/i', $body);
             throw new AIRouteException('Limit tugagan (429)', 'ratelimit', $retryAfter ?? ($daily ? 1800 : 0), false);
+        }
+        if ($withReason && ($code === 400 || $code === 422) && preg_match('/reasoning/i', $body)) {
+            self::noReasoning($r['route'], true);                  // bu model sozlamani bilmaydi — usiz qayta so'raymiz
+            $r['reasoning'] = '';
+            return self::call($r, $prompt, $systemPrompt, $maxTokens, $timeout, $temperature);
         }
         if ($code === 400 || $code === 413 || $code === 422) {
             if (preg_match('/context|too long|maximum|max_tokens|token/i', $body)) {

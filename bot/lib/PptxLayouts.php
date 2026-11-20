@@ -1343,6 +1343,53 @@ class PptxLayouts
         return $body;
     }
 
+    // ------------------------------------------------------------------ bo'lim ajratuvchi slayd
+
+    /**
+     * BO'LIM: katta raqam ("01"), bo'lim nomi va undagi slaydlar ro'yxati. AI so'rovisiz quriladi.
+     * Yorug' terilarda — asosiy rang fonida, qorong'i terilarda — o'z fonida aksent bezaklar bilan.
+     * $slide: ['title' => bo'lim nomi, 'lead' => '01', 'items' => [ichidagi slaydlar sarlavhalari]]
+     */
+    public static function sectionSlide(array $slide, array $d, int $n, int $total): string
+    {
+        self::setup($d);
+        self::$recording = false;
+        $P = self::$P;
+        $A = $P['acc'];
+        $W = self::W;
+        $H = self::H;
+        $dark = !empty(self::$S['dark']);
+        $bg = $dark ? $P['bg'] : $A;
+        $on = $dark ? 'FFFFFF' : self::on($A);
+        $soft = $dark ? $P['head'] : self::mix($on, $A, 0.22);
+        $num = preg_replace('/\D/', '', (string)($slide['lead'] ?? '')) ?: (string)$n;
+        $num = str_pad(substr($num, 0, 2), 2, '0', STR_PAD_LEFT);
+        $title = self::clip((string)($slide['title'] ?? ''), 90);
+        $items = array_slice(array_values(array_filter(array_map(fn($t) => self::clip((string)$t, 70), $slide['items'] ?? []))), 0, 5);
+        $x = self::$x0 + 120000;
+        $w = 7400000;
+
+        $s = self::shape('ContentBg', 'rect', 0, 0, $W, $H, $bg);
+        $s .= self::shape('Circ', 'ellipse', 6000000, -1600000, 4600000, 4600000, $dark ? self::mix($bg, $A, 0.22) : self::mix($A, $on, 0.1));
+        $s .= self::shape('Circ2', 'ellipse', 7600000, 5000000, 1500000, 1500000, $dark ? self::mix($bg, $A, 0.32) : self::mix($A, $on, 0.16));
+        $s .= self::textBox('Raqam', $x - 60000, 900000, 4000000, 1700000,
+            self::para(self::run($num, 110, $dark ? $A : self::mix($A, $on, 0.42), true, false, true), 'l'), 'b');
+        $s .= self::shape('Rule', 'rect', $x, 2750000, 1000000, 60000, $dark ? $A : $on);
+        $label = mb_strtoupper(I18n::t('tag_bolim', self::$lang)) . ' ' . (int)$num;
+        $s .= self::textBox('Teg', $x, 2900000, $w, 320000, self::para(self::run($label, 13, $soft, true, false, false, 300), 'l'), 'ctr');
+        $tsz = self::fit([[$title, true, 0, 0]], $w, 1250000, 40, 22);
+        $s .= self::titleSp($title, $x, 3250000, $w, 1250000, $on, 'l', $tsz, 't');
+        if ($items) {
+            $p = '';
+            foreach ($items as $it) {
+                $p .= self::para(self::run('—  ' . $it, 15, $soft), 'l', 5);
+            }
+            $s .= self::textBox('Ichida', $x, 4650000, $w, 1600000, $p, 't');
+        }
+        $s .= self::textBox('SlideNumber', 7600000, 6450000, 1300000, 260000, self::para(self::run($n . ' / ' . $total, 12, $soft), 'r'));
+        return self::wrap($s);
+    }
+
     // ------------------------------------------------------------------ muqova va yakuniy slayd
 
     /** kind = 'title' yoki 'thanks'. Har bir terida o'z muqovasi bor. */

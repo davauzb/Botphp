@@ -173,7 +173,11 @@ function generateSlideOutline(string $topic, int $count, array $avoid = [], stri
         . "- \"xulosa\": faqat OXIRGI slayd uchun\n"
         . "Turlar xilma-xil bo'lsin: ketma-ket ikki slayd bir xil turda bo'lmasin va kamida 4 xil tur ishlating. "
         . "Ikkinchi slayd \"tarif\" bo'lsin. "
-        . 'JSON: {"slaydlar":[{"sarlavha":"...","turi":"...","fikr":"bu slaydda nima yoritilishi (1 jumla)"}]}';
+        . (sectionCount($count) > 0 ? "Slaydlarni (oxirgi xulosadan tashqari) ketma-ket ANIQ " . sectionCount($count) . " ta mantiqiy bo'limga ajrating: har slaydga "
+            . "\"bolim\" — u tegishli bo'limning 2-4 so'zli nomi (bir bo'limdagi slaydlarda aynan bir xil yozilsin). " : '')
+        . "Har slaydga \"rasm\" — shu slayd uchun fotosurat qidirish iborasi, INGLIZ tilida, 2-5 so'z (mavzuga aniq bog'liq). "
+        . "Yana \"en\" — butun mavzuning inglizcha qisqa nomi (2-6 so'z). "
+        . 'JSON: {"en":"...","slaydlar":[{"sarlavha":"...","turi":"...","fikr":"bu slaydda nima yoritilishi (1 jumla)","rasm":"..."}]}';
     if ($avoid) {      // «Boshqa reja»: oldingi sarlavhalar yoqmagan
         $prompt .= "\n\nFOYDALANUVCHIGA OLDINGI REJA YOQMADI. Quyidagi sarlavhalarni TAKRORLAMANG, boshqacha qirralar va yangicha so'zlar bilan tuzing:\n- "
             . implode("\n- ", $avoid);
@@ -182,9 +186,10 @@ function generateSlideOutline(string $topic, int $count, array $avoid = [], stri
 
     $outline = [];
     for ($attempt = 0; $attempt < 2 && count($outline) < (int)ceil($count * 0.7); $attempt++) {
-        $raw = AIClient::generateText($prompt, slideSystemPrompt($lang), min(6000, $count * 120 + 800));
+        $raw = AIClient::generateText($prompt, slideSystemPrompt($lang), min(6000, $count * 140 + 800));
         $data = json_decode(extractJson($raw), true);
         $outline = [];
+        $enTopic = cleanImageQuery((string)($data['en'] ?? ''));
         foreach (($data['slaydlar'] ?? []) as $s) {
             $t = trim((string)($s['sarlavha'] ?? ''));
             if ($t === '') {
@@ -194,6 +199,8 @@ function generateSlideOutline(string $topic, int $count, array $avoid = [], stri
                 'sarlavha' => $t,
                 'turi' => strtolower(trim((string)($s['turi'] ?? 'matn'))),
                 'fikr' => trim((string)($s['fikr'] ?? '')),
+                'rasm' => cleanImageQuery((string)($s['rasm'] ?? '')),
+                'bolim' => mb_substr(trim((string)($s['bolim'] ?? '')), 0, 80),
             ];
         }
         if (count($outline) < (int)ceil($count * 0.7)) {
@@ -217,6 +224,9 @@ function generateSlideOutline(string $topic, int $count, array $avoid = [], stri
     }
 
     $outline = array_slice($outline, 0, $count);
+    if (!empty($enTopic) && $outline) {
+        $outline[0]['en_topic'] = $enTopic;          // muqova rasmi uchun (alohida tarjima so'rovi kerak bo'lmaydi)
+    }
 
     // Turlarni tekshiramiz: noma'lum tur -> matn; xulosa faqat oxirida; ketma-ket bir xil tur bo'lmasin
     $rotation = ['kartalar', 'matn', 'bosqichlar', 'xronologiya', 'taqqoslash'];
@@ -251,9 +261,12 @@ function generateSlideOutline(string $topic, int $count, array $avoid = [], stri
 /** Bitta guruh slaydlarning to'liq matnini so'raydi. Qaytadi: rejadagi tartibda massiv (yo'q bo'lganlari null). */
 function generateSlideBatch(string $topic, array $outline, array $indexes, string $lang = 'uz', bool $notes = false): array
 {
+    // Boshqa slaydlar faqat sarlavhasi bilan (takrorlanmaslik uchun shu yetarli) — har so'rovda kirish tokenlari kamayadi
     $planText = '';
     foreach ($outline as $i => $o) {
-        $planText .= ($i + 1) . ') ' . $o['sarlavha'] . ' — ' . $o['fikr'] . "\n";
+        if (!in_array($i, $indexes, true)) {
+            $planText .= ($i + 1) . ') ' . $o['sarlavha'] . "\n";
+        }
     }
 
     $todo = '';
@@ -343,4 +356,73 @@ function extractJson(string $raw): string
         return '';
     }
     return substr($raw, $start, $end - $start + 1);
+}
+
+/** AI bergan inglizcha rasm iborasini tozalaydi (bo'sh/uzun/kirill bo'lsa — bo'sh qaytadi, keyin tarjima zaxirasi ishlaydi). */
+function cleanImageQuery(string $q): string
+{
+    $q = trim(preg_replace('/\s+/u', ' ', $q) ?? '', " \t\n\r\"'.,;:");
+    if ($q === '' || mb_strlen($q) > 80 || preg_match('/[\x{0400}-\x{04FF}]/u', $q) || !preg_match('/^[\p{L}\p{N} \'\-&]+$/u', $q)) {
+        return '';
+    }
+    return $q;
+}
+
+/** Taqdimotga qo'shiladigan bo'lim ajratuvchi slaydlar soni (AI so'ralmaydi, tarif oralig'idan chiqmaydi). */
+function sectionCount(int $contentCount): int
+{
+    if (!(bool)Engine::c('SECTION_SLIDES', true)) {
+        return 0;
+    }
+    return $contentCount >= 14 ? 3 : ($contentCount >= 8 ? 2 : 0);
+}
+
+/**
+ * Kontent slaydlarini bo'limlarga ajratadi. AI bergan "bolim" nomlari yaroqli bo'lsa (ketma-ket, har birida kamida 2 slayd,
+ * soni to'g'ri) — o'shalar ishlatiladi, aks holda slaydlar teng bo'linadi va bo'lim nomi birinchi slayd sarlavhasidan olinadi.
+ * Qaytadi: [startIndex => ['name' => ..., 'titles' => [...]]] (xulosa slaydi oxirgi bo'limga qo'shilmaydi, ajratuvchisiz qoladi).
+ */
+function buildSections(array $outline, array $slides, int $nsec): array
+{
+    $n = count($slides);
+    if ($nsec < 2 || $n < $nsec * 2 + 1) {
+        return [];
+    }
+    $body = $n - 1;                      // oxirgi — xulosa
+    $groups = [];
+    $prev = null;
+    for ($i = 0; $i < $body; $i++) {
+        $name = trim((string)($outline[$i]['bolim'] ?? ''));
+        $key = mb_strtolower($name);
+        if ($name === '' ) {
+            $groups = [];
+            break;
+        }
+        if ($key !== $prev) {
+            $groups[] = ['start' => $i, 'name' => $name, 'len' => 0];
+            $prev = $key;
+        }
+        $groups[count($groups) - 1]['len']++;
+    }
+    $ok = count($groups) >= 2 && count($groups) <= $nsec + 1;
+    foreach ($groups as $g) {
+        $ok = $ok && $g['len'] >= 2;
+    }
+    if (!$ok) {
+        $groups = [];
+        for ($k = 0; $k < $nsec; $k++) {
+            $st = (int)floor($k * $body / $nsec);
+            $en = (int)floor(($k + 1) * $body / $nsec);
+            $groups[] = ['start' => $st, 'name' => (string)($slides[$st]['title'] ?? ''), 'len' => $en - $st];
+        }
+    }
+    $out = [];
+    foreach ($groups as $g) {
+        $titles = [];
+        for ($i = $g['start']; $i < $g['start'] + $g['len']; $i++) {
+            $titles[] = (string)($slides[$i]['title'] ?? '');
+        }
+        $out[$g['start']] = ['name' => $g['name'], 'titles' => array_values(array_filter($titles))];
+    }
+    return $out;
 }
