@@ -30,6 +30,37 @@ final class DocTypes
             'volumes' => [
                 '2-3' => ['label' => '2-3 bet', 'chapters' => 0, 'min_words' => 600, 'max_words' => 900, 'price' => 3000],
             ]],
+        'esse' => ['label' => 'esse', 'title' => 'Esse (insho)', 'menu' => '✍️ Esse / insho', 'cmd' => '/esse', 'doc' => 'ESSE', 'const' => 'ESSE_VOLUMES', 'kind' => 'article', 'single' => 'esse', 'images' => 0, 'flag' => 'ESSE_ENABLED', 'biblio' => 4,
+            'volumes' => [
+                '2-3' => ['label' => '2-3 bet', 'chapters' => 0, 'min_words' => 700, 'max_words' => 950, 'price' => 3000],
+                '4-5' => ['label' => '4-5 bet', 'chapters' => 0, 'min_words' => 1200, 'max_words' => 1500, 'price' => 5000],
+            ]],
+        'test' => ['label' => 'test savollari', 'title' => 'Test savollari', 'menu' => '❓ Test savollari', 'cmd' => '/test', 'doc' => 'TEST', 'const' => 'TEST_VOLUMES', 'kind' => 'test', 'images' => 0, 'flag' => 'TEST_ENABLED',
+            'volumes' => [
+                '20' => ['label' => '20 ta savol', 'questions' => 20, 'price' => 3000],
+                '30' => ['label' => '30 ta savol', 'questions' => 30, 'price' => 4000],
+                '50' => ['label' => '50 ta savol', 'questions' => 50, 'price' => 6000],
+            ]],
+        'lab' => ['label' => 'laboratoriya ishi', 'title' => 'Laboratoriya ishi', 'menu' => '🔬 Laboratoriya ishi', 'cmd' => '/laboratoriya', 'doc' => 'LABORATORIYA ISHI', 'const' => 'LAB_VOLUMES', 'kind' => 'paper', 'images' => 1, 'flag' => 'LAB_ENABLED', 'biblio' => 5, 'table_ch' => 3,
+            'fixed' => [
+                'uz' => ['Ishning maqsadi va nazariy asoslari', 'Kerakli asbob-uskunalar va ishni bajarish tartibi', 'Olingan natijalar va ularning tahlili'],
+                'ru' => ['Цель работы и теоретические основы', 'Необходимое оборудование и порядок выполнения работы', 'Полученные результаты и их анализ'],
+                'en' => ['Objective and theoretical background', 'Equipment and procedure', 'Results and analysis'],
+            ],
+            'volumes' => [
+                '5-7' => ['label' => '5-7 bet', 'chapters' => 3, 'sub' => 0, 'min_words' => 1500, 'max_words' => 2000, 'price' => 5000],
+                '8-10' => ['label' => '8-10 bet', 'chapters' => 3, 'sub' => 0, 'min_words' => 2400, 'max_words' => 3000, 'price' => 7000],
+            ]],
+        'amaliyot' => ['label' => 'amaliyot hisoboti', 'title' => 'Amaliyot hisoboti', 'menu' => '🏢 Amaliyot hisoboti', 'cmd' => '/amaliyot', 'doc' => 'AMALIYOT HISOBOTI', 'const' => 'AMALIYOT_VOLUMES', 'kind' => 'paper', 'images' => 1, 'flag' => 'AMALIYOT_ENABLED', 'biblio' => 6, 'table_ch' => 2,
+            'fixed' => [
+                'uz' => ["Amaliyot o'tilgan tashkilot haqida umumiy ma'lumot", 'Tashkilotning tuzilmasi va asosiy faoliyati', 'Amaliyot davomida bajarilgan ishlar', 'Aniqlangan muammolar va takliflar'],
+                'ru' => ['Общие сведения об организации — месте практики', 'Структура и основная деятельность организации', 'Работы, выполненные в ходе практики', 'Выявленные проблемы и предложения'],
+                'en' => ['General information about the host organization', 'Structure and main activities of the organization', 'Work performed during the internship', 'Identified problems and recommendations'],
+            ],
+            'volumes' => [
+                '10-15' => ['label' => '10-15 bet', 'chapters' => 4, 'sub' => 0, 'min_words' => 2800, 'max_words' => 3600, 'price' => 9000],
+                '20-25' => ['label' => '20-25 bet', 'chapters' => 4, 'sub' => 2, 'min_words' => 5200, 'max_words' => 6400, 'price' => 14000],
+            ]],
     ];
 
     public static function exists(string $t): bool
@@ -123,6 +154,18 @@ final class DocTypes
 
     public static function isArticleDoc(string $docType): bool
     {
-        return in_array($docType, ['MAQOLA', 'TEZIS'], true);
+        return in_array($docType, ['MAQOLA', 'TEZIS', 'ESSE'], true);
+    }
+
+    /** Qat'iy tuzilmali turlar (laboratoriya, amaliyot): bob sarlavhalari tayyor — reja uchun AI so'rovi yuborilmaydi. */
+    public static function fixed(string $t, string $lang): ?array
+    {
+        $f = self::T[$t]['fixed'] ?? null;
+        return $f ? ($f[$lang] ?? $f['uz']) : null;
+    }
+
+    public static function opt(string $t, string $k, $default = null)
+    {
+        return self::T[$t][$k] ?? $default;
     }
 }

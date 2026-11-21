@@ -14,6 +14,11 @@ require_once __DIR__ . '/lib/Maintenance.php';
 require_once __DIR__ . '/lib/DocTypes.php';
 require_once __DIR__ . '/lib/Settings.php';
 require_once __DIR__ . '/lib/AdminPro.php';
+require_once __DIR__ . '/lib/Growth.php';
+require_once __DIR__ . '/lib/AIKeys.php';
+require_once __DIR__ . '/lib/Uniq.php';
+require_once __DIR__ . '/lib/Requirements.php';
+require_once __DIR__ . '/lib/MiniApp.php';
 
 /**
  * Har chaqiruvda yangi PDO ulanish qaytaradi.
@@ -36,7 +41,7 @@ function db(): PDO
     $pdo->exec('PRAGMA synchronous = NORMAL;'); // WAL bilan xavfsiz va ancha tezroq
     $pdo->exec('PRAGMA foreign_keys = ON;');
 
-    $schemaVersion = 19;
+    $schemaVersion = 20;
     // "Yangi baza" ni fayl mavjudligi bilan EMAS, jadval borligi bilan aniqlaymiz: PDO ulanganda fayl darrov yaratiladi,
     // shuning uchun birinchi so'rov install.sql ni yarim yozib yiqilsa (yoki ikki so'rov bir vaqtda kelsa) baza abadiy
     // jadvalsiz qolardi. install.sql dagi barcha buyruqlar IF NOT EXISTS — qayta bajarilsa ham xavfsiz.
@@ -60,6 +65,9 @@ function db(): PDO
             Maintenance::ensureSchema($pdo);      // rassilka jadvallari
             Settings::ensureSchema($pdo);         // admin paneldagi sozlamalar
             AdminPro::ensureSchema($pdo);         // rollar, yordam, eslatmalar, AI sarfi
+            Growth::ensureSchema($pdo);           // obuna, agentlar, marketing, talablar, unikallik ustunlari
+            AIKeys::ensureSchema($pdo);           // paneldan qo'shilgan AI kalitlari
+            Uniq::ensureSchema($pdo);             // unikallik izlari
             $pdo->exec('PRAGMA user_version = ' . $schemaVersion);
         } catch (Throwable $e) {
             logError('engine', 'Qo\'shimcha jadvallar yaratilmadi: ' . $e->getMessage());

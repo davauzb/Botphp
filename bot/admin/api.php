@@ -10,6 +10,9 @@ require_once __DIR__ . '/../lib/Telegram.php';
 require_once __DIR__ . '/../lib/Queue.php';
 require_once __DIR__ . '/../lib/TopupHelpers.php';
 require_once __DIR__ . '/../lib/AdminService.php';
+require_once __DIR__ . '/../lib/AIClient.php';
+require_once __DIR__ . '/../lib/SlidePdf.php';
+require_once __DIR__ . '/../lib/VideoDeck.php';
 
 ini_set('display_errors', '0');
 if (!AdminSecurity::enabled()) {
@@ -108,7 +111,9 @@ try {
         // admin pro: sozlamalar, rollar, yordam, eslatmalar, hisobotlar, navbat
         'me', 'settings', 'settings_save', 'settings_reset', 'roles_list', 'roles_save', 'roles_delete',
         'support_list', 'support_thread', 'support_reply', 'support_close', 'user_meta',
-        'finance', 'finance_export', 'funnel', 'ai_usage', 'queue', 'job_resend', 'job_retry'];
+        'finance', 'finance_export', 'funnel', 'ai_usage', 'queue', 'job_resend', 'job_retry',
+        // 14-10: AI kalitlari, xatolar jurnali, hamkorlar, o'sish
+        'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs', 'logs_clear', 'agents', 'agent_save', 'agent_payout', 'growth'];
     if ($method !== 'POST' || !in_array($action, $allowed, true)) {
         AdminSecurity::deny();
     }
@@ -408,6 +413,50 @@ try {
 
         case 'audit':
             out(['ok' => true] + AdminService::audit(intv($b['offset'] ?? 0, 0, 100000)));
+
+        // ---------------- AI kalitlari (faqat owner)
+        case 'ai_keys':
+            out(['ok' => true] + AIKeys::list());
+
+        case 'ai_key_add':
+            if (!AdminSecurity::rate('aikey:' . $admin, 10, 600)) {
+                AdminSecurity::fail('rate', 429, 'Juda tez-tez. Biroz kuting');
+            }
+            mutate($admin, $b, fn() => AIKeys::add($admin, strv($b['provider'] ?? '', 30), strv($b['key'] ?? '', 300), strv($b['models'] ?? '', 300),
+                strv($b['endpoint'] ?? '', 300), intv($b['priority'] ?? 5, 1, 9), strv($b['note'] ?? '', 80)));
+
+        case 'ai_key_toggle':
+            mutate($admin, $b, fn() => AIKeys::toggle($admin, intv($b['id'] ?? 0, 1, PHP_INT_MAX), !empty($b['on'])));
+
+        case 'ai_key_delete':
+            mutate($admin, $b, fn() => AIKeys::delete($admin, intv($b['id'] ?? 0, 1, PHP_INT_MAX)));
+
+        case 'ai_key_test':
+            if (!AdminSecurity::rate('aitest:' . $admin, 20, 600)) {
+                AdminSecurity::fail('rate', 429, 'Juda tez-tez. Biroz kuting');
+            }
+            out(AIKeys::test(intv($b['id'] ?? 0, 1, PHP_INT_MAX)));
+
+        // ---------------- xatolar jurnali
+        case 'logs':
+            out(AdminPro::logs(strv($b['q'] ?? '', 100), strv($b['ctx'] ?? '', 40), 300));
+
+        case 'logs_clear':
+            mutate($admin, $b, fn() => AdminPro::logsClear($admin));
+
+        // ---------------- hamkorlar (agentlar) va o'sish
+        case 'agents':
+            out(['ok' => true, 'items' => Growth::agentsList(), 'enabled' => Growth::agentsEnabled(),
+                'bot' => defined('BOT_USERNAME') && BOT_USERNAME !== 'BOT_USERNAME_HERE' ? (string)BOT_USERNAME : '']);
+
+        case 'agent_save':
+            mutate($admin, $b, fn() => Growth::agentSave($admin, intv($b['tg'] ?? 0, 1, PHP_INT_MAX), intv($b['percent'] ?? 10, 1, 90), strv($b['name'] ?? '', 60), !empty($b['active'])));
+
+        case 'agent_payout':
+            mutate($admin, $b, fn() => Growth::agentPayout($admin, intv($b['tg'] ?? 0, 1, PHP_INT_MAX), intv($b['amount'] ?? 0, 1, 100000000)));
+
+        case 'growth':
+            out(['ok' => true] + Growth::marketingStats() + ['video_missing' => class_exists('VideoDeck') ? VideoDeck::missing() : []]);
     }
     AdminSecurity::deny();
 } catch (Throwable $e) {

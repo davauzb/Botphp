@@ -18,7 +18,7 @@ class AdminPro
     public const OPERATOR_ACTIONS = ['ping', 'logout', 'me', 'stats', 'topups', 'topup_decide', 'receipt', 'jobs', 'job', 'job_resend', 'events', 'events_read',
         'users', 'user', 'user_meta', 'support_list', 'support_thread', 'support_reply', 'support_close', 'queue'];
     /** Faqat owner (ADMIN_CHAT_ID). */
-    public const OWNER_ACTIONS = ['roles_list', 'roles_save', 'roles_delete'];
+    public const OWNER_ACTIONS = ['roles_list', 'roles_save', 'roles_delete', 'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs_clear', 'agent_payout'];
 
     public static function ensureSchema(PDO $pdo): void
     {
@@ -485,5 +485,75 @@ class AdminPro
         Engine::onJobPending($newId, "🔁 Administrator #{$jobId} buyurtmangizni qayta ishga tushirdi" . ($gift ? ' (bepul)' : ' (' . number_format($price, 0, '', ' ') . " so'm balansdan)") . '.');
         AdminSecurity::audit('job_retry', $admin, '#' . $jobId . ' → #' . $newId, $gift ? 'bepul' : (string)$price);
         return ['ok' => true, 'msg' => "Yangi buyurtma #$newId navbatga qo'yildi", 'id' => $newId];
+    }
+
+    // ================================================================== xatolar jurnali
+
+    /** Maxfiy qiymatlarni yashiradi (bot tokeni, AI kalitlari, parollar). */
+    public static function mask(string $s): string
+    {
+        $s = preg_replace('/\d{6,12}:[A-Za-z0-9_\-]{30,}/', '[BOT_TOKEN]', $s) ?? $s;
+        $s = preg_replace('/\b(sk-[A-Za-z0-9_\-]{8}|AIza[0-9A-Za-z_\-]{4}|gsk_[A-Za-z0-9]{4}|csk-[A-Za-z0-9]{4})[A-Za-z0-9_\-]{8,}/', '$1…', $s) ?? $s;
+        $s = preg_replace('/(Bearer\s+)[A-Za-z0-9._\-]{12,}/i', '$1…', $s) ?? $s;
+        $s = preg_replace('/((?:pass(?:word)?|secret|token|key)["\']?\s*[:=]\s*["\']?)[^\s"\',&]{6,}/i', '$1…', $s) ?? $s;
+        return $s;
+    }
+
+    /** app.log oxiridan (≈400 KB) yozuvlar: yangilari birinchi. */
+    public static function logs(string $q, string $ctx, int $limit = 200): array
+    {
+        $file = LOG_DIR . 'app.log';
+        $items = [];
+        $ctxCount = [];
+        $size = is_file($file) ? (int)filesize($file) : 0;
+        if ($size > 0) {
+            $fh = fopen($file, 'rb');
+            $read = min($size, 400 * 1024);
+            fseek($fh, $size - $read);
+            $chunk = (string)fread($fh, $read);
+            fclose($fh);
+            $lines = preg_split('/\R(?=\[\d{4}-\d\d-\d\d )/', $chunk) ?: [];
+            if ($read < $size) {
+                array_shift($lines);                 // birinchi qator yarim bo'lishi mumkin
+            }
+            $day = time() - 86400;
+            foreach (array_reverse($lines) as $ln) {
+                if (!preg_match('/^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\] \[([^\]]{1,40})\] (.*)$/s', trim($ln), $m)) {
+                    continue;
+                }
+                $ts = (int)strtotime($m[1]);
+                if ($ts >= $day) {
+                    $ctxCount[$m[2]] = ($ctxCount[$m[2]] ?? 0) + 1;
+                }
+                if ($ctx !== '' && $m[2] !== $ctx) {
+                    continue;
+                }
+                if ($q !== '' && mb_stripos($m[3], $q) === false) {
+                    continue;
+                }
+                if (count($items) < $limit) {
+                    $items[] = ['ts' => $ts, 'ctx' => $m[2], 'msg' => mb_substr(self::mask($m[3]), 0, 1200)];
+                }
+            }
+        }
+        arsort($ctxCount);
+        $c = [];
+        foreach ($ctxCount as $k => $n) {
+            $c[] = ['ctx' => $k, 'n' => $n];
+        }
+        return ['ok' => true, 'items' => $items, 'contexts' => $c, 'size' => $size];
+    }
+
+    public static function logsClear(int $admin): array
+    {
+        $file = LOG_DIR . 'app.log';
+        if (is_file($file)) {
+            @rename($file, LOG_DIR . 'app.' . date('Ymd_His') . '.log');
+            foreach (array_slice(array_reverse(glob(LOG_DIR . 'app.*.log') ?: []), 3) as $old) {
+                @unlink($old);                       // eng ko'pi 3 ta eski nusxa
+            }
+        }
+        AdminSecurity::audit('logs_clear', $admin);
+        return ['ok' => true, 'msg' => 'Jurnal arxivlandi va tozalandi'];
     }
 }

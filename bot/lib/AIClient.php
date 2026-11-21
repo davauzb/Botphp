@@ -21,6 +21,8 @@ class AIClient
     public static ?float $deadline = null;
     /** Joriy buyurtma (token hisobini buyurtmaga yozish uchun; Engine o'rnatadi). */
     public static ?int $jobId = null;
+    /** Joriy buyurtmaning qo'shimcha ko'rsatmasi (o'qituvchi talablari) — har so'rovning system qismiga qo'shiladi. */
+    public static string $context = '';
     public static int $defaultTimeout = 110;
     public static int $maxWaitInline = 6;     // hamma marshrut band bo'lsa, shuncha soniya o'zimiz kutamiz
 
@@ -35,9 +37,19 @@ class AIClient
     {
         $temperature = $opt['temperature'] ?? 0.7;
         $lastError = '';
+        $image = isset($opt['image']) ? (string)$opt['image'] : null;       // base64 JPEG/PNG (rasmni o'qish)
+        if (self::$context !== '' && $image === null) {
+            $systemPrompt .= self::$context;
+        }
 
         for ($pass = 0; $pass < 3; $pass++) {
             $routes = self::availableRoutes();
+            if ($image !== null) {
+                $routes = array_values(array_filter($routes, fn($r) => self::isVision($r['model'])));
+                if (!$routes && $pass === 0 && !self::hasVision()) {
+                    throw new RuntimeException('Rasmni tushunadigan AI modeli yo\'q');
+                }
+            }
 
             if (!$routes) {
                 $wait = self::soonestAvailability();
@@ -67,7 +79,7 @@ class AIClient
                 }
                 $t0 = microtime(true);
                 try {
-                    $text = self::call($r, $prompt, $systemPrompt, $maxTokens, $timeout, (float)$temperature);
+                    $text = self::call($r, $prompt, $systemPrompt, $maxTokens, $timeout, (float)$temperature, $image);
                     self::release($lease);
                     self::markSuccess($r, (int)((microtime(true) - $t0) * 1000));
                     return $text;
@@ -90,6 +102,22 @@ class AIClient
         }
 
         throw new AIUnavailableException('AI vaqtincha javob bermadi: ' . $lastError, 20);
+    }
+
+    private static function isVision(string $model): bool
+    {
+        return (bool)preg_match('/gemini|gpt-4o|gpt-4\.1|gpt-5|llama-4|vision|pixtral|qwen.*vl|claude/i', $model);
+    }
+
+    /** Rasmni tushunadigan model sozlanganmi. */
+    public static function hasVision(): bool
+    {
+        foreach (self::configuredRoutes() as $r) {
+            if (self::isVision($r['model'])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Diagnostika uchun: marshrutlar holati. */
@@ -124,7 +152,11 @@ class AIClient
             return $cache;
         }
         $cache = [];
-        foreach (AI_PROVIDERS as $p) {
+        $providers = AI_PROVIDERS;
+        if (class_exists('AIKeys')) {
+            $providers = array_merge($providers, AIKeys::providers());        // admin paneldan qo'shilgan kalitlar
+        }
+        foreach ($providers as $p) {
             $models = $p['models'] ?? [$p['model'] ?? ''];
             foreach ($p['keys'] as $key) {
                 if (!is_string($key) || $key === '' || preg_match('/_API_KEY_\d+$|^PUT_|YOUR_/i', $key)) {
@@ -292,13 +324,16 @@ class AIClient
 
     // ------------------------------------------------------------------ chaqiruv
 
-    private static function call(array $r, string $prompt, string $systemPrompt, int $maxTokens, int $timeout, float $temperature): string
+    private static function call(array $r, string $prompt, string $systemPrompt, int $maxTokens, int $timeout, float $temperature, ?string $image = null): string
     {
         $messages = [];
         if ($systemPrompt !== '') {
             $messages[] = ['role' => 'system', 'content' => $systemPrompt];
         }
-        $messages[] = ['role' => 'user', 'content' => $prompt];
+        $messages[] = ['role' => 'user', 'content' => $image === null ? $prompt : [
+            ['type' => 'text', 'text' => $prompt],
+            ['type' => 'image_url', 'image_url' => ['url' => 'data:' . (str_starts_with($image, 'iVBOR') ? 'image/png' : 'image/jpeg') . ';base64,' . $image]],
+        ]];
         if ($r['max_tokens_cap'] > 0) {
             $maxTokens = min($maxTokens, $r['max_tokens_cap']);
         }
@@ -367,7 +402,7 @@ class AIClient
         if ($withReason && ($code === 400 || $code === 422) && preg_match('/reasoning/i', $body)) {
             self::noReasoning($r['route'], true);                  // bu model sozlamani bilmaydi — usiz qayta so'raymiz
             $r['reasoning'] = '';
-            return self::call($r, $prompt, $systemPrompt, $maxTokens, $timeout, $temperature);
+            return self::call($r, $prompt, $systemPrompt, $maxTokens, $timeout, $temperature, $image);
         }
         if ($code === 400 || $code === 413 || $code === 422) {
             if (preg_match('/context|too long|maximum|max_tokens|token/i', $body)) {

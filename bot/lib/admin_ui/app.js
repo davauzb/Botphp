@@ -71,7 +71,7 @@ const initial = u => (nm(u).replace(/^@/, '')[0] || '?').toUpperCase();
 function newKey() { const a = new Uint8Array(16); (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => a[i] = Math.random() * 256); return Array.from(a, b => p2(b.toString(16))).join(''); }
 const L = {
   job: { pending: ['Navbatda', ''], processing: ['Jarayonda', 'acc'], done: ['Bajarildi', 'ok'], failed: ['Xato', 'bad'], cancelled: ['Bekor', 'warn'], awaiting_payment: ["To'lov kutilmoqda", 'warn'] },
-  type: { mustaqil_ish: 'Mustaqil ish', referat: 'Referat', slayd: 'Taqdimot', kurs_ishi: 'Kurs ishi', maqola: 'Ilmiy maqola', tezis: 'Tezis' },
+  type: { mustaqil_ish: 'Mustaqil ish', referat: 'Referat', slayd: 'Taqdimot', kurs_ishi: 'Kurs ishi', maqola: 'Ilmiy maqola', tezis: 'Tezis', esse: 'Esse', test: 'Test savollari', lab: 'Laboratoriya ishi', amaliyot: 'Amaliyot hisoboti' },
   topup: { pending: ['Kutilmoqda', 'warn'], approved: ['Tasdiqlangan', 'ok'], rejected: ['Rad etilgan', 'bad'], refunded: ['Qaytarilgan', 'warn'] },
   method: { click: 'Click', payme: 'Payme', manual: 'Chek', humo: 'Humo/Uzcard', stars: 'Telegram Stars' },
   audit: { auth_ok: ['Kirish', 'ok'], auth_fail: ['Kirish urinishi (rad etildi)', 'bad'], pin_fail: ['PIN xato', 'bad'], balance_adjust: ["Balans o'zgartirildi", 'warn'], topup_approve: ["To'lov tasdiqlandi", 'ok'], topup_reject: ["To'lov rad etildi", 'bad'], job_cancel: ['Buyurtma bekor', 'warn'], ban: ['Bloklandi', 'bad'], unban: ['Blokdan chiqarildi', 'ok'], send_msg: ['Xabar yuborildi', ''], view_receipt: ["Chek ko'rildi", ''], link_issued: ['Havola berildi', ''], logout: ['Chiqish', ''], promo_create: ['Promokod yaratildi', 'ok'], promo_on: ['Promokod yoqildi', 'ok'], promo_off: ["Promokod o'chirildi", 'warn'], promo_delete: ["Promokod o'chirib tashlandi", 'bad'], broadcast: ['Rassilka boshlandi', 'acc'], broadcast_stop: ["Rassilka to'xtatildi", 'warn'], bad_link: ["Noto'g'ri havola", 'bad'], bad_origin: ['Begona manba', 'bad'], session_ua_mismatch: ['Sessiya brauzeri o\'zgargan', 'bad'] },
@@ -80,7 +80,7 @@ const badge = (t, c) => h('span', { class: 'badge ' + (c || '') }, t);
 const haptic = (k) => { try { TG && TG.HapticFeedback && (k === 'ok' || k === 'bad' ? TG.HapticFeedback.notificationOccurred(k === 'ok' ? 'success' : 'error') : TG.HapticFeedback.impactOccurred(k || 'light')); } catch (e) {} };
 const AV_COLORS = ['#4f6bff', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'];
 function avStyle(seed) { let x = 0; String(seed).split('').forEach(c => { x = (x * 31 + c.charCodeAt(0)) >>> 0; }); const c = AV_COLORS[x % AV_COLORS.length]; return { color: c, background: c + '1f' }; }
-const TYPE_IC = { mustaqil_ish: 'doc', referat: 'file', slayd: 'slides', kurs_ishi: 'layers', maqola: 'list', tezis: 'file' };
+const TYPE_IC = { mustaqil_ish: 'doc', referat: 'file', slayd: 'slides', kurs_ishi: 'layers', maqola: 'list', tezis: 'file', esse: 'doc', test: 'list', lab: 'zap', amaliyot: 'box' };
 function emptyBox(text, ic) { return h('div', { class: 'empty' }, h('div', { class: 'big' }, icon(ic || 'box')), text); }
 function skeleton(n, hgt) { return h('div', { class: 'list' }, Array.from({ length: n || 4 }, () => h('div', { class: 'sk', style: { height: (hgt || 66) + 'px' } }))); }
 function pct(a, b) { if (!b) return a ? null : 0; return Math.round((a - b) / b * 100); }
@@ -785,7 +785,8 @@ async function viewSettings(box) {
   box.replaceChildren(h('div', { class: 'wrap' },
     h('div', { class: 'cols' },
       h('div', {}, h('div', { class: 'sec' }, '🛠 Texnik ishlar rejimi'), h('div', { class: 'card setc' }, group('mode')),
-        h('div', { class: 'sec' }, "💰 Pul va bonuslar"), h('div', { class: 'card setc' }, group('money'))),
+        h('div', { class: 'sec' }, "💰 Pul va bonuslar"), h('div', { class: 'card setc' }, group('money')),
+        h('div', { class: 'sec' }, "🚀 O'sish: obuna, hamkorlar, marketing"), h('div', { class: 'card setc' }, group('growth'))),
       h('div', {}, h('div', { class: 'sec' }, '🏷 Narxlar'), h('div', { class: 'card setc' }, prices),
         h('div', { class: 'sec' }, '🧩 Funksiyalar'), h('div', { class: 'card setc' }, group('feat')))),
     isOwner ? h('div', {}, h('div', { class: 'sec' }, '🛡 Adminlar va operatorlar'), admins) : '',
@@ -808,6 +809,101 @@ async function drawAdmins(box) {
       h('div', { class: 't2', style: { whiteSpace: 'normal', margin: '4px 0 8px' } }, "Operator: faqat cheklar, buyurtmalar va yordam. Admin: hammasi (rollardan tashqari). Odam avval botga /start yozgan bo'lsin."),
       h('div', { class: 'grid', style: { gridTemplateColumns: '1fr 1fr' } }, tg, nm1), h('div', { style: { margin: '8px 0' } }, rs),
       h('button', { class: 'btn pri', style: { width: '100%' }, onclick: async () => { const id = parseInt(tg.value.replace(/\D/g, ''), 10); if (!id) { toast('Telegram ID kiriting', 'bad'); return; } const rr = await act('roles_save', { tg: id, role, name: nm1.value.trim() }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); if (rr.ok) drawAdmins(box); } }, 'Qo\'shish')));
+}
+
+/* ------------------------------------------------------------------ hamkorlar va o'sish */
+async function viewGrowth(box) {
+  box.replaceChildren(h('div', { class: 'wrap' }, skeleton(3, 90)));
+  const [r, g] = await Promise.all([api('agents'), api('growth')]);
+  if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
+  const isOwner = CFG.role === 'owner';
+  const RULES = { nojob: "Buyurtma bermaganlarga eslatma", cross: "Boshqa turlar haqida", winback: "«Sog'indik» (30+ kun)" };
+  const tot = r.items.reduce((a, x) => ({ sales: a.sales + x.sales, due: a.due + x.due, clients: a.clients + x.clients }), { sales: 0, due: 0, clients: 0 });
+  const kpis = h('div', { class: 'grid' },
+    h('div', { class: 'card kpi' }, h('div', { class: 'ic' }, icon('users')), h('div', { class: 'l' }, 'Hamkorlar'), h('div', { class: 'v' }, fmt(r.items.length)), h('div', { class: 's' }, fmt(tot.clients) + ' ta mijoz olib kelgan')),
+    h('div', { class: 'card kpi vio' }, h('div', { class: 'ic' }, icon('wallet')), h('div', { class: 'l' }, 'Hamkor savdosi'), h('div', { class: 'v' }, moneyS(tot.sales)), h('div', { class: 's' }, "To'lanishi kerak: " + money(tot.due))),
+    g.ok ? h('div', { class: 'card kpi' }, h('div', { class: 'ic' }, icon('star')), h('div', { class: 'l' }, '💎 Faol obunalar'), h('div', { class: 'v' }, fmt(g.subs_active)), h('div', { class: 's' }, '30 kunda: ' + fmt(g.subs30) + ' ta · ' + money(g.subs30_sum))) : '');
+  const tg = h('input', { class: 'inp', type: 'text', inputmode: 'numeric', placeholder: 'Telegram ID', maxlength: '15' });
+  const nm = h('input', { class: 'inp', type: 'text', placeholder: 'Ism (ixtiyoriy)', maxlength: '60' });
+  const pc = h('input', { class: 'inp num', type: 'text', inputmode: 'numeric', placeholder: '%', value: '10', maxlength: '2' });
+  const link = id => r.bot ? 'https://t.me/' + r.bot + '?start=agt' + id : '/start agt' + id;
+  const list = r.items.length ? h('div', { class: 'card' }, r.items.map(a => h('div', { class: 'row' },
+    h('div', { class: 'av', style: avStyle(a.tg) }, (a.name || '#')[0].toUpperCase()),
+    h('div', { class: 'grow' }, h('div', { class: 't1' }, a.name || ('ID ' + a.tg), ' ', badge(a.percent + '%', 'acc'), a.active ? '' : badge("o'chiq", '')),
+      h('div', { class: 't2' }, fmt(a.clients) + ' mijoz · ' + fmt(a.orders) + ' buyurtma · savdo ' + money(a.sales)),
+      h('div', { class: 't2' }, 'Ishlagan ' + money(a.earned) + ' · qoldiq ', h('b', {}, money(a.due))),
+      h('div', { class: 't2', style: { userSelect: 'all', wordBreak: 'break-all' } }, link(a.tg))),
+    h('div', { class: 'right' },
+      h('button', { class: 'btn sm', onclick: async () => { const rr = await act('agent_save', { tg: a.tg, percent: a.percent, name: a.name, active: !a.active }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); viewGrowth(box); } }, a.active ? "O'chirish" : 'Yoqish'),
+      isOwner && a.due > 0 ? h('button', { class: 'btn sm ok', style: { marginTop: '6px' }, onclick: async () => { const ok = await confirmBox("To'lov", (a.name || a.tg) + ' ga ' + money(a.due) + " to'landi deb belgilansinmi?", "To'landi", 'ok'); if (!ok) return; const rr = await act('agent_payout', { tg: a.tg, amount: a.due }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); viewGrowth(box); } }, "💵 To'landi") : '')))) : emptyBox("Hali hamkor yo'q. Pastdan qo'shing — u /agent buyrug'i bilan havolasini oladi.", 'users');
+  const mkt = g.ok && g.rules.length ? h('div', { class: 'card' }, g.rules.map(x => h('div', { class: 'row' }, h('div', { class: 'grow' }, h('div', { class: 't1' }, RULES[x.rule] || x.rule), h('div', { class: 't2' }, 'Oxirgi: ' + ago(x.last))),
+    h('div', { class: 'right' }, h('b', {}, fmt(x.sent)), h('div', { class: 't2' }, fmt(x.conv) + ' ta buyurtma berdi'))))) : emptyBox("Avtomatik marketing hali xabar yubormagan (Sozlamalar → 🚀 O'sish → yoqing)", 'mega');
+  box.replaceChildren(h('div', { class: 'wrap' }, kpis,
+    h('div', { class: 'cols' },
+      h('div', {}, h('div', { class: 'sec' }, '🤝 Hamkorlar (agentlar)'), list,
+        h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px' } }, h('b', {}, "➕ Hamkor qo'shish / o'zgartirish"),
+          h('div', { class: 't2', style: { whiteSpace: 'normal', margin: '4px 0 8px' } }, "Hamkor havolasi orqali kelgan YANGI mijozlarning har pullik buyurtmasidan ulush hisoblanadi. Odam avval botga /start yozgan bo'lsin."),
+          h('div', { class: 'grid', style: { gridTemplateColumns: '1fr 1fr 70px' } }, tg, nm, pc),
+          h('button', { class: 'btn pri', style: { width: '100%', marginTop: '8px' }, onclick: async () => { const id = parseInt(tg.value.replace(/\D/g, ''), 10); if (!id) { toast('Telegram ID kiriting', 'bad'); return; } const rr = await act('agent_save', { tg: id, name: nm.value.trim(), percent: parseInt(pc.value, 10) || 10, active: true }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); if (rr.ok) viewGrowth(box); } }, 'Saqlash'))),
+      h('div', {}, h('div', { class: 'sec' }, '📣 Avtomatik marketing'), mkt,
+        g.ok && g.video_missing && g.video_missing.length ? h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px' } }, h('b', {}, '🎬 Videotaqdimot'), h('div', { class: 't2', style: { whiteSpace: 'normal' } }, 'Serverda yetishmayapti: ' + g.video_missing.join(', ') + ". Yoqilgan bo'lsa ham ishlamaydi.")) : ''))));
+}
+
+/* ------------------------------------------------------------------ tizim: AI kalitlari va xatolar jurnali */
+async function viewSystem(box) {
+  const keys = h('div', {}), logs = h('div', {});
+  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
+  if (CFG.role === 'owner') drawKeys(keys);
+  drawLogs(logs, '', '');
+}
+async function drawKeys(box) {
+  box.replaceChildren(skeleton(2, 70));
+  const r = await api('ai_keys');
+  if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
+  const ST = { ready: ['ishlayapti', 'ok'], cooling: ['dam olmoqda', 'warn'], dead: ["o'lik", 'bad'], new: ['yangi', 'acc'], off: ["o'chiq", ''] };
+  const sm = r.summary;
+  const sum = h('div', { class: 'card', style: { padding: '12px 14px' } }, h('b', {}, 'Barcha marshrutlar (config.php + panel): '), badge(sm.ready + ' tayyor', 'ok'), ' ', sm.cooling ? badge(sm.cooling + ' dam', 'warn') : '', ' ', sm.dead ? badge(sm.dead + " o'lik", 'bad') : '',
+    h('div', { class: 't2', style: { whiteSpace: 'normal', marginTop: '6px' } }, r.routes.map(x => x.provider + '/' + x.model + ' ' + x.key + (x.state !== 'ready' ? ' (' + x.state + ')' : '')).join(' · ')));
+  let prov = 'gemini';
+  const ps = h('div', { class: 'seg sm', style: { flexWrap: 'wrap' } });
+  const key = h('input', { class: 'inp', type: 'password', placeholder: 'API kalit', autocomplete: 'off', maxlength: '300' });
+  const models = h('input', { class: 'inp', type: 'text', placeholder: 'Modellar (vergul bilan, ixtiyoriy)', maxlength: '300' });
+  const ep = h('input', { class: 'inp', type: 'text', placeholder: 'https://…/v1/chat/completions', maxlength: '300' });
+  const hint = h('div', { class: 't2', style: { whiteSpace: 'normal', margin: '6px 0' } });
+  const drawP = () => { ps.replaceChildren(...r.presets.map(p => h('button', { class: prov === p.k ? 'on' : '', onclick: () => { prov = p.k; drawP(); } }, p.k)), h('button', { class: prov === 'custom' ? 'on' : '', onclick: () => { prov = 'custom'; drawP(); } }, 'boshqa'));
+    const p = r.presets.find(x => x.k === prov); hint.textContent = p ? p.note + ' · standart model: ' + p.models : "OpenAI'ga mos (chat/completions) istalgan provayder"; ep.style.display = prov === 'custom' ? '' : 'none'; models.placeholder = p ? p.models : 'model-nomi'; };
+  drawP();
+  const list = r.items.length ? h('div', { class: 'card' }, r.items.map(k => h('div', { class: 'row' },
+    h('div', { class: 'av', style: avStyle(k.provider) }, k.provider[0].toUpperCase()),
+    h('div', { class: 'grow' }, h('div', { class: 't1' }, k.provider + ' ' + k.key, ' ', badge(...(ST[k.state] || [k.state, '']))), h('div', { class: 't2' }, k.models + ' · ' + fmt(k.ok) + ' ok / ' + fmt(k.err) + ' xato' + (k.note ? ' · ' + k.note : '')),
+      k.last_error ? h('div', { class: 't2', style: { color: 'var(--bad)' } }, k.last_error) : ''),
+    h('div', { class: 'right', style: { display: 'flex', gap: '6px', alignItems: 'center' } },
+      h('button', { class: 'btn sm', onclick: async () => { toast('Tekshirilmoqda…'); const rr = await api('ai_key_test', { id: k.id }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawKeys(box); } }, 'Sinash'),
+      h('button', { class: 'btn sm', onclick: async () => { const rr = await act('ai_key_toggle', { id: k.id, on: !k.enabled }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawKeys(box); } }, k.enabled ? "O'chirish" : 'Yoqish'),
+      h('button', { class: 'btn sm bad', onclick: async () => { const ok = await confirmBox("Kalitni o'chirish", k.provider + ' ' + k.key + " butunlay o'chiriladi.", "O'chirish", 'bad'); if (!ok) return; const rr = await act('ai_key_delete', { id: k.id }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawKeys(box); } }, '✕'))))) : emptyBox("Paneldan qo'shilgan kalit yo'q (config.php dagilar ishlayapti).", 'cpu');
+  const add = h('button', { class: 'btn pri', style: { width: '100%', marginTop: '8px' }, onclick: async () => {
+    if (key.value.trim().length < 16) { toast('Kalitni kiriting', 'bad'); return; }
+    add.disabled = true; add.textContent = 'Sinab ko\'rilmoqda…';
+    const rr = await act('ai_key_add', { provider: prov, key: key.value.trim(), models: models.value.trim(), endpoint: ep.value.trim(), priority: 5 });
+    add.disabled = false; add.textContent = "Qo'shish va sinash"; toast(rr.msg || '', rr.ok && !rr.warn ? 'ok' : 'bad'); if (rr.ok) { key.value = ''; drawKeys(box); } } }, "Qo'shish va sinash");
+  box.replaceChildren(sum, h('div', { style: { height: '10px' } }), list,
+    h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px' } }, h('b', {}, "➕ Yangi kalit"), h('div', { style: { margin: '8px 0' } }, ps), hint, key, h('div', { style: { height: '8px' } }), models, h('div', { style: { height: '8px' } }), ep, add,
+      h('div', { class: 't2', style: { whiteSpace: 'normal', marginTop: '6px' } }, "Kalit qo'shilishidan oldin kichik so'rov bilan tekshiriladi. Panelda faqat oxirgi 4 belgisi ko'rinadi.")));
+}
+async function drawLogs(box, q, ctx) {
+  box.replaceChildren(skeleton(3, 50));
+  const r = await api('logs', { q, ctx });
+  if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
+  const inp = h('input', { class: 'inp', type: 'search', placeholder: 'Qidirish…', value: q });
+  let tmr; inp.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(() => drawLogs(box, inp.value.trim(), ctx), 450); });
+  const chips = h('div', { class: 'seg sm', style: { flexWrap: 'wrap', margin: '8px 0' } }, h('button', { class: ctx === '' ? 'on' : '', onclick: () => drawLogs(box, q, '') }, 'Hammasi'),
+    ...r.contexts.slice(0, 10).map(c => h('button', { class: ctx === c.ctx ? 'on' : '', onclick: () => drawLogs(box, q, c.ctx) }, c.ctx + ' ' + c.n)));
+  const clr = CFG.role === 'owner' ? h('button', { class: 'btn sm', onclick: async () => { const ok = await confirmBox('Jurnalni tozalash', "Joriy jurnal arxivga olinadi (oxirgi 3 ta arxiv saqlanadi).", 'Tozalash', 'bad'); if (!ok) return; const rr = await act('logs_clear', {}); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawLogs(box, '', ''); } }, '🧹 Tozalash') : '';
+  box.replaceChildren(h('div', { class: 'card', style: { padding: '12px 14px' } }, h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, inp, clr),
+    h('div', { class: 't2' }, 'Fayl hajmi: ' + fmt(Math.round(r.size / 1024)) + ' KB · 24 soatdagi yozuvlar bo\'yicha guruhlar:'), chips),
+    r.items.length ? h('div', { class: 'card logs' }, r.items.map(x => h('div', { class: 'row', style: { alignItems: 'flex-start' } },
+      h('div', { class: 'grow' }, h('div', { class: 't2' }, new Date(x.ts * 1000).toLocaleString('ru-RU') + ' · ', badge(x.ctx, /engine|ai_|fail|error/.test(x.ctx) ? 'bad' : '')),
+        h('div', { class: 't1', style: { whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: '400', fontSize: '13px', fontFamily: 'ui-monospace,Menlo,monospace' } }, x.msg))))) : emptyBox("Xato yo'q 🎉", 'shield'));
 }
 
 /* ------------------------------------------------------------------ jonli navbat (bosh sahifa) */
@@ -835,8 +931,9 @@ let mainBox, tabsBox, chipEl, pendingN = 0, unreadN = 0, supportN = 0;
 const TABS = [['home', 'Bosh', 'home', viewHome, false, true], ['topups', "To'lov", 'wallet', viewTopups, false, true], ['jobs', 'Buyurtma', 'box', viewJobs, false, true],
   ['support', 'Yordam', 'chat', viewSupport, false, true], ['users', 'Mijoz', 'users', viewUsers, false, true],
   ['events', 'Xabarlar', 'bell', viewEvents, true, true], ['promos', 'Promokod', 'tag', viewPromos, true, false], ['broadcast', 'Rassilka', 'mega', viewBroadcast, true, false],
-  ['reports', 'Hisobotlar', 'chart', viewReports, true, false], ['settings', 'Sozlamalar', 'gear', viewSettings, true, false], ['audit', 'Jurnal', 'list', viewAudit, true, false]];
-const LONG_NAMES = { home: 'Bosh sahifa', topups: "To'lovlar", users: 'Mijozlar', jobs: 'Buyurtmalar', support: 'Yordam', promos: 'Promokodlar', events: 'Xabarlar', broadcast: 'Rassilka', reports: 'Hisobotlar', settings: 'Sozlamalar', audit: 'Jurnal', more: "Ko'proq" };
+  ['reports', 'Hisobotlar', 'chart', viewReports, true, false], ['growth', 'Hamkorlar', 'star', viewGrowth, true, false], ['settings', 'Sozlamalar', 'gear', viewSettings, true, false],
+  ['system', 'Tizim', 'cpu', viewSystem, true, false], ['audit', 'Jurnal', 'list', viewAudit, true, false]];
+const LONG_NAMES = { home: 'Bosh sahifa', topups: "To'lovlar", users: 'Mijozlar', jobs: 'Buyurtmalar', support: 'Yordam', promos: 'Promokodlar', events: 'Xabarlar', broadcast: 'Rassilka', reports: 'Hisobotlar', settings: 'Sozlamalar', growth: "Hamkorlar va o'sish", system: 'Tizim: AI va xatolar', audit: 'Jurnal', more: "Ko'proq" };
 function allowed(k) { const t = TABS.find(x => x[0] === k); return !!t && (CFG.role !== 'operator' || t[5]); }
 function dotFor(k) { return k === 'topups' ? pendingN : (k === 'events' ? unreadN : (k === 'support' ? supportN : 0)); }
 function setPending(n) { pendingN = n | 0; drawTabs(); }

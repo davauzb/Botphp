@@ -17,7 +17,7 @@ class DocStore
     public const MAX_HEADING = 200;
     public const MAX_TEXT = 60000;        // bitta bo'lim
     public const MAX_TOTAL = 400000;      // butun hujjat (belgi)
-    public const TYPES = ['MUSTAQIL ISH', 'REFERAT', 'KURS ISHI', 'MAQOLA', 'TEZIS'];
+    public const TYPES = ['MUSTAQIL ISH', 'REFERAT', 'KURS ISHI', 'MAQOLA', 'TEZIS', 'ESSE', 'LABORATORIYA ISHI', 'AMALIYOT HISOBOTI'];
 
     public static function ensureSchema(PDO $pdo): void
     {

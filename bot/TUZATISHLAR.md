@@ -1,3 +1,43 @@
+# studybot 14-10 — YANGI TURLAR, TALABLAR, HIMOYA SAVOLLARI, OBUNA, HAMKORLAR, MINI APP
+
+Yangilash: botga `/yangilash` yozing → «🚀 Yangilash». Baza o'zi yangilanadi (sxema 20), config.php o'zgarmaydi.
+Hamma yangi funksiyalar **admin panel → Sozlamalar** dan yoqiladi/o'chiriladi.
+
+## 📚 Mijozlar uchun
+- **🎓 Himoya savollari** — har ishga 10 ta ehtimoliy savol va qisqa javob (bitta kichik AI so'rovi). Taqdimotda — konspektga qo'shiladi,
+  mustaqil ish / kurs ishi / referat / maqola / laboratoriya / amaliyotda — alohida «Himoya savollari» DOCX bo'lib keladi.
+- **📎 O'qituvchi talablari** — mavzu so'ralganda topshiriq faylini (DOCX, PDF, TXT) yoki rasmini yuborish mumkin, yoki `Talab: ...` deb yozish.
+  Ish boshida talablar qisqa bandlarga keltiriladi va HAMMA bosqichlarda (reja, boblar, slaydlar) hisobga olinadi. `/talab_ochir` — bekor qilish.
+  Rasmni o'qish uchun rasmni tushunadigan model kerak (Gemini — bor). Skaner qilingan PDF o'qilmaydi — mijozga rasm yuborish aytiladi.
+- **Titul**: ixtiyoriy **kafedra** va **o'qituvchi / ilmiy rahbar** («⏭ O'tkazib yuborish» bor); pastda **shahar** universitet nomidan
+  aniqlanadi («Samarqand – 2026–2027 o'quv yili»). Kurs ishida «Ilmiy rahbar», boshqalarida «Qabul qildi».
+- **Yangi turlar**: ✍️ **Esse / insho**, ❓ **Test savollari** (20/30/50 ta, A–D, variantlar aralashtiriladi, oxirida javoblar kaliti jadvali),
+  🔬 **Laboratoriya ishi**, 🏢 **Amaliyot hisoboti** (tuzilmasi tayyor — reja uchun AI so'rovi yo'q, tejamkor).
+- **🔎 Unikallik** — har ish bot avval yozgan barcha ishlar bilan solishtiriladi; o'xshash qism (ko'pi bilan 3 ta) qayta ifodalanadi,
+  izohda «Unikallik: 96%». ⚠️ Bu internet antiplagiati (Antiplagiat.ru / Turnitin) EMAS — faqat bot bazasi bo'yicha.
+- **😔 Past baho (1–2 ⭐)** — bot sababini so'raydi (panelning «Yordam» bo'limiga tushadi) va bir martalik **bepul qayta yozish**ni taklif qiladi
+  (izoh hisobga olinadi; 30 kunda bir marta, 7 kun ichidagi buyurtma uchun).
+- **📱 Ilova (Mini App)** — menyudagi tugma Telegram ichida chiroyli forma ochadi: tur → hajm → dizayn (rangli namunalar) → mavzu → titul → narx.
+- **🎬 Ovozli videotaqdimot** (ixtiyoriy) — slaydlar + ovoz (Gemini TTS) → MP4. Serverda **ffmpeg** va LibreOffice bo'lishi shart;
+  bo'lmasa panel «Hamkorlar» bo'limida nima yetishmayotgani ko'rinadi. O'zbekcha talaffuz mukammal bo'lmasligi mumkin.
+
+## 💰 Daromad uchun
+- **💎 «Talaba PRO» obunasi** — masalan 49 000 so'mga 30 kunda 10 ta buyurtma (narx, soni, muddat, qoplanadigan eng qimmat tarif — sozlamalarda).
+  `/obuna` yoki menyudagi «💎 Obuna». Buyurtma bekor bo'lsa, kredit qaytadi.
+- **🤝 Hamkorlar (agentlar)** — panelda Telegram ID va % kiritasiz → odam `/agent` buyrug'ida o'z havolasini va hisobotini ko'radi.
+  Havola orqali kelgan YANGI mijozlarning har pullik buyurtmasidan ulush yoziladi; «💵 To'landi» bilan to'lovni belgilaysiz.
+- **📣 Avtomatik marketing** (standart — o'chiq): 1-3 kun buyurtma bermaganlarga (bepul urinish eslatmasi), birinchi buyurtmadan 2-5 kun keyin
+  (boshqa turlar haqida), 30-60 kun kelmaganlarga («sog'indik»). Har xabar bir kishiga BIR marta, faqat 9:00–21:00. Natijasi panelda.
+
+## 🛡 Admin panel
+- **Tizim: AI va xatolar** — 🔑 AI kalitlarini qo'shish (gemini, groq, cerebras, openrouter, openai, deepseek yoki istalgan OpenAI-mos),
+  qo'shishdan oldin avtomatik sinov, yoqish/o'chirish/o'chirib tashlash, har kalit holati (faqat egasi). 🧯 **Xatolar jurnali** — qidiruv,
+  guruhlar, maxfiy qiymatlar (token, kalitlar) yashiriladi; tozalash (arxivga) — faqat egasi.
+- **Hamkorlar va o'sish** — hamkorlar ro'yxati, savdosi, qoldiq; obunalar; marketing natijalari.
+- Sozlamalarda yangi «🚀 O'sish» guruhi va yangi funksiyalar.
+
+---
+
 # studybot 14-9 — ADMIN PANEL PRO
 
 Yangilash: botga `/yangilash` yozing → «🚀 Yangilash». Baza o'zi yangilanadi, config.php o'zgarmaydi.

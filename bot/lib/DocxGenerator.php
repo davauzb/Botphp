@@ -67,7 +67,7 @@ class DocxGenerator
     {
         $lang = I18n::norm($lang);
         self::$lang = $lang;
-        self::$article = in_array($docType, ['MAQOLA', 'TEZIS'], true);
+        self::$article = DocTypes::isArticleDoc($docType);
         self::$figN = 0;
         self::$tabN = 0;
         self::$drawId = 0;
@@ -76,7 +76,7 @@ class DocxGenerator
         }
         $sections = array_values(array_filter($sections, fn($s) => trim((string)($s['heading'] ?? '')) !== '' || trim((string)($s['text'] ?? '')) !== ''));
 
-        $prefix = ['REFERAT' => 'referat_', 'KURS ISHI' => 'kurs_ishi_', 'MAQOLA' => 'maqola_', 'TEZIS' => 'tezis_'][$docType] ?? 'mustaqil_ish_';
+        $prefix = ['REFERAT' => 'referat_', 'KURS ISHI' => 'kurs_ishi_', 'MAQOLA' => 'maqola_', 'TEZIS' => 'tezis_', 'ESSE' => 'esse_', 'LABORATORIYA ISHI' => 'laboratoriya_ishi_', 'AMALIYOT HISOBOTI' => 'amaliyot_hisoboti_'][$docType] ?? 'mustaqil_ish_';
         $path = GENERATED_DIR . $prefix . uniqid() . '.docx';
         $tmpFiles = [];
         self::$media = self::prepareImages((array)($opts['images'] ?? []), $tmpFiles);
@@ -240,7 +240,11 @@ class DocxGenerator
         if ($ministry !== '') {
             $xml .= self::p(self::run(self::upper($ministry), ['b' => true, 'sz' => 26, 'color' => self::INK]), '<w:keepNext/>' . self::sp(0, 160, 252) . $ctr);
         }
-        $xml .= self::p(self::run(self::upper($university), ['b' => true, 'sz' => 26, 'color' => self::INK]), self::sp(0, 120, 252) . $ctr);
+        $kaf = trim((string)($studentInfo['kafedra'] ?? ''));
+        $xml .= self::p(self::run(self::upper($university), ['b' => true, 'sz' => 26, 'color' => self::INK]), self::sp(0, $kaf !== '' ? 40 : 120, 252) . $ctr);
+        if ($kaf !== '') {
+            $xml .= self::p(self::run($kaf, ['sz' => 24, 'color' => '5A6378']), self::sp(0, 120, 252) . $ctr);
+        }
         // ajratuvchi: ikki chiziq (yo'g'on + ingichka)
         $xml .= self::p('', '<w:pBdr><w:bottom w:val="thinThickSmallGap" w:sz="18" w:space="1" w:color="' . self::ACCENT . '"/></w:pBdr>' . self::sp(0, 0, 240) . '<w:ind w:left="567" w:right="567"/>');
 
@@ -261,10 +265,12 @@ class DocxGenerator
         );
         $xml .= $label(I18n::t('executor', $lang), $fullName, 2200);
         $xml .= $label(I18n::t('group', $lang), $group);
-        $xml .= $label(I18n::t('checked_by', $lang), '________________');
+        $teacher = trim((string)($studentInfo['teacher'] ?? ''));
+        $xml .= $label(I18n::t($docType === 'KURS ISHI' ? 'supervisor' : 'checked_by', $lang), $teacher !== '' ? $teacher : '________________');
 
         // O'quv yili — bet tagida (ramka/frame bilan), matn uzunligiga bog'liq emas
-        $xml .= self::p(self::run(self::academicYearLabel($lang), ['b' => true, 'sz' => 28, 'color' => self::INK]),
+        $city = self::city((string)($studentInfo['university'] ?? ''), $lang);
+        $xml .= self::p(self::run(($city !== '' ? $city . ' – ' : '') . self::academicYearLabel($lang), ['b' => true, 'sz' => 28, 'color' => self::INK]),
             '<w:framePr w:w="9072" w:hSpace="0" w:wrap="around" w:vAnchor="margin" w:hAnchor="margin" w:xAlign="center" w:yAlign="bottom"/>' . self::sp(0, 0) . $ctr);
 
         // Titul varag'i alohida bo'lim: faqat shu betda ramka, bet raqami yo'q
@@ -296,6 +302,34 @@ class DocxGenerator
             $x .= self::p(self::run($aff, ['i' => true, 'sz' => 24]), self::sp(0, 240, 264) . '<w:ind w:firstLine="0"/><w:jc w:val="right"/>');
         }
         return $x;
+    }
+
+    /** Universitet nomidan shahar (titul pastida «Toshkent – 2025–2026 o'quv yili»). Aniqlanmasa — bo'sh. */
+    public static function city(string $univ, string $lang = 'uz'): string
+    {
+        $u = mb_strtolower($univ);
+        $map = [
+            'Toshkent' => ['toshkent', 'tashkent', 'ташкент', 'тошкент', 'tatu', 'tdtu', 'tdiu', 'tdpu', "o'zmu", 'ozmu', 'tdyu', 'tiqxmmi', 'tkti', 'tdtru', 'ttyeti', 'wiut', 'inha'],
+            'Samarqand' => ['samarqand', 'samarkand', 'самарканд', 'samdu', 'samdaqi', 'samdchti'], 'Buxoro' => ['buxoro', 'bukhara', 'бухар', 'buxdu', 'buxmti'],
+            'Andijon' => ['andijon', 'andijan', 'андижан', 'anddu'], "Farg'ona" => ["farg'ona", 'fargona', 'fergana', 'фергана', 'fardu', 'farpi'],
+            'Namangan' => ['namangan', 'наманган', 'namdu', 'nammqi'], 'Qarshi' => ['qarshi', 'karshi', 'карши', 'qardu', 'qmii'], 'Termiz' => ['termiz', 'termez', 'термез', 'terdu'],
+            'Nukus' => ['nukus', 'нукус', 'qoraqalpoq', 'karakalpak', 'qqdu'], 'Urganch' => ['urganch', 'urgench', 'ургенч', 'urdu'], 'Jizzax' => ['jizzax', 'jizzakh', 'джизак', 'jdpu', 'jizpi'],
+            'Guliston' => ['guliston', 'gulistan', 'гулистан', 'guldu'], 'Navoiy' => ['navoiy', 'navoi', 'навои', 'navdpi', 'nkmi'], "Qo'qon" => ["qo'qon", 'qoqon', 'kokand', 'коканд', 'qdpi'],
+            'Xiva' => ['xiva', 'khiva', 'хива'],
+        ];
+        foreach ($map as $city => $keys) {
+            foreach ($keys as $k) {
+                if (preg_match('/(^|[^\p{L}])' . preg_quote($k, '/') . '/u', $u)) {
+                    if ($lang === 'ru') {
+                        return ['Toshkent' => 'Ташкент', 'Samarqand' => 'Самарканд', 'Buxoro' => 'Бухара', 'Andijon' => 'Андижан', "Farg'ona" => 'Фергана', 'Namangan' => 'Наманган',
+                            'Qarshi' => 'Карши', 'Termiz' => 'Термез', 'Nukus' => 'Нукус', 'Urganch' => 'Ургенч', 'Jizzax' => 'Джизак', 'Guliston' => 'Гулистан', 'Navoiy' => 'Навои',
+                            "Qo'qon" => 'Коканд', 'Xiva' => 'Хива'][$city];
+                    }
+                    return $city;
+                }
+            }
+        }
+        return '';
     }
 
     /** "2025-2026 o'quv yili" — o'quv yili sentyabrdan boshlanadi. */

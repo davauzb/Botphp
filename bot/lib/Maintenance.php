@@ -47,6 +47,13 @@ class Maintenance
         } catch (Throwable $e) {
             logError('maint', 'broadcast: ' . $e->getMessage());
         }
+        try {
+            if (class_exists('Growth')) {
+                Growth::marketingRun($until);
+            }
+        } catch (Throwable $e) {
+            logError('maint', 'marketing: ' . $e->getMessage());
+        }
     }
 
     /** Yuborilishi kerak bo'lgan rassilka bormi (tick zanjirini davom ettirish uchun). */

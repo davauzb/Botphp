@@ -31,6 +31,24 @@ class Settings
         'SECTION_SLIDES' => ['bool', 'feat', "Bo'lim ajratuvchi slaydlar", '', 0, 1],
         'SLIDE_PREVIEW' => ['bool', 'feat', 'Taqdimotdan lavhalar (albom)', '', 0, 1],
         'KONSPEKT_ENABLED' => ['bool', 'feat', 'Himoya konspekti', '', 0, 1],
+        'DEFENSE_QA' => ['bool', 'feat', 'Himoya savollari', "Har ishga 10 ta ehtimoliy savol va javob (taqdimotda — konspektda, hujjatda — alohida fayl)", 0, 1],
+        'REQUIREMENTS_ENABLED' => ['bool', 'feat', "O'qituvchi talablarini yuklash", "Mijoz topshiriq faylini/rasmini yuborsa, ish shunga moslab yoziladi", 0, 1],
+        'TITLE_EXTRAS' => ['bool', 'feat', 'Titulda kafedra va o\'qituvchi', "Ixtiyoriy so'raladi (o'tkazib yuborish mumkin)", 0, 1],
+        'UNIQ_CHECK' => ['bool', 'feat', 'Unikallik tekshiruvi', "Bot yozgan ishlar bilan solishtirib, o'xshash qismlarni qayta ifodalaydi (internet antiplagiati emas)", 0, 1],
+        'ESSE_ENABLED' => ['bool', 'feat', '✍️ Esse / insho', '', 0, 1],
+        'TEST_ENABLED' => ['bool', 'feat', '❓ Test savollari', '', 0, 1],
+        'LAB_ENABLED' => ['bool', 'feat', '🔬 Laboratoriya ishi', '', 0, 1],
+        'AMALIYOT_ENABLED' => ['bool', 'feat', '🏢 Amaliyot hisoboti', '', 0, 1],
+        'VIDEO_ENABLED' => ['bool', 'feat', '🎬 Ovozli videotaqdimot', "Taqdimotdan ovozli MP4 (serverda ffmpeg va TTS kaliti kerak)", 0, 1],
+        'MINIAPP_ENABLED' => ['bool', 'feat', '📱 Buyurtma Mini App', "Menyuda «📱 Ilova orqali buyurtma» tugmasi", 0, 1],
+        'FREE_REWRITE' => ['bool', 'growth', 'Past bahoda bepul qayta yozish', "1-2 ⭐ bergan mijozga bir marta (30 kunda) bepul qayta yozish taklif qilinadi", 0, 1],
+        'SUB_ENABLED' => ['bool', 'growth', '💎 «Talaba PRO» obunasi', "Oylik obuna: N ta buyurtma bir narxda", 0, 1],
+        'SUB_PRICE' => ['int', 'growth', "Obuna narxi, so'm", '', 1000, 10000000],
+        'SUB_CREDITS' => ['int', 'growth', 'Obunadagi buyurtmalar soni', '', 1, 1000],
+        'SUB_DAYS' => ['int', 'growth', 'Obuna muddati, kun', '', 1, 365],
+        'SUB_MAX_PRICE' => ['int', 'growth', "Obuna qoplaydigan eng qimmat tarif, so'm", "Undan qimmat buyurtmalar balansdan to'lanadi", 0, 10000000],
+        'AGENTS_ENABLED' => ['bool', 'growth', '🤝 Hamkorlar (agentlar)', "Hamkor havolasi orqali kelgan mijozlar buyurtmasidan % ulush", 0, 1],
+        'MARKETING_ENABLED' => ['bool', 'growth', '📣 Avtomatik marketing', "Buyurtma bermaganlarga eslatma, boshqa turlar haqida xabar, «sog'indik» xabari (har biriga bir marta, 9:00–21:00)", 0, 1],
         'EDITOR_AI_ENABLED' => ['bool', 'feat', '✨ Tahrirlovchida AI', '', 0, 1],
         'DB_BACKUP_DAILY' => ['bool', 'feat', 'Kunlik baza zaxirasi', '', 0, 1],
     ];
@@ -88,7 +106,8 @@ class Settings
     {
         $defaults = ['MAINTENANCE_MODE' => false, 'MAINTENANCE_TEXT' => "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!", 'FREE_TRIAL' => true,
             'TOPUP_BONUS_PERCENT' => 0, 'TOPUP_BONUS_MIN_AMOUNT' => 0, 'REFERRAL_BONUS' => 3000, 'MIN_TOPUP_AMOUNT' => 1000, 'PRO_SURCHARGE_PERCENT' => 60,
-            'STARS_RATE' => 200];
+            'STARS_RATE' => 200, 'VIDEO_ENABLED' => false, 'MINIAPP_ENABLED' => false, 'SUB_ENABLED' => false, 'MARKETING_ENABLED' => false,
+            'SUB_PRICE' => 49000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
         $items = [];
         foreach (self::SCHEMA as $k => [$type, $group, $label, $hint, $min, $max]) {
             $items[] = ['k' => $k, 'type' => $type, 'group' => $group, 'label' => $label, 'hint' => $hint, 'min' => $min, 'max' => $max,

@@ -65,6 +65,12 @@ class SlidePreview
         return [];
     }
 
+    /** Barcha slaydlar PNG (videotaqdimot uchun). Qaytadi: [tartib raqami => png]. */
+    public static function renderAll(string $pptx, int $total, float $budget): array
+    {
+        return SlidePdf::sofficePath() ? self::viaSoffice($pptx, range(0, $total - 1), $budget) : [];
+    }
+
     private static function viaSoffice(string $pptx, array $indexes, float $budget): array
     {
         $work = rtrim(GENERATED_DIR, '/') . '/pv_' . bin2hex(random_bytes(5));
@@ -114,7 +120,7 @@ class SlidePreview
             if (is_file($png) && filesize($png) > 2000) {
                 $dst = rtrim(GENERATED_DIR, '/') . '/pv_' . bin2hex(random_bytes(5)) . '.png';
                 if (@rename($png, $dst)) {
-                    $out[] = $dst;
+                    $out[$k] = $dst;              // kalit — $indexes dagi o'rni (videotaqdimot uchun moslik saqlanadi)
                 }
             }
         }

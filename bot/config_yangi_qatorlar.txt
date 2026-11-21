@@ -75,3 +75,7 @@ define('UPDATER_ENABLED', true);          // /yangilash — botni GitHub'dan yan
 //     '25-30' => ['label' => '25-30 bet', 'chapters' => 3, 'sub' => 3, 'min_words' => 6500, 'max_words' => 7500, 'price' => 18000],
 //     '30-40' => ['label' => '30-40 bet', 'chapters' => 3, 'sub' => 3, 'min_words' => 8500, 'max_words' => 10000, 'price' => 24000],
 // ]);
+
+// === 14-10 (IXTIYORIY — hammasini admin paneldagi «Sozlamalar»dan ham boshqarish mumkin) ===
+// define('FFMPEG_PATH', '/usr/bin/ffmpeg');   // 🎬 videotaqdimot: ffmpeg boshqa joyda bo'lsa
+// define('GEMINI_TTS_KEY', '');               // videotaqdimot ovozi uchun alohida Gemini kaliti (bo'lmasa AI_PROVIDERS dagi gemini kaliti)

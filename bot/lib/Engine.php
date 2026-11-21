@@ -436,6 +436,7 @@ class Engine
     {
         $jobId = (int)$job['id'];
         AIClient::$jobId = $jobId;                 // AI token sarfi shu buyurtmaga yoziladi
+        AIClient::$context = '';                   // o'qituvchi talablari (JobSteps::exec qadam boshida o'rnatadi)
         $state = $job['state'] ? json_decode((string)$job['state'], true) : null;
         if (!is_array($state) || empty($state['steps'])) {
             try {
@@ -597,6 +598,9 @@ class Engine
         }
         self::push($jobId, true, null, true);
         JobSteps::afterDone($job, $state);
+        if (class_exists('Growth')) {
+            Growth::onJobDone($job);              // hamkor (agent) ulushi
+        }
         foreach ((array)($state['res']['tmp'] ?? []) as $tmp) {
             if (is_string($tmp) && is_file($tmp)) {
                 @unlink($tmp);
@@ -657,6 +661,10 @@ class Engine
         if ((int)($job['is_free'] ?? 0) === 1) {
             db()->prepare('UPDATE users SET free_used = 0 WHERE telegram_id = ?')->execute([$chatId]);
             return "Bepul urinishingiz qaytarildi.";
+        }
+        if (($job['paid_by'] ?? '') === 'sub') {
+            Growth::subGive($chatId);
+            return "Obunangizga 1 ta buyurtma qaytarildi.";
         }
         $price = (int)($job['price'] ?? 0);
         if ($price > 0) {

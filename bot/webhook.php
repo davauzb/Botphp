@@ -88,10 +88,14 @@ try {
                 $referrerId = $candidate;
             }
         }
+        $agentRef = str_starts_with($payload, 'agt') ? (int)substr($payload, 3) : 0;
         $text = '/start';
     }
 
     $user = getOrCreateUser($chatId, $username, $referrerId);
+    if (!empty($agentRef)) {
+        Growth::attachAgent($chatId, $agentRef);     // hamkor havolasi
+    }
 
     // Admin panel orqali bloklangan foydalanuvchi botdan foydalana olmaydi (adminlar bundan mustasno)
     if (!empty($user['banned']) && !AdminSecurity::isAdmin($chatId)) {
@@ -104,6 +108,17 @@ try {
         if ($fileId) {
             handleReceiptSubmission($chatId, $user['state'], $fileId);
         }
+        exit;
+    }
+
+    // O'qituvchi talablari: mavzu kutilayotganda fayl, rasm yoki «Talab: ...» matni
+    if (str_starts_with((string)$user['state'], 'awaiting_topic:') && Requirements::handle($chatId, $message)) {
+        exit;
+    }
+    // Yomon bahodan keyin sabab yozilmoqda
+    $menuTexts = array_merge(...array_map(fn($row) => array_column($row, 'text'), mainMenu()['keyboard']));
+    if (str_starts_with((string)$user['state'], 'awaiting_feedback:') && $text !== '' && $text[0] !== '/' && !in_array($text, $menuTexts, true)) {
+        handleFeedbackText($chatId, (int)substr((string)$user['state'], strlen('awaiting_feedback:')), $text);
         exit;
     }
 
@@ -200,7 +215,11 @@ function mainMenu(): array
                 [['text' => '📋 Buyurtmalarim'], ['text' => '💰 Balans']],
                 [['text' => '🎁 Referal'], ['text' => '🎟 Promokod']],
                 [['text' => '⚙️ Profil'], ['text' => '🌐 Til']],
-                [['text' => '💬 Yordam']],
+                array_values(array_filter([
+                    Growth::subEnabled() ? ['text' => '💎 Obuna'] : null,
+                    ['text' => '💬 Yordam'],
+                    MiniApp::enabled() ? ['text' => '📱 Ilova', 'web_app' => ['url' => MiniApp::url()]] : null,
+                ])),
             ]
         ),
         'resize_keyboard' => true,
@@ -287,6 +306,26 @@ function handleMessage(array $user, int $chatId, string $text): void
         return;
     }
 
+    if ($text === '💎 Obuna' || $text === '/obuna') {
+        if (!Growth::subEnabled()) {
+            Telegram::sendMessage($chatId, "Obuna hozircha mavjud emas.", mainMenu());
+            return;
+        }
+        Telegram::sendMessage($chatId, Growth::subText($chatId), Growth::subKeyboard());
+        return;
+    }
+
+    if ($text === '/agent' || $text === '/hamkor') {
+        Telegram::sendMessage($chatId, Growth::agentText($chatId, defined('BOT_USERNAME') && BOT_USERNAME !== 'BOT_USERNAME_HERE' ? (string)BOT_USERNAME : ''));
+        return;
+    }
+
+    if ($text === '/talab_ochir') {
+        Requirements::clear($chatId);
+        Telegram::sendMessage($chatId, "🗑 Yuklangan talablar o'chirildi.");
+        return;
+    }
+
     if ($text === '/tahrir' || $text === '✏️ Tahrirlash') {
         sendEditList($chatId);
         return;
@@ -361,6 +400,11 @@ function handleMessage(array $user, int $chatId, string $text): void
             'kurs_ishi' => "🎓 <b>Kurs ishi</b>: titul, reja, kirish, 3 bob (har biri 1.1, 1.2, 1.3 bandlar bilan), xulosa va haqiqiy adabiyotlar ro'yxati.\n\n",
             'maqola' => "📰 <b>Ilmiy maqola</b>: sarlavha, muallif, annotatsiya, kalit so'zlar, kirish, metodologiya, natijalar va muhokama, xulosa, haqiqiy adabiyotlar.\n\n",
             'tezis' => "🧾 <b>Tezis</b> (konferensiya uchun): sarlavha, muallif, qisqa ilmiy matn va adabiyotlar.\n\n",
+            'esse' => "✍️ <b>Esse / insho</b>: asosiy g'oya, dalillar va misollar, shaxsiy mulohaza, xulosa — ravon uslubda.\n\n",
+            'test' => "❓ <b>Test savollari</b>: har savolda 4 ta variant (A–D), oxirida javoblar kaliti jadvali. O'qituvchilar va imtihonga tayyorlanish uchun.\n\n",
+            'lab' => "🔬 <b>Laboratoriya ishi hisoboti</b>: titul, ishning maqsadi va nazariy asoslari, jihozlar va bajarish tartibi, natijalar (jadval bilan), xulosa, nazorat savollari.\n\n",
+            'amaliyot' => "🏢 <b>Amaliyot hisoboti</b>: titul, tashkilot haqida ma'lumot, tuzilmasi va faoliyati, bajarilgan ishlar, muammolar va takliflar, xulosa.\n"
+                . "<i>Tashkilot haqidagi aniq ma'lumotlarni (manzil, raqamlar) tayyor fayldan o'zingiz to'g'rilab qo'ying.</i>\n\n",
         ][$orderType] ?? '';
         Telegram::sendMessage($chatId, $intro . "📏 Kerakli hajmni tanlang:", volumeKeyboard($orderType, $user));
         return;
@@ -554,7 +598,10 @@ function handleTopicSubmission(array $user, int $chatId, string $type, string $v
         $isFree = $freeClaim->rowCount() > 0;
     }
 
-    if (!$isFree) {
+    $paidBy = $isFree ? 'free' : 'balance';
+    if (!$isFree && Growth::subCovers($chatId, $price) && Growth::subTake($chatId)) {
+        $paidBy = 'sub';                            // 💎 obunadan 1 kredit
+    } elseif (!$isFree) {
         // Balansdan ATOMIK yechamiz: "balance >= narx" sharti UPDATE ning o'zida — parallel so'rovlarda
         // balans manfiyga tushib ketmaydi.
         $balUpd = db()->prepare('UPDATE users SET balance = balance - :p WHERE telegram_id = :id AND balance >= :p');
@@ -587,11 +634,15 @@ function handleTopicSubmission(array $user, int $chatId, string $type, string $v
     try {
         $student = StudentFlow::forJob($chatId);
         $jobId = Queue::createJob($chatId, $type, $topic, $volumeKey, $price, $isFree, !$isFree, $designKey, I18n::userLang($chatId), $student ?: null);
+        db()->prepare('UPDATE jobs SET paid_by = ? WHERE id = ?')->execute([$paidBy, $jobId]);
+        Requirements::attach($chatId, $jobId);
     } catch (Throwable $e) {
         // Buyurtma ochilmadi — olingan pul/bepul urinishni darhol qaytaramiz
         logError('webhook', 'createJob xato: ' . $e->getMessage());
         if ($isFree) {
             db()->prepare('UPDATE users SET free_used = 0 WHERE telegram_id = :id')->execute(['id' => $chatId]);
+        } elseif ($paidBy === 'sub') {
+            Growth::subGive($chatId);
         } else {
             db()->prepare('UPDATE users SET balance = balance + :p WHERE telegram_id = :id')->execute(['p' => $price, 'id' => $chatId]);
         }
@@ -601,6 +652,8 @@ function handleTopicSubmission(array $user, int $chatId, string $type, string $v
 
     if ($isFree) {
         $header = "✅ Bepul buyurtmangiz qabul qilindi!\n📏 Hajm: {$volume['label']}";
+    } elseif ($paidBy === 'sub') {
+        $header = "✅ Buyurtma qabul qilindi!\n📏 Hajm: {$volume['label']}  ·  💎 Obunadan (qoldi: " . Growth::sub($chatId)['credits'] . " ta)";
     } else {
         $header = "✅ Buyurtma qabul qilindi!\n📏 Hajm: {$volume['label']}  ·  💳 Balansdan yechildi: " . number_format($price, 0, '', ' ') . " so'm";
     }
@@ -756,6 +809,26 @@ function handleCallbackQuery(array $cb): void
         handleRating($chatId, $data);
         return;
     }
+    if ($data === 'sub:buy') {
+        Telegram::answerCallbackQuery((string)$cb['id']);
+        Telegram::sendMessage($chatId, Growth::subBuy($chatId), mainMenu());
+        return;
+    }
+    if (str_starts_with($data, 'rw:')) {             // past bahodan keyin bepul qayta yozish
+        Telegram::answerCallbackQuery((string)$cb['id']);
+        setUserState($chatId, 'idle');
+        $msg = Growth::rewrite($chatId, (int)substr($data, 3));
+        if ($msg !== '') {
+            Telegram::sendMessage($chatId, $msg);
+        }
+        return;
+    }
+    if ($data === 'fb:skip') {
+        Telegram::answerCallbackQuery((string)$cb['id']);
+        setUserState($chatId, 'idle');
+        Telegram::sendMessage($chatId, "Rahmat! Fikringiz uchun tashakkur.", mainMenu());
+        return;
+    }
 }
 
 function handleVolumeSelected(int $chatId, string $data): void
@@ -795,7 +868,7 @@ function proceedAfterProfileReady(int $chatId, string $type, string $volumeKey):
     $freeKey = DocTypes::freeKey($type);
     $isFreeEligible = (int)$user['free_used'] === 0 && $volumeKey === $freeKey;
 
-    if (!$isFreeEligible) {
+    if (!$isFreeEligible && !Growth::subCovers($chatId, (int)$volumes[$volumeKey]['price'])) {
         $balance = (int)$user['balance'];
         $price = $volumes[$volumeKey]['price'];
         if ($balance < $price) {
@@ -820,7 +893,12 @@ function proceedAfterProfileReady(int $chatId, string $type, string $volumeKey):
     }
 
     setUserState($chatId, "awaiting_topic:{$type}:{$volumeKey}");
-    Telegram::sendMessage($chatId, "✏️ " . ucfirst(typeLabel($type)) . " mavzusini yozing:" . I18n::hintLine($chatId));
+    $ask = [
+        'amaliyot' => "✏️ Amaliyot o'tgan <b>tashkilot nomi</b> va yo'nalishingizni yozing (masalan: «Toshkent shahar Soliq boshqarmasi, buxgalteriya hisobi»):",
+        'lab' => "✏️ <b>Fan va laboratoriya ishi nomini</b> yozing (masalan: «Fizika: Om qonunini tajribada tekshirish»):",
+        'test' => "✏️ Test qaysi <b>fan / mavzu</b> bo'yicha? (masalan: «Biologiya: hujayra tuzilishi»):",
+    ][$type] ?? "✏️ " . ucfirst(typeLabel($type)) . " mavzusini yozing:";
+    Telegram::sendMessage($chatId, $ask . I18n::hintLine($chatId) . ($type !== 'test' ? Requirements::hint() : ''));
 }
 
 /**
@@ -923,7 +1001,7 @@ function handleDesignChosen(int $chatId, string $data): void
     setUserState($chatId, "awaiting_topic:slayd:{$volumeKey}");
     Telegram::sendMessage(
         $chatId,
-        "✅ Dizayn tanlandi: " . pptxDesigns()[$designKey]['label'] . "\n\n✏️ Taqdimot mavzusini yozing:" . I18n::hintLine($chatId)
+        "✅ Dizayn tanlandi: " . pptxDesigns()[$designKey]['label'] . "\n\n✏️ Taqdimot mavzusini yozing:" . I18n::hintLine($chatId) . Requirements::hint()
     );
 }
 
@@ -1105,14 +1183,44 @@ function handleRating(int $chatId, string $data): void
     $upd = db()->prepare('UPDATE jobs SET rating = :r WHERE id = :id');
     $upd->execute(['r' => $stars, 'id' => $jobId]);
 
-    Telegram::sendMessage($chatId, str_repeat('⭐', $stars) . " uchun rahmat! Fikringiz biz uchun muhim.");
-
-    if ($stars <= 2 && ADMIN_CHAT_ID) {
-        Telegram::notifyAdmin(
-            "😟 Past baho: buyurtma #$jobId (\"" . Telegram::escape($job['topic']) . "\") "
-            . str_repeat('⭐', $stars) . " deb baholandi. Foydalanuvchi bilan bog'lanishni ko'rib chiqing."
-        );
+    if ($stars <= 2) {
+        // Past baho: sababini so'raymiz (admin «Yordam» bo'limida ko'radi) va bir martalik bepul qayta yozishni taklif qilamiz
+        setUserState($chatId, "awaiting_feedback:$jobId");
+        $full = db()->prepare('SELECT * FROM jobs WHERE id = ?');
+        $full->execute([$jobId]);
+        $fj = $full->fetch(PDO::FETCH_ASSOC) ?: [];
+        $kb = [[['text' => "⏭ Izohsiz", 'callback_data' => 'fb:skip']]];
+        $can = $fj && Growth::canRewrite($chatId, $fj);
+        Telegram::sendMessage($chatId, "😔 Kechirasiz, natija sizni qoniqtirmadi.\n\n<b>Nima yoqmadi?</b> Bitta xabarda yozing (masalan: «mavzudan chetga chiqqan», «2-bob juda qisqa»)."
+            . ($can ? "\nIzohingizdan keyin ishni <b>bepul qayta yozib beramiz</b> — izohingiz hisobga olinadi." : ''), ['inline_keyboard' => $kb]);
+        if (ADMIN_CHAT_ID) {
+            Telegram::notifyAdmin("😟 Past baho: buyurtma #$jobId (\"" . Telegram::escape($job['topic']) . "\") " . str_repeat('⭐', $stars) . ". Sababi so'raldi.");
+        }
+        return;
     }
+    Telegram::sendMessage($chatId, str_repeat('⭐', $stars) . " uchun rahmat! Fikringiz biz uchun muhim.");
+}
+
+/** Past bahodan keyingi izoh: adminning «Yordam» bo'limiga tushadi + bepul qayta yozish tugmasi. */
+function handleFeedbackText(int $chatId, int $jobId, string $text): void
+{
+    setUserState($chatId, 'idle');
+    $text = mb_substr(trim($text), 0, 1000);
+    try {
+        db()->prepare('INSERT INTO engine_kv (k, v, ts) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, ts = excluded.ts')->execute(['fb:' . $jobId, $text, time()]);
+        AdminPro::supportIncoming($chatId, "⭐ Past baho, buyurtma #$jobId: " . $text);
+    } catch (Throwable $e) {
+        logError('webhook', 'feedback: ' . $e->getMessage());
+    }
+    $st = db()->prepare('SELECT * FROM jobs WHERE id = ?');
+    $st->execute([$jobId]);
+    $j = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+    if ($j && Growth::canRewrite($chatId, $j)) {
+        Telegram::sendMessage($chatId, "🙏 Rahmat, izohingiz qabul qilindi va administratorga yetkazildi.\n\nIshni izohingizni hisobga olib <b>bepul</b> qayta yozib beraylikmi?",
+            ['inline_keyboard' => [[['text' => '🔁 Ha, bepul qayta yozing', 'callback_data' => 'rw:' . $jobId]], [['text' => "Kerak emas", 'callback_data' => 'fb:skip']]]]);
+        return;
+    }
+    Telegram::sendMessage($chatId, "🙏 Rahmat, izohingiz administratorga yetkazildi. Kerak bo'lsa, shu chatda javob beramiz.", mainMenu());
 }
 
 // ============================================================
