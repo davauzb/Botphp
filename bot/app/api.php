@@ -31,7 +31,7 @@ if (!is_array($in)) {
 }
 $tg = MiniApp::verify((string)($in['initData'] ?? ''));
 if ($tg <= 0) {
-    appOut(['ok' => false, 'msg' => "Ilovani bot ichidagi «📱 Ilova» tugmasi orqali oching"], 403);
+    appOut(['ok' => false, 'msg' => "Botga «📱 Ilova» deb yozing va chiqqan «Ilovani ochish» tugmasini bosing"], 403);
 }
 if (!AdminSecurity::rate('app:' . $tg, 40, 300)) {
     appOut(['ok' => false, 'msg' => 'Juda tez-tez. Birozdan keyin urinib ko\'ring'], 429);

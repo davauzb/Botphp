@@ -218,7 +218,7 @@ function mainMenu(): array
                 array_values(array_filter([
                     Growth::subEnabled() ? ['text' => '💎 Obuna'] : null,
                     ['text' => '💬 Yordam'],
-                    MiniApp::enabled() ? ['text' => '📱 Ilova', 'web_app' => ['url' => MiniApp::url()]] : null,
+                    MiniApp::enabled() ? ['text' => '📱 Ilova'] : null,
                 ])),
             ]
         ),
@@ -321,6 +321,14 @@ function handleMessage(array $user, int $chatId, string $text): void
         setUserState($chatId, 'awaiting_support');
         Telegram::sendMessage($chatId, "💬 <b>Yordam</b>\n\nSavolingiz yoki muammoingizni bitta xabarda yozing (buyurtma raqami bo'lsa, uni ham qo'shing). Administrator shu yerda javob beradi.",
             ['inline_keyboard' => [[['text' => '✖️ Bekor qilish', 'callback_data' => 'sup:cancel']]]]);
+        return;
+    }
+
+    // 📱 Mini App: pastki menyu tugmasidan ochilgan ilovaga Telegram foydalanuvchi ma'lumotini (initData) bermaydi —
+    // shuning uchun ilova xabar ichidagi (inline) web_app tugmasi orqali ochiladi
+    if (($text === '📱 Ilova' || $text === '/ilova') && MiniApp::enabled()) {
+        Telegram::sendMessage($chatId, "📱 <b>Buyurtma ilovasi</b>\nTur, hajm, dizayn va mavzuni bitta oynada tanlang 👇",
+            ['inline_keyboard' => [[['text' => '📱 Ilovani ochish', 'web_app' => ['url' => MiniApp::url()]]]]]);
         return;
     }
 
