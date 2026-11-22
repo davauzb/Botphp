@@ -13,6 +13,7 @@ require_once __DIR__ . '/Requirements.php';
 require_once __DIR__ . '/Uniq.php';
 require_once __DIR__ . '/TestDoc.php';
 require_once __DIR__ . '/VideoDeck.php';
+require_once __DIR__ . '/Translate.php';
 
 /**
  * Ish turlari uchun reja (qadamlar) va har bir qadamni bajarish.
@@ -52,6 +53,9 @@ class JobSteps
         $lang = I18n::norm($job['lang'] ?? I18n::userLang($chatId));
         $p = ['topic' => (string)$job['topic'], 'student' => self::jobStudent($job, $chatId), 'lang' => $lang];
 
+        if ($type === 'tarjima') {
+            return ['v' => 1, 'type' => $type, 'steps' => Translate::steps(), 'i' => 0, 'p' => $p + ['docLabel' => 'tarjima', 'kind' => 'tarjima'], 'res' => [], 'att' => [], 'dur' => [], 'shrink' => []];
+        }
         if (DocTypes::kind($type) === 'test') {
             $vols = DocTypes::volumes($type) ?? [];
             $v = $vols[$job['volume_key']] ?? reset($vols);
@@ -203,6 +207,21 @@ class JobSteps
                 break;
             case 'video':
                 self::stepVideo($job, $state);
+                break;
+            case 'tr_prep':
+                if (!isset($state['res']['segs']) && !isset($state['res']['file'])) {
+                    Translate::prep($job, $state);
+                }
+                break;
+            case 'tr_batch':
+                if (isset($state['res']['segs'])) {
+                    Translate::batch($state);
+                }
+                break;
+            case 'tr_build':
+                if (!isset($state['res']['file'])) {
+                    Translate::build($job, $state);
+                }
                 break;
             case 'outline':
                 self::outline($state);
@@ -1105,6 +1124,12 @@ class JobSteps
             ? "⚠️ Matn AI yordamida yaratildi — himoyadan oldin mazmunini bir bor ko'zdan kechiring."
             : "⚠️ Matn AI yordamida yaratildi — faktlar va sanalarni topshirishdan oldin albatta o'zingiz tekshirib chiqing.";
         $uq = isset($state['res']['uniq']) ? "\n🔎 Unikallik: <b>" . (int)$state['res']['uniq'] . "%</b> (bot yozgan barcha ishlar bilan solishtirildi)" : '';
+        if ($job['type'] === 'tarjima') {
+            $label = Translate::LANGS[(string)($state['p']['lang'] ?? '')] ?? '';
+            $real = $uq = '';
+            $warn = "Dizayn o'zgarmagan, faqat matn o'girildi. ⚠️ Tarjima AI yordamida qilindi — topshirishdan oldin ko'rib chiqing.";
+            $what = 'tarjima';
+        }
         if (($state['p']['kind'] ?? '') === 'test') {
             $real = '';
             $warn = "📌 Oxirgi betda — javoblar kaliti. ⚠️ Savollar AI yordamida tuzildi — foydalanishdan oldin ko'rib chiqing.";
@@ -1113,7 +1138,14 @@ class JobSteps
         if ($job['type'] === 'slayd' && !empty($state['res']['narr']) && empty($state['res']['vid']['done'])) {
             $caption .= "\n🎬 Ovozli videotaqdimot bir necha daqiqada alohida keladi.";
         }
-        $kb = !empty($state['res']['pres']) ? ['inline_keyboard' => [[['text' => '✏️ Tahrirlash', 'callback_data' => 'edit:' . $state['res']['pres']]]]] : null;
+        $rows = [];
+        if (!empty($state['res']['pres'])) {
+            $rows[] = [['text' => '✏️ Tahrirlash', 'callback_data' => 'edit:' . $state['res']['pres']]];
+        }
+        if (Translate::enabled() && $job['type'] !== 'tarjima') {
+            $rows[] = [Translate::button((int)$job['id'])];
+        }
+        $kb = $rows ? ['inline_keyboard' => $rows] : null;
         if (!empty($state['res']['pv']) && empty($state['res']['pv_sent'])) {
             $state['res']['pv_sent'] = true;          // albom bir marta (qayta urinishda takrorlanmaydi)
             try {

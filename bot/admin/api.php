@@ -13,6 +13,7 @@ require_once __DIR__ . '/../lib/AdminService.php';
 require_once __DIR__ . '/../lib/AIClient.php';
 require_once __DIR__ . '/../lib/SlidePdf.php';
 require_once __DIR__ . '/../lib/VideoDeck.php';
+require_once __DIR__ . '/../lib/SlidePreview.php';
 
 ini_set('display_errors', '0');
 if (!AdminSecurity::enabled()) {
@@ -113,7 +114,7 @@ try {
         'support_list', 'support_thread', 'support_reply', 'support_close', 'user_meta',
         'finance', 'finance_export', 'funnel', 'ai_usage', 'queue', 'job_resend', 'job_retry',
         // 14-10: AI kalitlari, xatolar jurnali, hamkorlar, o'sish
-        'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs', 'logs_clear', 'agents', 'agent_save', 'agent_payout', 'growth'];
+        'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs', 'logs_clear', 'agents', 'agent_save', 'agent_payout', 'growth', 'job_view', 'job_send_me'];
     if ($method !== 'POST' || !in_array($action, $allowed, true)) {
         AdminSecurity::deny();
     }
@@ -454,6 +455,16 @@ try {
 
         case 'agent_payout':
             mutate($admin, $b, fn() => Growth::agentPayout($admin, intv($b['tg'] ?? 0, 1, PHP_INT_MAX), intv($b['amount'] ?? 0, 1, 100000000)));
+
+        case 'job_view':
+            if (!AdminSecurity::rate('jobview:' . $admin, 12, 300)) {
+                AdminSecurity::fail('rate', 429, 'Juda tez-tez. Biroz kuting');
+            }
+            @set_time_limit(120);
+            out(AdminPro::jobView(intv($b['id'] ?? 0, 1, PHP_INT_MAX)));
+
+        case 'job_send_me':
+            mutate($admin, $b, fn() => AdminPro::jobSendMe($admin, intv($b['id'] ?? 0, 1, PHP_INT_MAX)));
 
         case 'growth':
             out(['ok' => true] + Growth::marketingStats() + ['video_missing' => class_exists('VideoDeck') ? VideoDeck::missing() : []]);

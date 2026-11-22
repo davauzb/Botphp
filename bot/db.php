@@ -19,6 +19,7 @@ require_once __DIR__ . '/lib/AIKeys.php';
 require_once __DIR__ . '/lib/Uniq.php';
 require_once __DIR__ . '/lib/Requirements.php';
 require_once __DIR__ . '/lib/MiniApp.php';
+require_once __DIR__ . '/lib/Translate.php';
 
 /**
  * Har chaqiruvda yangi PDO ulanish qaytaradi.

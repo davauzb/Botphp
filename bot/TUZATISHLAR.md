@@ -1,3 +1,19 @@
+# studybot 14-11 — RANGLI TUGMALAR, TARJIMA, «MIJOZ KO'ZI BILAN»
+
+Yangilash: botga `/yangilash` → «🚀 Yangilash». Baza o'zgarmaydi.
+
+- **🎨 Rangli tugmalar** (Telegram Bot API 10.4): tasdiqlash/to'lash — 🟢 yashil, bekor qilish/rad etish — 🔴 qizil, tanlash
+  (hajm, til, tahrirlash, holat, ilova) — 🔵 ko'k; pastki menyuda buyurtma turlari ko'k, «💰 Balans» yashil.
+  Rang avtomatik beriladi (bitta joyda — `Telegram::colorize`). Telegram rangni qabul qilmasa, xabar rangsiz qayta yuboriladi.
+  Eski Telegram ilovalarida tugmalar oddiy ko'rinadi. O'chirish: Sozlamalar → «🎨 Rangli tugmalar».
+- **🌐 Tarjima**: tayyor fayl ostida «🌐 Boshqa tilga tarjima» → til (o'zbek / rus / ingliz) → narx balansdan (Sozlamalar → «Tarjima narxi»,
+  standart 2 000 so'm). Taqdimot (oddiy va PRO) va hujjatlarning MATNI o'giriladi — dizayn, rasmlar, animatsiyalar, reja va bet raqamlari
+  o'zgarmaydi. Ismlar, universitet, guruh, URL/DOI va adabiyotlar o'zgartirilmaydi. Server faylni o'chirgan bo'lsa — Telegram'dan olinadi.
+- **👁 Mijoz ko'zi bilan** (admin panel → buyurtma): mijozga borgan fayl sahifalari/slaydlari rasm ko'rinishida (taqdimot — 6 slayd,
+  hujjat — 4 bet, serverda LibreOffice bo'lsa), mijozga borgan izoh va bahosi; «📲 Faylni Telegram'imga yuborish».
+
+---
+
 # studybot 14-10 — YANGI TURLAR, TALABLAR, HIMOYA SAVOLLARI, OBUNA, HAMKORLAR, MINI APP
 
 Yangilash: botga `/yangilash` yozing → «🚀 Yangilash». Baza o'zi yangilanadi (sxema 20), config.php o'zgarmaydi.

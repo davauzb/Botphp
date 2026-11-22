@@ -71,7 +71,7 @@ const initial = u => (nm(u).replace(/^@/, '')[0] || '?').toUpperCase();
 function newKey() { const a = new Uint8Array(16); (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => a[i] = Math.random() * 256); return Array.from(a, b => p2(b.toString(16))).join(''); }
 const L = {
   job: { pending: ['Navbatda', ''], processing: ['Jarayonda', 'acc'], done: ['Bajarildi', 'ok'], failed: ['Xato', 'bad'], cancelled: ['Bekor', 'warn'], awaiting_payment: ["To'lov kutilmoqda", 'warn'] },
-  type: { mustaqil_ish: 'Mustaqil ish', referat: 'Referat', slayd: 'Taqdimot', kurs_ishi: 'Kurs ishi', maqola: 'Ilmiy maqola', tezis: 'Tezis', esse: 'Esse', test: 'Test savollari', lab: 'Laboratoriya ishi', amaliyot: 'Amaliyot hisoboti' },
+  type: { mustaqil_ish: 'Mustaqil ish', referat: 'Referat', slayd: 'Taqdimot', kurs_ishi: 'Kurs ishi', maqola: 'Ilmiy maqola', tezis: 'Tezis', esse: 'Esse', test: 'Test savollari', lab: 'Laboratoriya ishi', amaliyot: 'Amaliyot hisoboti', tarjima: 'Tarjima' },
   topup: { pending: ['Kutilmoqda', 'warn'], approved: ['Tasdiqlangan', 'ok'], rejected: ['Rad etilgan', 'bad'], refunded: ['Qaytarilgan', 'warn'] },
   method: { click: 'Click', payme: 'Payme', manual: 'Chek', humo: 'Humo/Uzcard', stars: 'Telegram Stars' },
   audit: { auth_ok: ['Kirish', 'ok'], auth_fail: ['Kirish urinishi (rad etildi)', 'bad'], pin_fail: ['PIN xato', 'bad'], balance_adjust: ["Balans o'zgartirildi", 'warn'], topup_approve: ["To'lov tasdiqlandi", 'ok'], topup_reject: ["To'lov rad etildi", 'bad'], job_cancel: ['Buyurtma bekor', 'warn'], ban: ['Bloklandi', 'bad'], unban: ['Blokdan chiqarildi', 'ok'], send_msg: ['Xabar yuborildi', ''], view_receipt: ["Chek ko'rildi", ''], link_issued: ['Havola berildi', ''], logout: ['Chiqish', ''], promo_create: ['Promokod yaratildi', 'ok'], promo_on: ['Promokod yoqildi', 'ok'], promo_off: ["Promokod o'chirildi", 'warn'], promo_delete: ["Promokod o'chirib tashlandi", 'bad'], broadcast: ['Rassilka boshlandi', 'acc'], broadcast_stop: ["Rassilka to'xtatildi", 'warn'], bad_link: ["Noto'g'ri havola", 'bad'], bad_origin: ['Begona manba', 'bad'], session_ua_mismatch: ['Sessiya brauzeri o\'zgargan', 'bad'] },
@@ -466,6 +466,7 @@ async function openJob(id) {
     j.error_message ? h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px', borderColor: 'var(--bad)' } }, h('div', { class: 't2' }, 'Xato xabari'), h('div', { style: { whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: '4px' } }, j.error_message)) : '',
     h('div', { class: 'btns', style: { marginTop: '14px' } },
       h('button', { class: 'btn', onclick: () => { s.close(); openUser(j.telegram_id); } }, '👤 Foydalanuvchi'),
+      j.has_file ? h('button', { class: 'btn line', onclick: () => viewAsClient(j) }, "👁 Mijoz ko'zi bilan") : '',
       j.has_file ? h('button', { class: 'btn line', onclick: async () => { const rr = await act('job_resend', { id: j.id }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); } }, '📎 Faylni qayta yuborish') : '',
       !active && CFG.role !== 'operator' ? h('button', { class: 'btn line', onclick: () => retrySheet(j, () => { s.close(); if (S.reload) S.reload(); }) }, '🔁 Qayta ishga tushirish') : '',
       active ? h('button', { class: 'btn bad', onclick: async () => {
@@ -474,6 +475,22 @@ async function openJob(id) {
       } }, '🛑 Bekor qilish') : ''));
 }
 
+/* 👁 mijoz olgan faylning sahifalari/slaydlari + izoh, «Menga yuborish» */
+async function viewAsClient(j) {
+  const body = h('div', {}, h('div', { class: 't2', style: { margin: '6px 0 10px' } }, "Fayl ochilib, sahifalari rasmga aylantirilmoqda (10–40 soniya)…"), skeleton(2, 220));
+  openSheet("👁 Mijoz ko'zi bilan · #" + j.id, body);
+  const r = await api('job_view', { id: j.id });
+  if (!r.ok) { body.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
+  const send = h('button', { class: 'btn pri', style: { width: '100%' }, onclick: async () => { send.disabled = true; const rr = await act('job_send_me', { id: j.id }); send.disabled = false; toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); } }, "📲 Faylni Telegram'imga yuborish");
+  body.replaceChildren(
+    h('div', { class: 'card', style: { padding: '12px 14px', marginBottom: '10px', background: 'var(--acc-soft, rgba(59,91,219,.08))' } },
+      h('div', { class: 't2' }, '📎 ' + r.name + (r.pages ? ' · ' + r.pages + (r.ext === 'pptx' ? ' slayd' : ' bet') : '')),
+      h('div', { style: { whiteSpace: 'pre-wrap', marginTop: '6px', fontSize: '14px' } }, r.caption),
+      r.rating ? h('div', { class: 't2', style: { marginTop: '6px' } }, 'Mijoz bahosi: ' + '⭐'.repeat(r.rating)) : ''),
+    r.images.length ? h('div', { class: 'vgal' }, r.images.map(src => h('img', { src, alt: '', loading: 'lazy' })))
+      : emptyBox(r.can_render ? "Sahifalarni rasmga aylantirib bo'lmadi" : "Serverda LibreOffice yo'q — sahifalar ko'rinmaydi. Faylni Telegram'ingizga yuborib ko'ring.", 'doc'),
+    h('div', { style: { height: '10px' } }), send);
+}
 function retrySheet(j, done) {
   let gift = j.status === 'failed';
   const b1 = h('button', {}, "💳 Mijoz balansidan"), b2 = h('button', {}, '🎁 Bepul (sizning hisobingizdan)');

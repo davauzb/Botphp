@@ -41,6 +41,9 @@ class Settings
         'AMALIYOT_ENABLED' => ['bool', 'feat', '🏢 Amaliyot hisoboti', '', 0, 1],
         'VIDEO_ENABLED' => ['bool', 'feat', '🎬 Ovozli videotaqdimot', "Taqdimotdan ovozli MP4 (serverda ffmpeg va TTS kaliti kerak)", 0, 1],
         'MINIAPP_ENABLED' => ['bool', 'feat', '📱 Buyurtma Mini App', "Menyuda «📱 Ilova orqali buyurtma» tugmasi", 0, 1],
+        'BUTTON_COLORS' => ['bool', 'feat', '🎨 Rangli tugmalar', "Tasdiqlash — yashil, bekor qilish — qizil, tanlash — ko'k (Telegram'ning yangi versiyalarida)", 0, 1],
+        'TRANSLATE_ENABLED' => ['bool', 'feat', '🌐 Tarjima', "Tayyor fayl ostida «Boshqa tilga tarjima» tugmasi (dizayn o'zgarmaydi)", 0, 1],
+        'TRANSLATE_PRICE' => ['int', 'money', "Tarjima narxi, so'm", '0 — bepul', 0, 1000000],
         'FREE_REWRITE' => ['bool', 'growth', 'Past bahoda bepul qayta yozish', "1-2 ⭐ bergan mijozga bir marta (30 kunda) bepul qayta yozish taklif qilinadi", 0, 1],
         'SUB_ENABLED' => ['bool', 'growth', '💎 «Talaba PRO» obunasi', "Oylik obuna: N ta buyurtma bir narxda", 0, 1],
         'SUB_PRICE' => ['int', 'growth', "Obuna narxi, so'm", '', 1000, 10000000],
@@ -107,7 +110,7 @@ class Settings
         $defaults = ['MAINTENANCE_MODE' => false, 'MAINTENANCE_TEXT' => "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!", 'FREE_TRIAL' => true,
             'TOPUP_BONUS_PERCENT' => 0, 'TOPUP_BONUS_MIN_AMOUNT' => 0, 'REFERRAL_BONUS' => 3000, 'MIN_TOPUP_AMOUNT' => 1000, 'PRO_SURCHARGE_PERCENT' => 60,
             'STARS_RATE' => 200, 'VIDEO_ENABLED' => false, 'MINIAPP_ENABLED' => false, 'SUB_ENABLED' => false, 'MARKETING_ENABLED' => false,
-            'SUB_PRICE' => 49000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
+            'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
         $items = [];
         foreach (self::SCHEMA as $k => [$type, $group, $label, $hint, $min, $max]) {
             $items[] = ['k' => $k, 'type' => $type, 'group' => $group, 'label' => $label, 'hint' => $hint, 'min' => $min, 'max' => $max,

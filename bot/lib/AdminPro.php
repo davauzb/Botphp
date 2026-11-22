@@ -15,7 +15,7 @@ class AdminPro
     public const ROLES = ['admin' => 'Admin', 'operator' => 'Operator'];
 
     /** Operator bajarishi mumkin bo'lgan amallar (qolganlari faqat admin/owner). */
-    public const OPERATOR_ACTIONS = ['ping', 'logout', 'me', 'stats', 'topups', 'topup_decide', 'receipt', 'jobs', 'job', 'job_resend', 'events', 'events_read',
+    public const OPERATOR_ACTIONS = ['ping', 'logout', 'me', 'stats', 'topups', 'topup_decide', 'receipt', 'jobs', 'job', 'job_resend', 'job_view', 'job_send_me', 'events', 'events_read',
         'users', 'user', 'user_meta', 'support_list', 'support_thread', 'support_reply', 'support_close', 'queue'];
     /** Faqat owner (ADMIN_CHAT_ID). */
     public const OWNER_ACTIONS = ['roles_list', 'roles_save', 'roles_delete', 'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs_clear', 'agent_payout'];
@@ -555,5 +555,149 @@ class AdminPro
         }
         AdminSecurity::audit('logs_clear', $admin);
         return ['ok' => true, 'msg' => 'Jurnal arxivlandi va tozalandi'];
+    }
+
+    // ================================================================== 👁 mijoz ko'zi bilan
+
+    /** Buyurtma faylining mahalliy nusxasi (serverda bo'lmasa — Telegram'dan). */
+    private static function jobFile(array $j): ?string
+    {
+        $f = (string)($j['result_file'] ?? '');
+        if ($f !== '' && is_file($f)) {
+            return $f;
+        }
+        if (empty($j['tg_file_id'])) {
+            return null;
+        }
+        $r = Telegram::call('getFile', ['file_id' => (string)$j['tg_file_id']]);
+        $path = (string)($r['result']['file_path'] ?? '');
+        if ($path === '') {
+            return null;
+        }
+        $ch = curl_init(TELEGRAM_FILE_API . $path);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30]);
+        $body = curl_exec($ch);
+        $ok = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200;
+        curl_close($ch);
+        if (!$ok || !is_string($body)) {
+            return null;
+        }
+        $dst = rtrim(GENERATED_DIR, '/') . '/view_' . bin2hex(random_bytes(5)) . '.' . (pathinfo($path, PATHINFO_EXTENSION) ?: 'bin');
+        file_put_contents($dst, $body);
+        return $dst;
+    }
+
+    /** Rasm faylini kichraytirib data: URI ga aylantiradi (panelga yuborish uchun). */
+    private static function thumb(string $png, int $w = 760): ?string
+    {
+        if (!is_file($png)) {
+            return null;
+        }
+        $raw = (string)file_get_contents($png);
+        if (function_exists('imagecreatefromstring') && ($im = @imagecreatefromstring($raw))) {
+            $k = min(1, $w / max(1, imagesx($im)));
+            $dst = imagecreatetruecolor(max(1, (int)(imagesx($im) * $k)), max(1, (int)(imagesy($im) * $k)));
+            imagefill($dst, 0, 0, imagecolorallocate($dst, 255, 255, 255));
+            imagecopyresampled($dst, $im, 0, 0, 0, 0, imagesx($dst), imagesy($dst), imagesx($im), imagesy($im));
+            ob_start();
+            imagejpeg($dst, null, 80);
+            return 'data:image/jpeg;base64,' . base64_encode((string)ob_get_clean());
+        }
+        return strlen($raw) < 1500000 ? 'data:image/png;base64,' . base64_encode($raw) : null;
+    }
+
+    /**
+     * Mijoz olgan faylning birinchi sahifalari/slaydlari rasmlari + mijozga borgan izoh matni.
+     * Taqdimot: 6 ta slayd; hujjat: 4 bet (serverda LibreOffice bo'lsa).
+     */
+    public static function jobView(int $jobId): array
+    {
+        $st = db()->prepare('SELECT * FROM jobs WHERE id = ?');
+        $st->execute([$jobId]);
+        $j = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$j) {
+            return ['ok' => false, 'msg' => 'Topilmadi'];
+        }
+        $file = self::jobFile($j);
+        if ($file === null) {
+            return ['ok' => false, 'msg' => "Fayl serverda ham, Telegram'da ham topilmadi"];
+        }
+        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        $imgs = [];
+        $pages = 0;
+        $tmp = [];
+        try {
+            if ($ext === 'pptx') {
+                $z = new ZipArchive();
+                if ($z->open($file) === true) {
+                    for ($i = 0; $i < $z->numFiles; $i++) {
+                        $pages += (int)preg_match('#^ppt/slides/slide\d+\.xml$#', (string)$z->getNameIndex($i));
+                    }
+                    $z->close();
+                }
+                $idx = SlidePreview::pick($pages, 6);
+                $tmp = SlidePreview::make($file, $idx, !empty($j['pres_id']) && $j['type'] === 'slayd' ? (string)$j['pres_id'] : null, 40);
+            } elseif ($ext === 'docx' && SlidePdf::sofficePath()) {
+                $work = rtrim(GENERATED_DIR, '/') . '/view_' . bin2hex(random_bytes(5));
+                @mkdir($work, 0700, true);
+                $cmd = escapeshellarg((string)SlidePdf::sofficePath()) . ' -env:UserInstallation=' . escapeshellarg('file://' . $work . '/p')
+                    . ' --headless --norestore --convert-to pdf --outdir ' . escapeshellarg($work) . ' ' . escapeshellarg($file) . ' 2>/dev/null';
+                @exec('timeout 60 ' . $cmd);
+                $pdf = glob($work . '/*.pdf')[0] ?? '';
+                if ($pdf !== '' && is_executable('/usr/bin/pdftoppm')) {
+                    @exec('/usr/bin/pdftoppm -r 70 -png -f 1 -l 4 ' . escapeshellarg($pdf) . ' ' . escapeshellarg($work . '/pg'));
+                    $tmp = glob($work . '/pg*.png') ?: [];
+                    sort($tmp);
+                    $info = @shell_exec('pdfinfo ' . escapeshellarg($pdf) . ' 2>/dev/null');
+                    $pages = preg_match('/Pages:\s+(\d+)/', (string)$info, $m) ? (int)$m[1] : 0;
+                } elseif ($pdf === '') {
+                    @exec('timeout 60 ' . str_replace('--convert-to pdf', '--convert-to png', $cmd));
+                    $tmp = glob($work . '/*.png') ?: [];
+                }
+                $tmp[] = $work;
+            }
+            foreach ($tmp as $f) {
+                if (is_file($f) && ($d = self::thumb($f))) {
+                    $imgs[] = $d;
+                }
+            }
+        } catch (Throwable $e) {
+            logError('admin', 'jobView: ' . $e->getMessage());
+        } finally {
+            foreach ($tmp as $f) {
+                if (is_dir($f)) {
+                    foreach (glob($f . '/{,.}*', GLOB_BRACE) ?: [] as $x) {
+                        if (is_file($x)) {
+                            @unlink($x);
+                        }
+                    }
+                    @exec('rm -rf ' . escapeshellarg($f));
+                } elseif (is_file($f)) {
+                    @unlink($f);
+                }
+            }
+            if (str_contains(basename($file), 'view_')) {
+                @unlink($file);
+            }
+        }
+        $vols = DocTypes::volumes((string)$j['type']) ?? [];
+        $caption = "✅ \"" . $j['topic'] . "\" mavzusidagi " . DocTypes::label((string)$j['type']) . " tayyor (" . ($vols[$j['volume_key']]['label'] ?? '') . ")."
+            . ($j['uniq'] !== null && $j['uniq'] !== '' ? "\n🔎 Unikallik: " . (int)$j['uniq'] . '%' : '');
+        return ['ok' => true, 'images' => $imgs, 'pages' => $pages, 'ext' => $ext, 'name' => (string)($j['tg_file_name'] ?: basename((string)$j['result_file'])),
+            'caption' => $caption, 'rating' => $j['rating'] !== null ? (int)$j['rating'] : null, 'can_render' => (bool)SlidePdf::sofficePath()];
+    }
+
+    /** Faylni adminning o'z Telegram'iga yuboradi (mijoz qanday olgan bo'lsa, shunday). */
+    public static function jobSendMe(int $admin, int $jobId): array
+    {
+        $st = db()->prepare('SELECT * FROM jobs WHERE id = ?');
+        $st->execute([$jobId]);
+        $j = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$j || empty($j['tg_file_id'])) {
+            return ['ok' => false, 'msg' => "Bu buyurtmada yuborilgan fayl yo'q"];
+        }
+        $ok = Telegram::sendDocumentById($admin, (string)$j['tg_file_id'], "👁 #{$jobId} — mijozga borgan fayl (ID " . (int)$j['telegram_id'] . ")");
+        AdminSecurity::audit('job_view_send', $admin, '#' . $jobId);
+        return $ok ? ['ok' => true, 'msg' => "Fayl Telegram'ingizga yuborildi"] : ['ok' => false, 'msg' => "Yuborib bo'lmadi (avval botga /start yozing)"];
     }
 }

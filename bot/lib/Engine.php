@@ -711,9 +711,12 @@ class Engine
         $vk = (string)$job['volume_key'];
         $label = '';
         $t = (string)$job['type'];
-        $head = isset(DocTypes::T[$t]) ? DocTypes::T[$t]['menu'] : '📄 Buyurtma';
+        $head = isset(DocTypes::T[$t]) ? DocTypes::T[$t]['menu'] : ($t === 'tarjima' ? '🌐 Tarjima' : '📄 Buyurtma');
         $vols = DocTypes::volumes($t) ?? [];
         $label = (string)($vols[$vk]['label'] ?? '');
+        if ($t === 'tarjima' && class_exists('Translate')) {
+            $label = Translate::LANGS[explode(':', $vk . ':')[1]] ?? '';
+        }
         return $head . ($label !== '' ? " · $label" : '');
     }
 

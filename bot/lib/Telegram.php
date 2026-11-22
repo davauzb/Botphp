@@ -8,7 +8,92 @@ class Telegram
      * qayta uradi, orasiga kutish (backoff) qo'yadi — bitta muvaqqat uzilish
      * butun so'rovni yiqitmaydi.
      */
+    /** Rangli tugmalar o'chirilgan/qo'llab-quvvatlanmagan bo'lsa true bo'ladi (shu so'rov davomida). */
+    private static bool $noStyle = false;
+
+    /**
+     * 🎨 RANGLI TUGMALAR (Bot API 10.4: «style» — primary ko'k, success yashil, danger qizil).
+     * Tugma vazifasiga qarab rang o'zi beriladi; Telegram rad etsa — shu so'rov rangsiz qayta yuboriladi.
+     * O'chirish: admin panel → Sozlamalar → «🎨 Rangli tugmalar».
+     */
+    public static function colorize(array $markup): array
+    {
+        $pick = function (array $b): ?string {
+            if (isset($b['style'])) {
+                return null;
+            }
+            $t = (string)($b['text'] ?? '');
+            $d = (string)($b['callback_data'] ?? '');
+            if (preg_match('/^(job:c:|topup_reject:|humo_cancel:|sup:cancel)/', $d) || preg_match('/^(✖️|❌|🗑)/u', $t)) {
+                return 'danger';
+            }
+            if (preg_match('/^(stu:use:|sub:buy|rw:|topup_approve:|plan:ok:|upd:go|humo_check:)/', $d) || preg_match('/^(✅|💎|🔁 Ha|🚀)/u', $t)) {
+                return 'success';
+            }
+            if (preg_match('/^(vol:|edit:|job:r:|tr:|trl:|topup_amount:|topup_method:|design(std|pro)?:|ro:|rt:|dl:|plan:ed:|ord:)/', $d) || isset($b['web_app'])) {
+                return 'primary';
+            }
+            return null;
+        };
+        foreach (['inline_keyboard', 'keyboard'] as $k) {
+            if (!isset($markup[$k]) || !is_array($markup[$k])) {
+                continue;
+            }
+            foreach ($markup[$k] as $ri => $row) {
+                foreach ((array)$row as $bi => $b) {
+                    if (!is_array($b)) {
+                        continue;
+                    }
+                    $style = $pick($b);
+                    if ($k === 'keyboard' && $style === null) {           // pastki menyu: buyurtma turlari ko'k, balans yashil
+                        $t = (string)($b['text'] ?? '');
+                        $style = class_exists('DocTypes') && DocTypes::fromText($t) !== null ? 'primary' : ($t === '💰 Balans' || $t === '💎 Obuna' ? 'success' : null);
+                    }
+                    if ($style !== null) {
+                        $markup[$k][$ri][$bi]['style'] = $style;
+                    }
+                }
+            }
+        }
+        return $markup;
+    }
+
+    private static function colorsOn(): bool
+    {
+        if (self::$noStyle || !class_exists('Engine')) {
+            return false;
+        }
+        try {
+            return (bool)Engine::c('BUTTON_COLORS', true);
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
     public static function call(string $method, array $params = [], array $files = []): ?array
+    {
+        $plainMarkup = null;
+        if (isset($params['reply_markup']) && is_string($params['reply_markup']) && self::colorsOn()) {
+            $m = json_decode($params['reply_markup'], true);
+            if (is_array($m)) {
+                $styled = json_encode(self::colorize($m), JSON_UNESCAPED_UNICODE);
+                if ($styled !== false && $styled !== $params['reply_markup']) {
+                    $plainMarkup = $params['reply_markup'];
+                    $params['reply_markup'] = $styled;
+                }
+            }
+        }
+        $res = self::rawCall($method, $params, $files);
+        if ($plainMarkup !== null && is_array($res) && empty($res['ok']) && (int)($res['error_code'] ?? 0) === 400
+            && preg_match('/style|button|reply markup|keyboard/i', (string)($res['description'] ?? ''))) {
+            self::$noStyle = true;                     // Telegram rangni qabul qilmadi — rangsiz qayta
+            $params['reply_markup'] = $plainMarkup;
+            $res = self::rawCall($method, $params, $files);
+        }
+        return $res;
+    }
+
+    private static function rawCall(string $method, array $params = [], array $files = []): ?array
     {
         $url = TELEGRAM_API . $method;
         $maxAttempts = 3;

@@ -809,6 +809,16 @@ function handleCallbackQuery(array $cb): void
         handleRating($chatId, $data);
         return;
     }
+    if (str_starts_with($data, 'tr:') || str_starts_with($data, 'trl:')) {   // 🌐 tarjima
+        Telegram::answerCallbackQuery((string)$cb['id']);
+        $pp = explode(':', $data);
+        if ($pp[0] === 'tr') {
+            Translate::ask($chatId, (int)($pp[1] ?? 0));
+        } else {
+            Translate::order($chatId, (int)($pp[1] ?? 0), (string)($pp[2] ?? ''));
+        }
+        return;
+    }
     if ($data === 'sub:buy') {
         Telegram::answerCallbackQuery((string)$cb['id']);
         Telegram::sendMessage($chatId, Growth::subBuy($chatId), mainMenu());
