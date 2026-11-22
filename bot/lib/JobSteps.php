@@ -871,9 +871,19 @@ class JobSteps
                 }
             }
         } else {
+            // oddiy dizayn: rasm sig'adigan barcha slaydlar (matn, ta'rif, kartalar, xulosa, xronologiya), ko'pi bilan STD_MAX_IMAGES ta
+            $elig = [];
             foreach ($outline as $i => $o) {
-                if (in_array($o['turi'] ?? 'matn', ['matn', 'tarif'], true) && $i % 2 === 0) {
-                    $want[] = $i;
+                if (in_array($o['turi'] ?? 'matn', ['matn', 'tarif', 'kartalar', 'xulosa', 'xronologiya'], true)) {
+                    $elig[] = $i;
+                }
+            }
+            $max = max(1, (int)Engine::c('STD_MAX_IMAGES', 10));
+            if (count($elig) <= $max) {
+                $want = $elig;
+            } else {
+                for ($k = 0; $k < $max; $k++) {
+                    $want[] = $elig[(int)floor($k * count($elig) / $max)];
                 }
             }
         }

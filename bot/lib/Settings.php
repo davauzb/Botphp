@@ -41,6 +41,7 @@ class Settings
         'AMALIYOT_ENABLED' => ['bool', 'feat', '🏢 Amaliyot hisoboti', '', 0, 1],
         'VIDEO_ENABLED' => ['bool', 'feat', '🎬 Ovozli videotaqdimot', "Taqdimotdan ovozli MP4 (serverda ffmpeg va TTS kaliti kerak)", 0, 1],
         'MINIAPP_ENABLED' => ['bool', 'feat', '📱 Buyurtma Mini App', "Menyuda «📱 Ilova orqali buyurtma» tugmasi", 0, 1],
+        'STD_MAX_IMAGES' => ['int', 'feat', 'Oddiy taqdimotda rasmlar soni (ko\'pi bilan)', 'PRO dizaynda — PRO_MAX_IMAGES', 0, 20],
         'IMAGE_AI_CHECK' => ['bool', 'feat', '🖼 Rasmni AI bilan tekshirish', "Rasm mavzuga mosligini AI ko'rib tasdiqlaydi (bitta rasmga 1-3 kichik so'rov)", 0, 1],
         'IMAGE_AI_FALLBACK' => ['bool', 'feat', '🎨 Mos rasm topilmasa — AI chizsin', 'Pollinations (kalitsiz), faqat oxirgi chora', 0, 1],
         'BUTTON_COLORS' => ['bool', 'feat', '🎨 Rangli tugmalar', "Tasdiqlash — yashil, bekor qilish — qizil, tanlash — ko'k (Telegram'ning yangi versiyalarida)", 0, 1],
@@ -112,7 +113,7 @@ class Settings
         $defaults = ['MAINTENANCE_MODE' => false, 'MAINTENANCE_TEXT' => "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!", 'FREE_TRIAL' => true,
             'TOPUP_BONUS_PERCENT' => 0, 'TOPUP_BONUS_MIN_AMOUNT' => 0, 'REFERRAL_BONUS' => 3000, 'MIN_TOPUP_AMOUNT' => 1000, 'PRO_SURCHARGE_PERCENT' => 60,
             'STARS_RATE' => 200, 'VIDEO_ENABLED' => false, 'MINIAPP_ENABLED' => false, 'SUB_ENABLED' => false, 'MARKETING_ENABLED' => false,
-            'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
+            'STD_MAX_IMAGES' => 10, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
         $items = [];
         foreach (self::SCHEMA as $k => [$type, $group, $label, $hint, $min, $max]) {
             $items[] = ['k' => $k, 'type' => $type, 'group' => $group, 'label' => $label, 'hint' => $hint, 'min' => $min, 'max' => $max,

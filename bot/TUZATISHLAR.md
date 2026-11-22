@@ -1,3 +1,13 @@
+# studybot 14-13 — ODDIY TAQDIMOTDA KO'PROQ RASM
+
+- Oddiy (PRO bo'lmagan) dizaynlarda rasm endi faqat «Ma'lumot»/«Ta'rif» slaydlarining har ikkinchisiga emas, balki
+  **Ma'lumot, Ta'rif, Kartalar (≤4 ta), Xronologiya (≤4 ta) va Xulosa** slaydlariga qo'yiladi (rasm yon ustunda, matn 64% kenglikda).
+  Ko'pi bilan **10 ta** rasm — Sozlamalar → «Oddiy taqdimotda rasmlar soni».
+- Tor mavzularda slayd iborasi bo'yicha mos rasm topilmasa — umumiy mavzu bo'yicha qidiriladi, u ham bo'lmasa AI chizadi.
+- Rasm baholash qattiqroq: iboradagi so'zlarning kamida 2/3 qismi va asosiy ot (odatda oxirgi so'z) tavsifda bo'lishi shart.
+
+---
+
 # studybot 14-12 — RASMLAR MAVZUGA ANIQ MOS
 
 Yangilash: botga `/yangilash` → «🚀 Yangilash».

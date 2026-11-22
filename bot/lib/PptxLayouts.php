@@ -882,6 +882,13 @@ class PptxLayouts
             $imagePath = null;
         }
 
+        // Rasm yon ustunda: kartalar (≤4), xulosa, xronologiya (≤4 qadam) — kontent kengligi 64% ga qisqaradi
+        $side = $hasImage && $imagePath && in_array($kind, ['kartalar', 'xulosa', 'xronologiya'], true)
+            && ($kind === 'xulosa' || count($pts) <= 4);
+        $origCw = self::$cw;
+        if ($side) {
+            self::$cw = (int)($origCw * 0.64);
+        }
         if ($kind === 'reja') {
             $body = self::layoutAgenda($slide['items'] ?? []);
         } else {
@@ -894,6 +901,11 @@ class PptxLayouts
                 'xulosa' => self::layoutConclusion($pts, $lead),
                 default => self::layoutText($pts, $lead, $n, $hasImage, $imagePath),
             };
+            if ($side) {
+                $gx = self::$x0 + self::$cw + 200000;
+                self::$cw = $origCw;
+                $body .= self::pictureXml((string)$imagePath, $gx, self::$y0, self::$x0 + $origCw - $gx, self::$yb - self::$y0, self::$P['acc']);
+            }
             if (!in_array($kind, self::TAG_KINDS, true)) {
                 $kind = 'matn';
             }

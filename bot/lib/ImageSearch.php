@@ -100,6 +100,15 @@ class ImageSearch
                 $scored[] = $c + ['score' => $s];
             }
         }
+        // Slayd iborasi bo'yicha mos rasm bo'lmasa — umumiy mavzu bo'yicha (tor mavzularda ham rasm bo'lsin)
+        if (count($scored) < 2 && self::$topicEn !== '' && mb_strtolower(self::$topicEn) !== mb_strtolower($query)) {
+            $tk = self::words(self::$topicEn);
+            foreach (self::candidates(self::$topicEn, $wide) as $c) {
+                if (!isset(self::$seen[$c['url']]) && ($s = self::score($c, $tk, [], $wide)) > 0) {
+                    $scored[] = $c + ['score' => $s - 3];      // aniq ibora bo'yicha topilganlardan keyin
+                }
+            }
+        }
         usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
 
         $check = (bool)Engine::c('IMAGE_AI_CHECK', true) && AIClient::hasVision();
@@ -281,9 +290,14 @@ class ImageSearch
             return 0;
         }
         $ratio = $hit / count($kw);
-        $need = count($kw) >= 3 ? 0.5 : (count($kw) === 2 ? 0.5 : 1.0);
+        $need = count($kw) >= 3 ? 2 / 3 : (count($kw) === 2 ? 0.5 : 1.0);
         if ($ratio + 1e-9 < $need) {
-            return 0;                                // asosiy so'zlarning yarmi ham yo'q — mos emas
+            return 0;                                // asosiy so'zlarning ko'pi yo'q — mos emas
+        }
+        // ingliz iborasida asosiy ot odatda oxirida (solar panels on ROOF, bee on FLOWER): u bo'lmasa — faqat hamma qolgan so'zlar bo'lsa
+        $last = $kw[count($kw) - 1];
+        if (count($kw) >= 2 && $ratio < 1 && mb_strpos($text, $last) === false) {
+            return 0;
         }
         $s = $ratio * 10;
         foreach ($tw as $w) {
