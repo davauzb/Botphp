@@ -115,6 +115,9 @@ class StarsPay
                 return;                    // ro'yxat berilmagan (= hammasi keladi) yoki allaqachon bor
             }
             $allowed[] = 'pre_checkout_query';
+            if (defined('HUMO_ENABLED') && HUMO_ENABLED) {          // HUMO avto uchun business xabarlar ham qolsin
+                array_push($allowed, 'business_connection', 'business_message', 'edited_business_message', 'deleted_business_messages');
+            }
             $params = ['url' => $url, 'allowed_updates' => json_encode(array_values(array_unique($allowed)))];
             if (defined('WEBHOOK_SECRET') && WEBHOOK_SECRET !== '') {
                 $params['secret_token'] = WEBHOOK_SECRET;

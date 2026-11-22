@@ -102,6 +102,8 @@ class HumoAuto
         }
         if (isset($u['business_message'])) {
             try {
+                self::noteSeen((array)$u['business_message']);
+
                 self::onMessage((array)$u['business_message']);
             } catch (Throwable $e) {
                 logError('humo', 'business_message: ' . $e->getMessage());
@@ -521,6 +523,56 @@ class HumoAuto
         return true;
     }
 
+    /**
+     * Diagnostika: oxirgi kelgan business xabar haqida faqat METAMA'LUMOT (vaqt, chat bot bo'lsa — uning @username'i).
+     * Odamlar bilan yozishmalar matni yoki ismi saqlanmaydi.
+     */
+    private static function noteSeen(array $m): void
+    {
+        try {
+            $chat = (array)($m['chat'] ?? []);
+            $from = (array)($m['from'] ?? []);
+            $who = !empty($from['is_bot']) ? '@' . (string)($chat['username'] ?? $from['username'] ?? '?') : 'odam bilan chat';
+            $hasUzs = stripos((string)($m['text'] ?? $m['caption'] ?? ''), 'UZS') !== false ? ' (UZS bor)' : '';
+            db()->prepare('INSERT INTO engine_kv (k, v, ts) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, ts = excluded.ts')
+                ->execute(['humo_seen', mb_substr($who . $hasUzs, 0, 80), time()]);
+            if (!empty($from['is_bot'])) {
+                db()->prepare('INSERT INTO engine_kv (k, v, ts) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, ts = excluded.ts')
+                    ->execute(['humo_seen_bot', mb_substr($who . $hasUzs, 0, 80), time()]);
+            }
+        } catch (Throwable $e) {
+        }
+    }
+
+    /** Webhook business xabarlarni oladimi; olmasa — mavjud manzil va maxfiy kalit bilan tuzatadi. Qaytadi: holat matni. */
+    private static function webhookCheck(): string
+    {
+        $info = Telegram::call('getWebhookInfo');
+        $r = (array)($info['result'] ?? []);
+        $url = (string)($r['url'] ?? '');
+        if ($url === '') {
+            return "❌ webhook o'rnatilmagan";
+        }
+        $allowed = $r['allowed_updates'] ?? null;
+        $need = ['business_connection', 'business_message', 'edited_business_message', 'deleted_business_messages'];
+        $err = !empty($r['last_error_message']) ? " · oxirgi xato: " . Telegram::escape(mb_substr((string)$r['last_error_message'], 0, 60))
+            . ' (' . gmdate('d.m H:i', (int)($r['last_error_date'] ?? 0) + 5 * 3600) . ')' : '';
+        if (!is_array($allowed) || !$allowed) {
+            return '✅ hamma turdagi xabarlar qabul qilinadi' . $err;
+        }
+        $missing = array_values(array_diff($need, $allowed));
+        if (!$missing) {
+            return '✅ business xabarlar qabul qilinadi' . $err;
+        }
+        $params = ['url' => $url, 'allowed_updates' => json_encode(array_values(array_unique(array_merge($allowed, $need, ['pre_checkout_query']))))];
+        if (defined('WEBHOOK_SECRET') && WEBHOOK_SECRET !== '') {
+            $params['secret_token'] = WEBHOOK_SECRET;
+        }
+        $ok = !empty(Telegram::call('setWebhook', $params)['ok']);
+        return ($ok ? "🔧 TUZATILDI: webhook business xabarlarni olmayotgan edi (" : "❌ webhook business xabarlarni olmaydi, tuzatib bo'lmadi (")
+            . implode(', ', $missing) . ')';
+    }
+
     // ------------------------------------------------------------------ admin /humo
 
     public static function adminReport(): string
@@ -533,6 +585,24 @@ class HumoAuto
         $n = self::activeConnectionCount();
         $lines[] = 'Business ulanishi: ' . ($n > 0 ? "✅ ({$n})" : "❌ yo'q — Telegram → Sozlamalar → Business → Chatbotlar");
         $lines[] = 'Kuzatiladigan bot: @' . Telegram::escape((string)HUMO_BOT_USERNAME) . ((int)HUMO_BOT_ID > 0 ? ' (ID ' . (int)HUMO_BOT_ID . ')' : '');
+        try {
+            $lines[] = 'Webhook: ' . self::webhookCheck();
+        } catch (Throwable $e) {
+            $lines[] = 'Webhook: tekshirib bo\'lmadi';
+        }
+        $seen = function (string $k) use ($pdo) {
+            $st = $pdo->prepare('SELECT v, ts FROM engine_kv WHERE k = ?');
+            $st->execute([$k]);
+            $r = $st->fetch(PDO::FETCH_ASSOC);
+            return $r ? gmdate('d.m H:i', (int)$r['ts'] + 5 * 3600) . ' — ' . Telegram::escape((string)$r['v']) : "hali yo'q";
+        };
+        $lines[] = 'Oxirgi business xabar: ' . $seen('humo_seen');
+        $lines[] = 'Oxirgi bot xabari: ' . $seen('humo_seen_bot');
+        $last = $pdo->query("SELECT id, amount, status, created_at FROM topups WHERE method = 'humo' ORDER BY id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        if ($last) {
+            $lines[] = "Oxirgi HUMO so'rovi: #{$last['id']} · " . number_format((int)$last['amount'], 0, '', ' ') . " so'm · {$last['status']} · "
+                . gmdate('d.m H:i', (int)$last['created_at'] + 5 * 3600);
+        }
         $p = $pdo->query("SELECT COUNT(*) FROM topups WHERE method = 'humo' AND status = 'pending'")->fetchColumn();
         $lines[] = "Kutilayotgan so'rovlar: <b>" . (int)$p . '</b>';
         $ev = $pdo->query('SELECT ts, amount, tiyin, status, topup_id, raw FROM humo_events ORDER BY id DESC LIMIT 8')->fetchAll(PDO::FETCH_ASSOC);
