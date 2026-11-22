@@ -18,9 +18,10 @@ require_once __DIR__ . '/lib/JobSteps.php';
 require_once __DIR__ . '/lib/Diagnostics.php';
 
 // Soxta so'rovlardan himoya: WEBHOOK_SECRET o'rnatilgan bo'lsa, Telegram yuborgan maxfiy sarlavha mos kelishi shart
-if (WEBHOOK_SECRET !== '') {
+$__whs = Settings::webhookSecret();
+if ($__whs !== '') {
     $hdr = (string)($_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '');
-    if (!hash_equals(WEBHOOK_SECRET, $hdr)) {
+    if (!hash_equals($__whs, $hdr)) {
         http_response_code(403);
         exit;
     }
@@ -349,6 +350,11 @@ function handleMessage(array $user, int $chatId, string $text): void
     if ($text === '/talab_ochir') {
         Requirements::clear($chatId);
         Telegram::sendMessage($chatId, "🗑 Yuklangan talablar o'chirildi.");
+        return;
+    }
+
+    if ($text === '/himoya' && ADMIN_CHAT_ID && $chatId === (int)ADMIN_CHAT_ID) {
+        Telegram::sendMessage($chatId, Settings::enableWebhookSecret($chatId));
         return;
     }
 

@@ -184,8 +184,10 @@ class Diagnostics
             }
             $pending = (int)($r['pending_update_count'] ?? 0);
             $pending > 20 ? $this->warn("Navbatda $pending ta kutayotgan yangilanish (server sekin javob beryapti)") : $this->ok("Kutayotgan yangilanishlar: $pending");
-            if (WEBHOOK_SECRET === '') {
-                $this->warn("WEBHOOK_SECRET qo'yilmagan — soxta so'rovlardan himoya yo'q (config.php va setWebhook secret_token)");
+            if (Settings::webhookSecret() === '') {
+                $this->warn("Webhook himoyasi yo'q — botga /himoya deb yozing (bir bosishda yoqiladi)");
+            } else {
+                $this->ok('Webhook himoyasi (maxfiy kalit) yoqilgan');
             }
         }
     }
@@ -223,7 +225,9 @@ class Diagnostics
             $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
             $leak = ($code === 200 || $code === 206) && $body !== '' && ($p !== 'config.php' || strpos($body, '<?php') !== false);
-            if ($leak) {
+            if ($leak && str_ends_with($p, '.js')) {
+                $this->lines[] = "▫️ /$p ochiladi — bu brauzerga baribir yuboriladigan kod, maxfiy emas (xavfsiz)";
+            } elseif ($leak) {
                 $leaks++;
                 $this->bad("OCHIQ: /$p ($label)");
             }

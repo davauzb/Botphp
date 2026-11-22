@@ -119,8 +119,8 @@ class StarsPay
                 array_push($allowed, 'business_connection', 'business_message', 'edited_business_message', 'deleted_business_messages');
             }
             $params = ['url' => $url, 'allowed_updates' => json_encode(array_values(array_unique($allowed)))];
-            if (defined('WEBHOOK_SECRET') && WEBHOOK_SECRET !== '') {
-                $params['secret_token'] = WEBHOOK_SECRET;
+            if (Settings::webhookSecret() !== '') {
+                $params['secret_token'] = Settings::webhookSecret();
             }
             Telegram::call('setWebhook', $params);
         } catch (Throwable $e) {

@@ -190,6 +190,50 @@ class Settings
         self::$cache = null;
     }
 
+    /** Webhook maxfiy kaliti: config.php dagi WEBHOOK_SECRET, bo'lmasa /himoya buyrug'i bazaga yozgani. */
+    public static function webhookSecret(): string
+    {
+        if (defined('WEBHOOK_SECRET') && WEBHOOK_SECRET !== '') {
+            return (string)WEBHOOK_SECRET;
+        }
+        try {
+            return (string)(self::raw('WEBHOOK_SECRET_DB') ?? '');
+        } catch (Throwable $e) {
+            return '';
+        }
+    }
+
+    /**
+     * /himoya: tasodifiy maxfiy kalit yaratib, webhook'ni shu kalit bilan qayta o'rnatadi (manzil va allowed_updates saqlanadi).
+     * Avval Telegram'ga o'rnatiladi, keyin bazaga yoziladi — oraliqda kelgan yangilanishlar yo'qolmaydi.
+     */
+    public static function enableWebhookSecret(int $admin): string
+    {
+        if (defined('WEBHOOK_SECRET') && WEBHOOK_SECRET !== '') {
+            return "✅ Himoya allaqachon yoqilgan (config.php dagi WEBHOOK_SECRET).";
+        }
+        $info = Telegram::call('getWebhookInfo');
+        $url = (string)($info['result']['url'] ?? '');
+        if ($url === '') {
+            return "❌ Webhook o'rnatilmagan — avval webhook'ni o'rnating.";
+        }
+        $secret = bin2hex(random_bytes(24));
+        $params = ['url' => $url, 'secret_token' => $secret];
+        $allowed = $info['result']['allowed_updates'] ?? null;
+        if (is_array($allowed) && $allowed) {
+            $params['allowed_updates'] = json_encode(array_values($allowed));
+        }
+        $r = Telegram::call('setWebhook', $params);
+        if (empty($r['ok'])) {
+            return "❌ Telegram webhook'ni qabul qilmadi: " . Telegram::escape((string)($r['description'] ?? 'nomaʼlum xato'));
+        }
+        self::setRaw('WEBHOOK_SECRET_DB', $secret, $admin);
+        if (class_exists('AdminSecurity')) {
+            AdminSecurity::audit('webhook_secret', $admin);
+        }
+        return "🛡 <b>Webhook himoyasi yoqildi.</b>\nEndi bot faqat Telegram'dan kelgan, maxfiy kalitli so'rovlarni qabul qiladi.";
+    }
+
     public static function maintenance(): bool
     {
         return (bool)self::get('MAINTENANCE_MODE', false);

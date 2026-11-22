@@ -565,8 +565,8 @@ class HumoAuto
             return '✅ business xabarlar qabul qilinadi' . $err;
         }
         $params = ['url' => $url, 'allowed_updates' => json_encode(array_values(array_unique(array_merge($allowed, $need, ['pre_checkout_query']))))];
-        if (defined('WEBHOOK_SECRET') && WEBHOOK_SECRET !== '') {
-            $params['secret_token'] = WEBHOOK_SECRET;
+        if (Settings::webhookSecret() !== '') {
+            $params['secret_token'] = Settings::webhookSecret();
         }
         $ok = !empty(Telegram::call('setWebhook', $params)['ok']);
         return ($ok ? "🔧 TUZATILDI: webhook business xabarlarni olmayotgan edi (" : "❌ webhook business xabarlarni olmaydi, tuzatib bo'lmadi (")
