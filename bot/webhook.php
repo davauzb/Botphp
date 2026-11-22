@@ -255,17 +255,35 @@ function topupAmountKeyboard(): array
 
 function topupMethodKeyboard(): array
 {
+    // Qaysi usullar ko'rinishi — admin panel → Sozlamalar → «To'lov usullari»
     $rows = [];
-    if (HumoAuto::ready()) {
+    if (payMethodOn('humo') && HumoAuto::ready()) {
         $rows[] = [['text' => '⚡ Humo / Uzcard (Avto)', 'callback_data' => 'topup_method:humo']];
     }
-    return [
-        'inline_keyboard' => array_merge($rows, [
-            [['text' => '💳 Click orqali', 'callback_data' => 'topup_method:click']],
-            [['text' => '💳 Payme orqali', 'callback_data' => 'topup_method:payme']],
-            [['text' => "🧾 Chek yuborish (qo'lda tasdiqlash)", 'callback_data' => 'topup_method:manual']],
-        ], StarsPay::enabled() ? [[['text' => '⭐ Telegram Stars (kartasiz)', 'callback_data' => 'topup_method:stars']]] : []),
-    ];
+    if (payMethodOn('click')) {
+        $rows[] = [['text' => '💳 Click orqali', 'callback_data' => 'topup_method:click']];
+    }
+    if (payMethodOn('payme')) {
+        $rows[] = [['text' => '💳 Payme orqali', 'callback_data' => 'topup_method:payme']];
+    }
+    $rows[] = [['text' => "🧾 Kartaga o'tkazib, chek yuborish", 'callback_data' => 'topup_method:manual']];
+    if (payMethodOn('stars') && StarsPay::enabled()) {
+        $rows[] = [['text' => '⭐ Telegram Stars (kartasiz)', 'callback_data' => 'topup_method:stars']];
+    }
+    return ['inline_keyboard' => $rows];
+}
+
+/** To'lov usuli yoqilganmi (qo'lda — chek yuborish — har doim yoqilgan). */
+function payMethodOn(string $m): bool
+{
+    return match ($m) {
+        'manual' => true,
+        'humo' => (bool)Engine::c('PAY_HUMO', false),
+        'click' => (bool)Engine::c('PAY_CLICK', false),
+        'payme' => (bool)Engine::c('PAY_PAYME', false),
+        'stars' => (bool)Engine::c('STARS_ENABLED', false),
+        default => false,
+    };
 }
 
 // ============================================================
@@ -1038,6 +1056,10 @@ function handleTopupMethodChosen(int $chatId, string $method): void
 
     if (!str_starts_with($state, 'awaiting_topup_method:')) {
         Telegram::sendMessage($chatId, "Bu so'rov eskirgan, /balans orqali qaytadan boshlang.");
+        return;
+    }
+    if (!payMethodOn($method)) {           // o'chirilgan usul (eski xabardagi tugma)
+        Telegram::sendMessage($chatId, "Bu to'lov usuli hozircha o'chirilgan. Quyidagisidan foydalaning:", topupMethodKeyboard());
         return;
     }
     [, $amountStr, $resumeType, $resumeVolumeKey] = array_pad(explode(':', $state, 4), 4, null);

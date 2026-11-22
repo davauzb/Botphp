@@ -14,7 +14,7 @@ class StarsPay
 {
     public static function enabled(): bool
     {
-        return (bool)Engine::c('STARS_ENABLED', true);
+        return (bool)Engine::c('STARS_ENABLED', false);
     }
 
     public static function rate(): int

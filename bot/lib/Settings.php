@@ -19,11 +19,14 @@ class Settings
         'MIN_TOPUP_AMOUNT' => ['int', 'money', "Eng kam to'ldirish, so'm", '', 100, 1000000],
         'PRO_SURCHARGE_PERCENT' => ['int', 'money', "PRO taqdimot qo'shimcha narxi, %", '', 0, 500],
         'STARS_RATE' => ['int', 'money', "1 ⭐ = necha so'm", 'Telegram Stars kursi', 50, 2000],
+        'PAY_HUMO' => ['bool', 'money', "To'lov: ⚡ Humo / Uzcard (Avto)", "Telegram Business orqali avtomatik tasdiqlash. O'chiq bo'lsa — faqat chek (qo'lda)", 0, 1],
+        'PAY_CLICK' => ['bool', 'money', "To'lov: 💳 Click", '', 0, 1],
+        'PAY_PAYME' => ['bool', 'money', "To'lov: 💳 Payme", '', 0, 1],
         'PRO_ENABLED' => ['bool', 'feat', '⭐ PRO taqdimotlar', '', 0, 1],
         'KURS_ISHI_ENABLED' => ['bool', 'feat', '🎓 Kurs ishi', '', 0, 1],
         'MAQOLA_ENABLED' => ['bool', 'feat', '📰 Ilmiy maqola', '', 0, 1],
         'TEZIS_ENABLED' => ['bool', 'feat', '🧾 Tezis', '', 0, 1],
-        'STARS_ENABLED' => ['bool', 'feat', '⭐ Telegram Stars to\'lovi', '', 0, 1],
+        'STARS_ENABLED' => ['bool', 'money', "To'lov: ⭐ Telegram Stars", '', 0, 1],
         'PLAN_REVIEW_ENABLED' => ['bool', 'feat', 'Reja tasdiqlash', 'Mijozga reja ko\'rsatilib, tasdiqlash so\'raladi', 0, 1],
         'REAL_BIBLIO' => ['bool', 'feat', 'Haqiqiy adabiyotlar (Crossref)', '', 0, 1],
         'DOC_IMAGES' => ['bool', 'feat', 'Hujjatga rasm', '', 0, 1],
@@ -113,7 +116,7 @@ class Settings
         $defaults = ['MAINTENANCE_MODE' => false, 'MAINTENANCE_TEXT' => "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!", 'FREE_TRIAL' => true,
             'TOPUP_BONUS_PERCENT' => 0, 'TOPUP_BONUS_MIN_AMOUNT' => 0, 'REFERRAL_BONUS' => 3000, 'MIN_TOPUP_AMOUNT' => 1000, 'PRO_SURCHARGE_PERCENT' => 60,
             'STARS_RATE' => 200, 'VIDEO_ENABLED' => false, 'MINIAPP_ENABLED' => false, 'SUB_ENABLED' => false, 'MARKETING_ENABLED' => false,
-            'STD_MAX_IMAGES' => 10, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
+            'STD_MAX_IMAGES' => 10, 'PAY_HUMO' => false, 'PAY_CLICK' => false, 'PAY_PAYME' => false, 'STARS_ENABLED' => false, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
         $items = [];
         foreach (self::SCHEMA as $k => [$type, $group, $label, $hint, $min, $max]) {
             $items[] = ['k' => $k, 'type' => $type, 'group' => $group, 'label' => $label, 'hint' => $hint, 'min' => $min, 'max' => $max,
