@@ -41,6 +41,8 @@ class Settings
         'AMALIYOT_ENABLED' => ['bool', 'feat', '🏢 Amaliyot hisoboti', '', 0, 1],
         'VIDEO_ENABLED' => ['bool', 'feat', '🎬 Ovozli videotaqdimot', "Taqdimotdan ovozli MP4 (serverda ffmpeg va TTS kaliti kerak)", 0, 1],
         'MINIAPP_ENABLED' => ['bool', 'feat', '📱 Buyurtma Mini App', "Menyuda «📱 Ilova orqali buyurtma» tugmasi", 0, 1],
+        'IMAGE_AI_CHECK' => ['bool', 'feat', '🖼 Rasmni AI bilan tekshirish', "Rasm mavzuga mosligini AI ko'rib tasdiqlaydi (bitta rasmga 1-3 kichik so'rov)", 0, 1],
+        'IMAGE_AI_FALLBACK' => ['bool', 'feat', '🎨 Mos rasm topilmasa — AI chizsin', 'Pollinations (kalitsiz), faqat oxirgi chora', 0, 1],
         'BUTTON_COLORS' => ['bool', 'feat', '🎨 Rangli tugmalar', "Tasdiqlash — yashil, bekor qilish — qizil, tanlash — ko'k (Telegram'ning yangi versiyalarida)", 0, 1],
         'TRANSLATE_ENABLED' => ['bool', 'feat', '🌐 Tarjima', "Tayyor fayl ostida «Boshqa tilga tarjima» tugmasi (dizayn o'zgarmaydi)", 0, 1],
         'TRANSLATE_PRICE' => ['int', 'money', "Tarjima narxi, so'm", '0 — bepul', 0, 1000000],
@@ -169,6 +171,18 @@ class Settings
     public static function reset(string $k): void
     {
         db()->prepare('DELETE FROM settings WHERE k = ?')->execute([$k]);
+        self::$cache = null;
+    }
+
+    /** Ro'yxatdan tashqari ichki qiymat (masalan rasm kalitlari: IMGKEY:pexels). '' — o'chirish. */
+    public static function setRaw(string $k, string $v, int $admin): void
+    {
+        if ($v === '') {
+            db()->prepare('DELETE FROM settings WHERE k = ?')->execute([$k]);
+        } else {
+            db()->prepare('INSERT INTO settings (k, v, admin, updated_at) VALUES (?,?,?,?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, admin = excluded.admin, updated_at = excluded.updated_at')
+                ->execute([$k, $v, $admin, time()]);
+        }
         self::$cache = null;
     }
 

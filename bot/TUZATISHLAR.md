@@ -1,3 +1,20 @@
+# studybot 14-12 — RASMLAR MAVZUGA ANIQ MOS
+
+Yangilash: botga `/yangilash` → «🚀 Yangilash».
+
+- **Kalitsiz manbalar har doim ishlaydi**: Wikipedia (shaxs, joy, hodisa uchun aynan o'sha rasm — Registon, Amir Temur haykali…),
+  Openverse (800 mln+ ochiq litsenziyali rasm), Wikimedia Commons. Kalit qo'yilmaguncha rasmlar shulardan topiladi.
+- **Kalitli bepul manbalar admin paneldan**: Tizim → «🖼 Rasm manbalari» → Pexels / Pixabay / Unsplash (bepul) yoki Serper (pullik)
+  kalitini kiriting → bot darhol sinab ko'radi, ishlasa saqlaydi. config.php dagi eski kalitlar ham ishlayveradi.
+- **Aniqlik**: barcha manbalardan bir vaqtda 30-60 ta nomzod olinadi, har biri tavsifi/teglari bo'yicha baholanadi (qidiruv so'zlarining
+  kamida yarmi bo'lmasa — chiqarib tashlanadi), keng va katta rasmlar afzal. AI qidiruv iborasini «suratga olsa bo'ladigan aniq narsa»
+  ko'rinishida yozadi (mavhum so'zlarsiz), shaxs/joy bo'lsa — uning inglizcha nomi.
+- **🖼 AI tekshiruvi** (Sozlamalar → «Rasmni AI bilan tekshirish», standart yoqilgan): Gemini eng yaxshi 3 nomzodni ko'rib, mos emasini rad etadi.
+- **🎨 AI chizgan rasm** faqat hech narsa topilmasa (Sozlamalar → «Mos rasm topilmasa — AI chizsin»).
+- Natijalar 30 kun keshlanadi, katta rasmlar 2000 px gacha kichraytiriladi.
+
+---
+
 # studybot 14-11 — RANGLI TUGMALAR, TARJIMA, «MIJOZ KO'ZI BILAN»
 
 Yangilash: botga `/yangilash` → «🚀 Yangilash». Baza o'zgarmaydi.

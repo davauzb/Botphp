@@ -14,6 +14,7 @@ require_once __DIR__ . '/../lib/AIClient.php';
 require_once __DIR__ . '/../lib/SlidePdf.php';
 require_once __DIR__ . '/../lib/VideoDeck.php';
 require_once __DIR__ . '/../lib/SlidePreview.php';
+require_once __DIR__ . '/../lib/ImageSearch.php';
 
 ini_set('display_errors', '0');
 if (!AdminSecurity::enabled()) {
@@ -114,7 +115,7 @@ try {
         'support_list', 'support_thread', 'support_reply', 'support_close', 'user_meta',
         'finance', 'finance_export', 'funnel', 'ai_usage', 'queue', 'job_resend', 'job_retry',
         // 14-10: AI kalitlari, xatolar jurnali, hamkorlar, o'sish
-        'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs', 'logs_clear', 'agents', 'agent_save', 'agent_payout', 'growth', 'job_view', 'job_send_me'];
+        'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs', 'logs_clear', 'agents', 'agent_save', 'agent_payout', 'growth', 'job_view', 'job_send_me', 'img_keys', 'img_key_save', 'img_key_delete'];
     if ($method !== 'POST' || !in_array($action, $allowed, true)) {
         AdminSecurity::deny();
     }
@@ -465,6 +466,37 @@ try {
 
         case 'job_send_me':
             mutate($admin, $b, fn() => AdminPro::jobSendMe($admin, intv($b['id'] ?? 0, 1, PHP_INT_MAX)));
+
+        // ---------------- rasm manbalari kalitlari (faqat owner)
+        case 'img_keys':
+            out(['ok' => true, 'items' => ImageSearch::keysStatus()]);
+
+        case 'img_key_save':
+            $p = strv($b['p'] ?? '', 20);
+            $key = trim(strv($b['key'] ?? '', 200));
+            if (!isset(ImageSearch::PROVIDERS[$p]) || strlen($key) < 10 || preg_match('/\s/', $key)) {
+                out(['ok' => false, 'msg' => "Kalit noto'g'ri"]);
+            }
+            if (!AdminSecurity::rate('imgkey:' . $admin, 10, 600)) {
+                AdminSecurity::fail('rate', 429, 'Juda tez-tez. Biroz kuting');
+            }
+            mutate($admin, $b, function () use ($p, $key, $admin) {
+                $t = ImageSearch::testKey($p, $key);
+                if (!$t['ok']) {
+                    return $t;
+                }
+                Settings::setRaw('IMGKEY:' . $p, $key, $admin);
+                AdminSecurity::audit('img_key_save', $admin, $p, '…' . substr($key, -4));
+                return ['ok' => true, 'msg' => "✅ Kalit ishlayapti va saqlandi"];
+            });
+
+        case 'img_key_delete':
+            $p = strv($b['p'] ?? '', 20);
+            mutate($admin, $b, function () use ($p, $admin) {
+                Settings::setRaw('IMGKEY:' . $p, '', $admin);
+                AdminSecurity::audit('img_key_delete', $admin, $p);
+                return ['ok' => true, 'msg' => "Kalit o'chirildi"];
+            });
 
         case 'growth':
             out(['ok' => true] + Growth::marketingStats() + ['video_missing' => class_exists('VideoDeck') ? VideoDeck::missing() : []]);

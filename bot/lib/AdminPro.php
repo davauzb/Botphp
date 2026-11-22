@@ -18,7 +18,7 @@ class AdminPro
     public const OPERATOR_ACTIONS = ['ping', 'logout', 'me', 'stats', 'topups', 'topup_decide', 'receipt', 'jobs', 'job', 'job_resend', 'job_view', 'job_send_me', 'events', 'events_read',
         'users', 'user', 'user_meta', 'support_list', 'support_thread', 'support_reply', 'support_close', 'queue'];
     /** Faqat owner (ADMIN_CHAT_ID). */
-    public const OWNER_ACTIONS = ['roles_list', 'roles_save', 'roles_delete', 'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs_clear', 'agent_payout'];
+    public const OWNER_ACTIONS = ['roles_list', 'roles_save', 'roles_delete', 'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs_clear', 'agent_payout', 'img_keys', 'img_key_save', 'img_key_delete'];
 
     public static function ensureSchema(PDO $pdo): void
     {

@@ -175,7 +175,9 @@ function generateSlideOutline(string $topic, int $count, array $avoid = [], stri
         . "Ikkinchi slayd \"tarif\" bo'lsin. "
         . (sectionCount($count) > 0 ? "Slaydlarni (oxirgi xulosadan tashqari) ketma-ket ANIQ " . sectionCount($count) . " ta mantiqiy bo'limga ajrating: har slaydga "
             . "\"bolim\" — u tegishli bo'limning 2-4 so'zli nomi (bir bo'limdagi slaydlarda aynan bir xil yozilsin). " : '')
-        . "Har slaydga \"rasm\" — shu slayd uchun fotosurat qidirish iborasi, INGLIZ tilida, 2-5 so'z (mavzuga aniq bog'liq). "
+        . "Har slaydga \"rasm\" — shu slayd uchun fotosurat qidirish iborasi, INGLIZ tilida, 2-5 so'z: suratga olsa bo'ladigan ANIQ narsa yoki sahna "
+        . "(masalan \"solar panels on roof\", \"doctor examining patient\"), mavhum so'zlarsiz (development, importance, role, concept emas); "
+        . "slayd aniq shaxs, joy, asar yoki hodisa haqida bo'lsa — uning inglizcha nomi (masalan \"Registan Samarkand\", \"Amir Temur statue\"). "
         . "Yana \"en\" — butun mavzuning inglizcha qisqa nomi (2-6 so'z). "
         . 'JSON: {"en":"...","slaydlar":[{"sarlavha":"...","turi":"...","fikr":"bu slaydda nima yoritilishi (1 jumla)","rasm":"..."}]}';
     if ($avoid) {      // «Boshqa reja»: oldingi sarlavhalar yoqmagan

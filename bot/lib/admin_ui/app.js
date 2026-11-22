@@ -868,9 +868,9 @@ async function viewGrowth(box) {
 
 /* ------------------------------------------------------------------ tizim: AI kalitlari va xatolar jurnali */
 async function viewSystem(box) {
-  const keys = h('div', {}), logs = h('div', {});
-  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
-  if (CFG.role === 'owner') drawKeys(keys);
+  const keys = h('div', {}), logs = h('div', {}), img = h('div', {});
+  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
+  if (CFG.role === 'owner') { drawKeys(keys); drawImgKeys(img); }
   drawLogs(logs, '', '');
 }
 async function drawKeys(box) {
@@ -906,6 +906,25 @@ async function drawKeys(box) {
   box.replaceChildren(sum, h('div', { style: { height: '10px' } }), list,
     h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px' } }, h('b', {}, "➕ Yangi kalit"), h('div', { style: { margin: '8px 0' } }, ps), hint, key, h('div', { style: { height: '8px' } }), models, h('div', { style: { height: '8px' } }), ep, add,
       h('div', { class: 't2', style: { whiteSpace: 'normal', marginTop: '6px' } }, "Kalit qo'shilishidan oldin kichik so'rov bilan tekshiriladi. Panelda faqat oxirgi 4 belgisi ko'rinadi.")));
+}
+async function drawImgKeys(box) {
+  box.replaceChildren(skeleton(1, 60));
+  const r = await api('img_keys');
+  if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
+  const free = h('div', { class: 'card', style: { padding: '12px 14px', marginBottom: '10px' } }, h('b', {}, '✅ Kalitsiz manbalar — doim ishlaydi'),
+    h('div', { class: 't2', style: { whiteSpace: 'normal', marginTop: '4px' } }, "Wikipedia (shaxs, joy, hodisa uchun aynan o'sha rasm) · Openverse (800 mln+ ochiq rasm) · Wikimedia Commons. "
+      + "Quyidagi bepul kalitlarni qo'shsangiz, rasmlar soni va sifati oshadi. Har rasm mavzu so'zlari bo'yicha baholanadi va (yoqilgan bo'lsa) AI ko'rib tekshiradi."));
+  const rows = r.items.map(p => {
+    const inp = h('input', { class: 'inp', type: 'password', placeholder: p.set ? 'Yangi kalit (almashtirish uchun)' : 'API kalit', autocomplete: 'off', maxlength: '200' });
+    const save = h('button', { class: 'btn sm pri', onclick: async () => { if (inp.value.trim().length < 10) { toast('Kalitni kiriting', 'bad'); return; } save.disabled = true; save.textContent = 'Sinalmoqda…'; const rr = await act('img_key_save', { p: p.k, key: inp.value.trim() }); save.disabled = false; save.textContent = 'Saqlash'; toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); if (rr.ok) drawImgKeys(box); } }, 'Saqlash');
+    return h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '8px' } },
+      h('div', { class: 'av', style: avStyle(p.k) }, p.name[0]),
+      h('div', { class: 'grow', style: { minWidth: '200px' } }, h('div', { class: 't1' }, p.name, ' ', p.set ? badge('ulangan ' + p.tail + (p.from === 'config' ? ' · config' : ''), 'ok') : badge("kalit yo'q", '')),
+        h('div', { class: 't2', style: { whiteSpace: 'normal' } }, p.note + ' · ', h('a', { href: p.url, target: '_blank', rel: 'noopener' }, 'kalit olish'))),
+      h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flex: '1 1 260px' } }, inp, save,
+        p.from === 'panel' ? h('button', { class: 'btn sm bad', onclick: async () => { const ok = await confirmBox("Kalitni o'chirish", p.name + " kaliti o'chiriladi.", "O'chirish", 'bad'); if (!ok) return; const rr = await act('img_key_delete', { p: p.k }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawImgKeys(box); } }, '✕') : ''));
+  });
+  box.replaceChildren(free, h('div', { class: 'card' }, rows));
 }
 async function drawLogs(box, q, ctx) {
   box.replaceChildren(skeleton(3, 50));

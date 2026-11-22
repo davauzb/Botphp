@@ -304,7 +304,8 @@ class JobSteps
             . "Boblar quyidagi yo'nalishlarda bo'lsin (har biri o'z yo'nalishiga mos, qisqa va aniq sarlavha):\n$list\n\n"
             . ($sub > 0 ? "Har bob ichida ANIQ $sub ta band (kichik bo'lim) sarlavhasi bo'lsin — bob mavzusini mantiqiy bo'laklarga ajratsin, bir-birini takrorlamasin. " : '')
             . "Yana: \"en\" — mavzuning inglizcha qisqa nomi (ilmiy manbalar qidirish uchun, 2-6 so'z); har bobga \"rasm\" — shu bob uchun "
-            . "fotosurat qidirish iborasi INGLIZ tilida (2-5 so'z).\n"
+            . "fotosurat qidirish iborasi INGLIZ tilida (2-5 so'z): suratga olsa bo'ladigan ANIQ narsa yoki sahna, mavhum so'zlarsiz; "
+            . "aniq shaxs/joy/hodisa bo'lsa — uning inglizcha nomi.\n"
             . 'Faqat JSON qaytaring: {"en":"...","boblar":[{"nom":"1. ...",' . ($sub > 0 ? '"bandlar":["...","..."],' : '') . '"rasm":"..."}]}';
         if (!empty($state['res']['plan_avoid'])) {      // foydalanuvchi «Boshqa reja» so'ragan — oldingisidan farq qilsin
             $prompt .= "\n\nFOYDALANUVCHIGA OLDINGI REJA YOQMADI. Quyidagi sarlavhalarni TAKRORLAMANG, boshqacha, yangicha so'zlar va yondashuv bilan yozing:\n- "
@@ -686,6 +687,7 @@ class JobSteps
             self::needTime(14);
             $title = preg_replace('/^\d+\.\s*/u', '', (string)$state['res']['titles'][$i]);
             $en = (string)($state['res']['rasm'][$i] ?? '');
+            ImageSearch::$topicEn = (string)($state['res']['en'] ?? '');
             $path = null;
             try {
                 $path = ImageSearch::fetchImage(mb_substr((string)$p['topic'], 0, 80) . ': ' . $title, true, $en);
@@ -835,6 +837,7 @@ class JobSteps
         $outline = $state['res']['outline'] ?? [];
         $topic = (string)($state['p']['topic'] ?? '');
         $pro = isProDesign($state['p']['designKey'] ?? null);
+        ImageSearch::$topicEn = (string)($outline[0]['en_topic'] ?? '');
         $want = [];                 // rasm olinadigan slaydlar (indekslar)
         if ($pro) {
             // PRO: muqova + imkon qadar ko'p slayd (tekis taqsimlab), ko'pi bilan PRO_MAX_IMAGES ta
