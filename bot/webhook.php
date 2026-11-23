@@ -490,7 +490,7 @@ function handleMessage(array $user, int $chatId, string $text): void
         setUserState($chatId, 'idle');
         Telegram::sendMessage(
             $chatId,
-            "💰 Joriy balansingiz: <b>" . number_format($balance, 0, '', ' ') . " so'm</b>\n\n" . (($ls = Loyalty::status($chatId)) !== '' ? $ls . "\n\n" : '') . "To'ldirish summasini tanlang:",
+            "💰 Joriy balansingiz: <b>" . number_format($balance, 0, '', ' ') . " so'm</b>\n\n" . (($pl = PromoDays::line()) !== '' ? $pl . "\n\n" : '') . (($ls = Loyalty::status($chatId)) !== '' ? $ls . "\n\n" : '') . "To'ldirish summasini tanlang:",
             topupAmountKeyboard()
         );
         return;
@@ -1186,7 +1186,7 @@ function handleTopupMethodChosen(int $chatId, string $method): void
         $card = manualCard();
         $digits = preg_replace('/\D+/', '', $card['number']);
         $pretty = trim(chunk_split($digits, 4, ' '));
-        $bp = (int)Engine::c('TOPUP_BONUS_PERCENT', 0);
+        $bp = PromoDays::bonusPercent();
         $bonus = ($bp > 0 && $amount >= (int)Engine::c('TOPUP_BONUS_MIN_AMOUNT', 0)) ? (int)floor($amount * $bp / 100) : 0;
         Telegram::sendMessage(
             $chatId,

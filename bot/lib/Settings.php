@@ -56,6 +56,9 @@ class Settings
         'PART_REWRITE_ENABLED' => ['bool', 'feat', '♻️ Qismini qayta yozish', "Tayyor fayl ostida bitta bob/slaydni qayta yozish tugmasi", 0, 1],
         'PART_REWRITE_PRICE' => ['int', 'money', "Qismini qayta yozish narxi, so'm", '0 — bepul', 0, 1000000],
         'BUTTON_COLORS' => ['bool', 'feat', '🎨 Rangli tugmalar', "Tasdiqlash — yashil, bekor qilish — qizil, tanlash — ko'k (Telegram'ning yangi versiyalarida)", 0, 1],
+        'PROMO_CALENDAR' => ['bool', 'money', '🎉 Aksiyalar kalendari', "Bayram kunlarida to'ldirishga avtomatik bonus (ro'yxat pastda)", 0, 1],
+        'PROMO_BROADCAST' => ['bool', 'money', '🎉 Aksiya kuni xabari', 'Aksiya boshlangan kuni 10:00 dan keyin hammaga bir marta tabrik + bonus xabari', 0, 1],
+        'PROMO_DAYS' => ['text', 'money', '🎉 Aksiya kunlari', "Har qatorda: OY-KUN|foiz|Nomi, oraliq: 08-25..08-31|20|Nomi", 0, 2000],
         'GROUP_ENABLED' => ['bool', 'feat', '👥 Guruh buyurtmasi', "Mavzu so'ralganda «👥 Guruh uchun» tugmasi: bir yo'la bir nechta talabaga", 0, 1],
         'GROUP_DISCOUNT' => ['int', 'money', '👥 Guruh chegirmasi, %', "Har bir ishga chegirma (GROUP_MIN va undan ko'p talaba bo'lsa)", 0, 70],
         'GROUP_MIN' => ['int', 'money', '👥 Chegirma uchun kamida', 'Nechta talabadan boshlab chegirma', 2, 40],
@@ -132,7 +135,7 @@ class Settings
         $defaults = ['MAINTENANCE_MODE' => false, 'MAINTENANCE_TEXT' => "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!", 'FREE_TRIAL' => true,
             'TOPUP_BONUS_PERCENT' => 0, 'TOPUP_BONUS_MIN_AMOUNT' => 0, 'REFERRAL_BONUS' => 3000, 'MIN_TOPUP_AMOUNT' => 1000, 'PRO_SURCHARGE_PERCENT' => 60,
             'STARS_RATE' => 200, 'VIDEO_ENABLED' => false, 'MINIAPP_ENABLED' => false, 'SUB_ENABLED' => false, 'MARKETING_ENABLED' => false,
-            'STD_MAX_IMAGES' => 10, 'PART_REWRITE_PRICE' => 1000, 'EXPRESS_PRICE' => 3000, 'LOYALTY_EVERY' => 10, 'GROUP_DISCOUNT' => 15, 'GROUP_MIN' => 3, 'LOYALTY_MAX_PRICE' => 20000, 'EXPRESS_ENABLED' => true, 'PDF_BUTTON' => true, 'PAY_CARD_NUMBER' => '', 'PAY_CARD_HOLDER' => '', 'PAY_HUMO' => false, 'PAY_CLICK' => false, 'PAY_PAYME' => false, 'STARS_ENABLED' => false, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
+            'STD_MAX_IMAGES' => 10, 'PART_REWRITE_PRICE' => 1000, 'EXPRESS_PRICE' => 3000, 'LOYALTY_EVERY' => 10, 'PROMO_DAYS' => class_exists('PromoDays') ? PromoDays::DEFAULT : '', 'GROUP_DISCOUNT' => 15, 'GROUP_MIN' => 3, 'LOYALTY_MAX_PRICE' => 20000, 'EXPRESS_ENABLED' => true, 'PDF_BUTTON' => true, 'PAY_CARD_NUMBER' => '', 'PAY_CARD_HOLDER' => '', 'PAY_HUMO' => false, 'PAY_CLICK' => false, 'PAY_PAYME' => false, 'STARS_ENABLED' => false, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
         $items = [];
         foreach (self::SCHEMA as $k => [$type, $group, $label, $hint, $min, $max]) {
             $items[] = ['k' => $k, 'type' => $type, 'group' => $group, 'label' => $label, 'hint' => $hint, 'min' => $min, 'max' => $max,

@@ -170,7 +170,7 @@ class Promo
             $bonus += $b;
         }
         // 2) hamma uchun aksiya
-        $pct = (int)Engine::c('TOPUP_BONUS_PERCENT', 0);
+        $pct = class_exists('PromoDays') ? PromoDays::bonusPercent() : (int)Engine::c('TOPUP_BONUS_PERCENT', 0);   // 🎉 bayram kuni — kattasi
         if ($pct > 0 && $amount >= (int)Engine::c('TOPUP_BONUS_MIN_AMOUNT', 0)) {
             $b = (int)floor($amount * $pct / 100);
             $bonus += $cap > 0 ? min($b, $cap) : $b;
