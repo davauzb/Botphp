@@ -27,10 +27,10 @@ class Telegram
             if (preg_match('/^(job:c:|topup_reject:|humo_cancel:|sup:cancel)/', $d) || preg_match('/^(✖️|❌|🗑)/u', $t)) {
                 return 'danger';
             }
-            if (preg_match('/^(stu:use:|sub:buy|rw:|topup_approve:|plan:ok:|upd:go|humo_check:)/', $d) || preg_match('/^(✅|💎|🔁 Ha|🚀)/u', $t)) {
+            if (preg_match('/^(stu:use:|sub:buy|grp:ok|job:xy:|rw:|topup_approve:|plan:ok:|upd:go|humo_check:)/', $d) || preg_match('/^(✅|💎|🔁 Ha|🚀)/u', $t)) {
                 return 'success';
             }
-            if (preg_match('/^(vol:|edit:|job:r:|tr:|trl:|pdf:|rp:|rpp:|rpm:|topup_amount:|topup_method:|design(std|pro)?:|ro:|rt:|dl:|plan:ed:|ord:)/', $d) || isset($b['web_app'])) {
+            if (preg_match('/^(vol:|edit:|job:r:|tr:|trl:|pdf:|grp:s:|rp:|rpp:|rpm:|topup_amount:|topup_method:|design(std|pro)?:|ro:|rt:|dl:|plan:ed:|ord:)/', $d) || isset($b['web_app'])) {
                 return 'primary';
             }
             return null;

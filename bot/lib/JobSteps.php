@@ -112,7 +112,7 @@ class JobSteps
                 $p += ['chapters' => $chapters, 'per' => $per, 'parts' => $parts, 'partWords' => $partWords, 'sub' => $sub];
                 if ($kind === 'paper' && empty($res['titles'])) {
                     $steps[] = ['id' => 'outline', 'k' => 'outline', 'w' => 1.5, 'label' => 'Reja va bob sarlavhalari tuzilmoqda'];
-                    if (PlanReview::enabled()) {
+                    if (PlanReview::enabled() && empty($job['group_id'])) {   // guruh ishida reja tasdiqlash so'ralmaydi
                         $steps[] = PlanReview::stepDef();
                     }
                 }
@@ -151,7 +151,7 @@ class JobSteps
             $dk = (string)($job['design_key'] ?? '');
             $p += ['count' => $count, 'designKey' => isset(pptxDesigns()[$dk]) ? $dk : DEFAULT_PPTX_DESIGN];
             $steps[] = ['id' => 'outline', 'k' => 'slide_outline', 'w' => 2.0, 'label' => 'Taqdimot rejasi tuzilmoqda'];
-            if (PlanReview::enabled()) {
+            if (PlanReview::enabled() && empty($job['group_id'])) {   // guruh ishida reja tasdiqlash so'ralmaydi
                 $steps[] = PlanReview::stepDef();
             }
             for ($b = 0; $b < $nb; $b++) {
@@ -1181,7 +1181,8 @@ class JobSteps
             $rows[] = [Translate::button((int)$job['id'])];
         }
         $kb = $rows ? ['inline_keyboard' => $rows] : null;
-        if (!empty($state['res']['pv']) && empty($state['res']['pv_sent'])) {
+        $caption = GroupOrder::captionPrefix($job) . $caption;
+        if (!empty($state['res']['pv']) && empty($state['res']['pv_sent']) && empty($job['group_id'])) {
             $state['res']['pv_sent'] = true;          // albom bir marta (qayta urinishda takrorlanmaydi)
             try {
                 SlidePreview::send($chatId, $state['res']['pv'], "👀 <b>Taqdimotingizdan lavhalar</b>\nTo'liq fayl — pastda 👇");

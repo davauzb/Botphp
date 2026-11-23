@@ -591,6 +591,12 @@ function handleMessage(array $user, int $chatId, string $text): void
         return;
     }
 
+    // --- 👥 Guruh ro'yxati kutilmoqda: state = "awaiting_group:<type>:<volume_key>" ---
+    if (str_starts_with($user['state'], 'awaiting_group:') && $text !== '') {
+        GroupOrder::onText($chatId, (string)$user['state'], $text);
+        return;
+    }
+
     // --- Mavzu kutilayotgan holat: state = "awaiting_topic:<type>:<volume_key>" ---
     if (str_starts_with($user['state'], 'awaiting_topic:') && $text !== '') {
         [, $type, $volumeKey] = array_pad(explode(':', $user['state'], 3), 3, null);
@@ -907,6 +913,17 @@ function handleCallbackQuery(array $cb): void
         }
         return;
     }
+    if (str_starts_with($data, 'grp:')) {                 // 👥 guruh buyurtmasi
+        $gp = explode(':', $data);
+        if ($gp[1] === 's') {
+            GroupOrder::start($chatId, (string)($gp[2] ?? ''), (string)($gp[3] ?? ''));
+        } elseif ($gp[1] === 'ok') {
+            GroupOrder::confirm($chatId);
+        } else {
+            GroupOrder::cancel($chatId);
+        }
+        return;
+    }
     if (preg_match('/^pdf:(\d+)$/', $data, $pm)) {       // 📄 PDF nusxa
         Telegram::answerCallbackQuery((string)$cb['id'], '📄 PDF tayyorlanmoqda…');
         DocPdf::send($chatId, (int)$pm[1]);
@@ -1011,7 +1028,7 @@ function proceedAfterProfileReady(int $chatId, string $type, string $volumeKey):
         'lab' => "✏️ <b>Fan va laboratoriya ishi nomini</b> yozing (masalan: «Fizika: Om qonunini tajribada tekshirish»):",
         'test' => "✏️ Test qaysi <b>fan / mavzu</b> bo'yicha? (masalan: «Biologiya: hujayra tuzilishi»):",
     ][$type] ?? "✏️ " . ucfirst(typeLabel($type)) . " mavzusini yozing:";
-    Telegram::sendMessage($chatId, $ask . I18n::hintLine($chatId) . ($type !== 'test' ? Requirements::hint() : ''));
+    Telegram::sendMessage($chatId, $ask . I18n::hintLine($chatId) . ($type !== 'test' ? Requirements::hint() : ''), GroupOrder::button($type, $volumeKey));
 }
 
 /**
@@ -1114,7 +1131,8 @@ function handleDesignChosen(int $chatId, string $data): void
     setUserState($chatId, "awaiting_topic:slayd:{$volumeKey}");
     Telegram::sendMessage(
         $chatId,
-        "✅ Dizayn tanlandi: " . pptxDesigns()[$designKey]['label'] . "\n\n✏️ Taqdimot mavzusini yozing:" . I18n::hintLine($chatId) . Requirements::hint()
+        "✅ Dizayn tanlandi: " . pptxDesigns()[$designKey]['label'] . "\n\n✏️ Taqdimot mavzusini yozing:" . I18n::hintLine($chatId) . Requirements::hint(),
+        GroupOrder::button('slayd', $volumeKey)
     );
 }
 
