@@ -764,7 +764,7 @@ class Engine
             sort($d);
             $v = $d[intdiv(count($d), 2)];
         } else {
-            $v = ['slayd' => 150, 'kurs_ishi' => 420, 'diplom' => 900, 'tarjima' => 120, 'qayta' => 60, 'test' => 120, 'tezis' => 90][$type] ?? 240;
+            $v = ['slayd' => 150, 'kurs_ishi' => 420, 'diplom' => 900, 'tarjima' => 120, 'qayta' => 60, 'test' => 120, 'tezis' => 90, 'krossvord' => 60, 'maruza' => 200, 'keys' => 200][$type] ?? 240;
         }
         return $cache[$type] = max(30, min(3600, $v));
     }

@@ -468,6 +468,11 @@ function handleMessage(array $user, int $chatId, string $text): void
             'esse' => "✍️ <b>Esse / insho</b>: asosiy g'oya, dalillar va misollar, shaxsiy mulohaza, xulosa — ravon uslubda.\n\n",
             'test' => "❓ <b>Test savollari</b>: har savolda 4 ta variant (A–D), oxirida javoblar kaliti jadvali. O'qituvchilar va imtihonga tayyorlanish uchun.\n\n",
             'lab' => "🔬 <b>Laboratoriya ishi hisoboti</b>: titul, ishning maqsadi va nazariy asoslari, jihozlar va bajarish tartibi, natijalar (jadval bilan), xulosa, nazorat savollari.\n\n",
+            'diplom' => "🎓 <b>Diplom ishi (BMI)</b>: titul (ilmiy rahbar bilan), reja, kirish, 3 bob (har biri bandlarga bo'lingan), xulosa va takliflar, 20 tagacha haqiqiy adabiyot, jadval va rasmlar.\n"
+                . "<i>Bu katta ish — tayyorlash 10–20 daqiqa davom etadi. Reja tayyor bo'lganda sizga ko'rsatiladi.</i>\n\n",
+            'maruza' => "🎙 <b>Ma'ruza matni</b>: titul, reja (3 savol), har bir savol bo'yicha batafsil matn, xulosa, nazorat savollari va tayanch iboralar.\n\n",
+            'keys' => "💼 <b>Keys (case study)</b>: vaziyat tavsifi, muammo tahlili, yechim variantlari va ularni baholash, tanlangan yechim, muhokama uchun savollar.\n\n",
+            'krossvord' => "🧩 <b>Krossvord</b>: mavzu bo'yicha so'zlar avtomatik panjaraga joylanadi; «Eniga» / «Bo'yiga» savollari va oxirgi betda javoblar. Dars va tadbirlar uchun.\n\n",
             'amaliyot' => "🏢 <b>Amaliyot hisoboti</b>: titul, tashkilot haqida ma'lumot, tuzilmasi va faoliyati, bajarilgan ishlar, muammolar va takliflar, xulosa.\n"
                 . "<i>Tashkilot haqidagi aniq ma'lumotlarni (manzil, raqamlar) tayyor fayldan o'zingiz to'g'rilab qo'ying.</i>\n\n",
         ][$orderType] ?? '';
@@ -1027,8 +1032,10 @@ function proceedAfterProfileReady(int $chatId, string $type, string $volumeKey):
         'amaliyot' => "✏️ Amaliyot o'tgan <b>tashkilot nomi</b> va yo'nalishingizni yozing (masalan: «Toshkent shahar Soliq boshqarmasi, buxgalteriya hisobi»):",
         'lab' => "✏️ <b>Fan va laboratoriya ishi nomini</b> yozing (masalan: «Fizika: Om qonunini tajribada tekshirish»):",
         'test' => "✏️ Test qaysi <b>fan / mavzu</b> bo'yicha? (masalan: «Biologiya: hujayra tuzilishi»):",
+        'krossvord' => "✏️ Krossvord qaysi <b>fan / mavzu</b> bo'yicha? (masalan: «Informatika asoslari»):",
+        'keys' => "✏️ Keys <b>mavzusi yoki vaziyat</b>ni yozing (masalan: «Kichik biznesda xodimlar qo'nimsizligi»):",
     ][$type] ?? "✏️ " . ucfirst(typeLabel($type)) . " mavzusini yozing:";
-    Telegram::sendMessage($chatId, $ask . I18n::hintLine($chatId) . ($type !== 'test' ? Requirements::hint() : ''), GroupOrder::button($type, $volumeKey));
+    Telegram::sendMessage($chatId, $ask . I18n::hintLine($chatId) . (!in_array($type, ['test', 'krossvord'], true) ? Requirements::hint() : ''), GroupOrder::button($type, $volumeKey));
 }
 
 /**

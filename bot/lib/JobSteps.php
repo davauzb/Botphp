@@ -71,6 +71,15 @@ class JobSteps
             $steps[] = ['id' => 'deliver', 'k' => 'deliver', 'w' => 1.0, 'label' => 'Telegram’ga yuborilmoqda'];
             return ['v' => 1, 'type' => $type, 'steps' => $steps, 'i' => 0, 'p' => $p, 'res' => [], 'att' => [], 'dur' => [], 'shrink' => []];
         }
+        if (DocTypes::kind($type) === 'cross') {
+            $vols = DocTypes::volumes($type) ?? [];
+            $v = $vols[$job['volume_key']] ?? reset($vols);
+            $p += ['words' => max(8, (int)($v['words'] ?? 15)), 'docLabel' => DocTypes::label($type), 'dtype' => $type, 'kind' => 'cross'];
+            $steps[] = ['id' => 'cw', 'k' => 'cw_words', 'w' => 2.5, 'label' => "So'zlar va savollar tuzilmoqda"];
+            $steps[] = ['id' => 'build', 'k' => 'cw_build', 'w' => 1.0, 'label' => 'Krossvord panjarasi joylashtirilmoqda'];
+            $steps[] = ['id' => 'deliver', 'k' => 'deliver', 'w' => 1.0, 'label' => 'Telegram’ga yuborilmoqda'];
+            return ['v' => 1, 'type' => $type, 'steps' => $steps, 'i' => 0, 'p' => $p, 'res' => [], 'att' => [], 'dur' => [], 'shrink' => []];
+        }
         if (DocTypes::isDoc($type)) {
             $vols = DocTypes::volumes($type) ?? [];
             $v = $vols[$job['volume_key']] ?? reset($vols);
@@ -207,6 +216,23 @@ class JobSteps
                 break;
             case 'uniq':
                 self::stepUniq($job, $state);
+                break;
+            case 'cw_words':
+                self::stepCrossWords($state);
+                break;
+            case 'cw_build':
+                if (empty($state['res']['cw'])) {
+                    self::stepCrossWords($state);            // oldingi so'zlar yaxshi kesishmagan — yangilari
+                }
+                $L = Crossword::layout((array)$state['res']['cw'], (int)$state['p']['words']);
+                if (count($L['words']) < max(6, (int)floor($state['p']['words'] * 0.7)) && (int)($state['att']['build'] ?? 0) < 2) {
+                    unset($state['res']['cw']);
+                    throw new StepRetryException("Krossvord: so'zlar kam joylashdi (" . count($L['words']) . ')');
+                }
+                if (count($L['words']) < 5) {
+                    throw new RuntimeException("Krossvord tuzib bo'lmadi");
+                }
+                $state['res']['file'] = Crossword::generate((string)$state['p']['topic'], $L, (array)$state['p']['student'], (string)($state['p']['lang'] ?? 'uz'));
                 break;
             case 'video':
                 self::stepVideo($job, $state);
@@ -390,6 +416,9 @@ class JobSteps
             $target = (int)round($p['per'] * 0.7 * $shrink);
             $prompt = "\"{$p['topic']}\" mavzusidagi {$p['docLabel']} uchun XULOSA qismini yozing (taxminan $target so'z): har bir bobdan kelib chiqadigan "
                 . "asosiy xulosalar va amaliy tavsiyalar. Ish boblari:\n" . implode("\n", $titles);
+            if (($extra = (string)DocTypes::opt((string)($p['dtype'] ?? ''), 'concl_extra', '')) !== '') {
+                $prompt .= "\n\n" . $extra;
+            }
         } else {
             $c = (int)$step['c'];
             $j = (int)$step['j'];
@@ -542,6 +571,37 @@ class JobSteps
         }
         $state['res']['tqb'][$b] = count($qs);
         $state['res']['tq'] = array_merge((array)($state['res']['tq'] ?? []), array_slice($qs, 0, $cnt));
+    }
+
+    /** Krossvord uchun so'z + savol juftlari (joylashtirishda zaxira bo'lishi uchun ko'proq so'raladi). */
+    private static function stepCrossWords(array &$state): void
+    {
+        if (!empty($state['res']['cw'])) {
+            return;
+        }
+        $p = $state['p'];
+        $ask = (int)ceil($p['words'] * 1.8);
+        $prompt = "\"{$p['topic']}\" mavzusi bo'yicha krossvord uchun $ask ta so'z va savol tuzing. Talablar:\n"
+            . "- har bir javob BITTA so'z (3-12 harf), bo'shliq, chiziqcha, raqam va tutuq belgisisiz (o' va g' mumkin), bosh kelishikda;\n"
+            . "- so'zlar mavzuga aniq tegishli atamalar, nomlar, tushunchalar bo'lsin; turli uzunlikda (bir nechtasi 8+ harfli);\n"
+            . "- savol (ta'rif) qisqa va aniq bo'lsin (1 gap), javob so'zining o'zi yoki o'zagi savolda BO'LMASIN;\n"
+            . "- faqat ishonchli, umumiy tan olingan faktlar.\n"
+            . 'JSON: {"sozlar":[{"soz":"ATAMA","savol":"qisqa ta\'rif"}]}' . I18n::directive($p['lang'] ?? 'uz');
+        $raw = AIClient::generateText($prompt, "Faqat JSON formatda javob bering.", 2600, ['temperature' => 0.5]);
+        $d = json_decode(extractJson($raw), true);
+        $items = Crossword::normalize((array)($d['sozlar'] ?? []));
+        if (count($items) < max(8, (int)ceil($p['words'] * 0.9))) {
+            $e = new StepRetryException("Krossvord so'zlari kam: " . count($items));
+            $e->maxAttempts = 3;
+            if (count($items) >= 8) {
+                $e->acceptAfterRetries = true;
+                $e->acceptFn = function (array &$st) use ($items) {
+                    $st['res']['cw'] = $items;
+                };
+            }
+            throw $e;
+        }
+        $state['res']['cw'] = $items;
     }
 
     /**
@@ -1158,6 +1218,10 @@ class JobSteps
             $warn = "Dizayn o'zgarmagan, faqat matn o'girildi. ⚠️ Tarjima AI yordamida qilindi — topshirishdan oldin ko'rib chiqing.";
             $what = 'tarjima';
         }
+        if (($state['p']['kind'] ?? '') === 'cross') {
+            $real = $uq = '';
+            $warn = "📌 Oxirgi betda — javoblar (to'ldirilgan panjara). ⚠️ Savollar AI yordamida tuzildi — foydalanishdan oldin ko'rib chiqing.";
+        }
         if (($state['p']['kind'] ?? '') === 'test') {
             $real = '';
             $warn = "📌 Oxirgi betda — javoblar kaliti. ⚠️ Savollar AI yordamida tuzildi — foydalanishdan oldin ko'rib chiqing.";
@@ -1174,10 +1238,10 @@ class JobSteps
             $rows[] = [DocPdf::button((int)$job['id'])];
         }
         $srcForRw = $job['type'] === 'qayta' ? (int)explode(':', (string)$job['volume_key'])[0] : (int)$job['id'];
-        if (!empty($state['res']['pres']) && PartRewrite::enabled() && !in_array($job['type'], ['tarjima', 'test'], true)) {
+        if (!empty($state['res']['pres']) && PartRewrite::enabled() && !in_array($job['type'], ['tarjima', 'test', 'krossvord'], true)) {
             $rows[] = [PartRewrite::button($srcForRw)];
         }
-        if (Translate::enabled() && !in_array($job['type'], ['tarjima', 'qayta'], true)) {
+        if (Translate::enabled() && !in_array($job['type'], ['tarjima', 'qayta', 'krossvord'], true)) {
             $rows[] = [Translate::button((int)$job['id'])];
         }
         $kb = $rows ? ['inline_keyboard' => $rows] : null;

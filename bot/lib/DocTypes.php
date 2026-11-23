@@ -61,6 +61,33 @@ final class DocTypes
                 '10-15' => ['label' => '10-15 bet', 'chapters' => 4, 'sub' => 0, 'min_words' => 2800, 'max_words' => 3600, 'price' => 9000],
                 '20-25' => ['label' => '20-25 bet', 'chapters' => 4, 'sub' => 2, 'min_words' => 5200, 'max_words' => 6400, 'price' => 14000],
             ]],
+        'diplom' => ['label' => 'bitiruv malakaviy ishi', 'title' => 'Diplom ishi (BMI)', 'menu' => '🎓 Diplom ishi (BMI)', 'cmd' => '/diplom', 'doc' => 'BITIRUV MALAKAVIY ISHI', 'const' => 'DIPLOM_VOLUMES', 'kind' => 'paper', 'images' => 4, 'flag' => 'DIPLOM_ENABLED', 'biblio' => 20, 'table_ch' => 2,
+            'volumes' => [
+                '50-60' => ['label' => '50-60 bet', 'chapters' => 3, 'sub' => 3, 'min_words' => 12500, 'max_words' => 14500, 'price' => 49000],
+                '60-75' => ['label' => '60-75 bet', 'chapters' => 3, 'sub' => 4, 'min_words' => 15500, 'max_words' => 18000, 'price' => 59000],
+            ]],
+        'maruza' => ['label' => "ma'ruza matni", 'title' => "Ma'ruza matni", 'menu' => "🎙 Ma'ruza matni", 'cmd' => '/maruza', 'doc' => "MA'RUZA MATNI", 'const' => 'MARUZA_VOLUMES', 'kind' => 'paper', 'images' => 1, 'flag' => 'MARUZA_ENABLED', 'biblio' => 6,
+            'concl_extra' => "Xulosadan keyin bo'sh qator qoldirib, «Nazorat savollari:» deb yozing va ma'ruza bo'yicha 6-8 ta nazorat savolini raqamlab bering (har biri alohida qatorda, «1) » ko'rinishida). Undan keyin «Tayanch iboralar:» deb 8-12 ta asosiy atamani vergul bilan sanab bering.",
+            'volumes' => [
+                '6-8' => ['label' => '6-8 bet', 'chapters' => 3, 'sub' => 0, 'min_words' => 1800, 'max_words' => 2300, 'price' => 5000],
+                '10-12' => ['label' => '10-12 bet', 'chapters' => 3, 'sub' => 0, 'min_words' => 3000, 'max_words' => 3600, 'price' => 8000],
+            ]],
+        'keys' => ['label' => 'keys (vaziyatli masala)', 'title' => 'Keys (case study)', 'menu' => '💼 Keys (case study)', 'cmd' => '/keys', 'doc' => 'KEYS', 'const' => 'KEYS_VOLUMES', 'kind' => 'paper', 'images' => 0, 'flag' => 'KEYS_ENABLED', 'biblio' => 5, 'table_ch' => 2,
+            'concl_extra' => "Xulosadan keyin bo'sh qator qoldirib, «Muhokama uchun savollar:» deb yozing va keys bo'yicha 4-6 ta savolni raqamlab bering (har biri alohida qatorda, «1) » ko'rinishida).",
+            'fixed' => [
+                'uz' => ['Vaziyat tavsifi (keys matni)', "Muammoni aniqlash va tahlil qilish", "Yechim variantlari va ularni baholash", "Tanlangan yechim va amalga oshirish rejasi"],
+                'ru' => ['Описание ситуации (текст кейса)', 'Выявление и анализ проблемы', 'Варианты решения и их оценка', 'Выбранное решение и план реализации'],
+                'en' => ['Case description', 'Problem identification and analysis', 'Alternative solutions and their evaluation', 'Chosen solution and implementation plan'],
+            ],
+            'volumes' => [
+                '4-6' => ['label' => '4-6 bet', 'chapters' => 4, 'sub' => 0, 'min_words' => 1300, 'max_words' => 1700, 'price' => 5000],
+                '8-10' => ['label' => '8-10 bet', 'chapters' => 4, 'sub' => 0, 'min_words' => 2400, 'max_words' => 3000, 'price' => 8000],
+            ]],
+        'krossvord' => ['label' => 'krossvord', 'title' => 'Krossvord', 'menu' => '🧩 Krossvord', 'cmd' => '/krossvord', 'doc' => 'KROSSVORD', 'const' => 'KROSSVORD_VOLUMES', 'kind' => 'cross', 'images' => 0, 'flag' => 'KROSSVORD_ENABLED',
+            'volumes' => [
+                '15' => ['label' => "15 ta so'z", 'words' => 15, 'price' => 3000],
+                '25' => ['label' => "25 ta so'z", 'words' => 25, 'price' => 4000],
+            ]],
     ];
 
     public static function exists(string $t): bool
@@ -127,7 +154,7 @@ final class DocTypes
 
     public static function isDoc(string $t): bool
     {
-        return isset(self::T[$t]) && self::T[$t]['kind'] !== 'slides';
+        return isset(self::T[$t]) && in_array(self::T[$t]['kind'], ['paper', 'article'], true);
     }
 
     public static function images(string $t): int
@@ -149,7 +176,7 @@ final class DocTypes
     /** DOCX/DocStore uchun barcha hujjat turlari ('MUSTAQIL ISH', 'REFERAT', ...). */
     public static function docTypes(): array
     {
-        return array_values(array_filter(array_map(fn($v) => $v['doc'], self::T)));
+        return array_values(array_filter(array_map(fn($v) => in_array($v['kind'], ['paper', 'article'], true) ? $v['doc'] : '', self::T)));
     }
 
     public static function isArticleDoc(string $docType): bool

@@ -474,7 +474,7 @@ class DocPdf
             self::$y = 1100;
             $x = (int)(self::W * 0.5);
             foreach ([[I18n::t('executor', $lang), $st['full_name'] ?? ''], [I18n::t('group', $lang), $st['group_name'] ?? ''],
-                [I18n::t($doc['doc_type'] === 'KURS ISHI' ? 'supervisor' : 'checked_by', $lang), ($st['teacher'] ?? '') ?: '________________']] as [$k, $v]) {
+                [I18n::t(in_array($doc['doc_type'], ['KURS ISHI', 'BITIRUV MALAKAVIY ISHI'], true) ? 'supervisor' : 'checked_by', $lang), ($st['teacher'] ?? '') ?: '________________']] as [$k, $v]) {
                 self::text($k . ': ', self::font(true), 14, $x, self::$y, self::INK);
                 self::text((string)$v, self::font(), 14, $x + (int)self::width($k . ': ', self::font(true), 14), self::$y, self::INK);
                 self::$y += 42;

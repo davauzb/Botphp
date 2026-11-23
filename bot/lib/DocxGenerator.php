@@ -76,7 +76,7 @@ class DocxGenerator
         }
         $sections = array_values(array_filter($sections, fn($s) => trim((string)($s['heading'] ?? '')) !== '' || trim((string)($s['text'] ?? '')) !== ''));
 
-        $prefix = ['REFERAT' => 'referat_', 'KURS ISHI' => 'kurs_ishi_', 'MAQOLA' => 'maqola_', 'TEZIS' => 'tezis_', 'ESSE' => 'esse_', 'LABORATORIYA ISHI' => 'laboratoriya_ishi_', 'AMALIYOT HISOBOTI' => 'amaliyot_hisoboti_'][$docType] ?? 'mustaqil_ish_';
+        $prefix = ['REFERAT' => 'referat_', 'KURS ISHI' => 'kurs_ishi_', 'MAQOLA' => 'maqola_', 'TEZIS' => 'tezis_', 'ESSE' => 'esse_', 'LABORATORIYA ISHI' => 'laboratoriya_ishi_', 'AMALIYOT HISOBOTI' => 'amaliyot_hisoboti_', 'BITIRUV MALAKAVIY ISHI' => 'diplom_ishi_', "MA'RUZA MATNI" => 'maruza_matni_', 'KEYS' => 'keys_'][$docType] ?? 'mustaqil_ish_';
         $path = GENERATED_DIR . $prefix . uniqid() . '.docx';
         $tmpFiles = [];
         self::$media = self::prepareImages((array)($opts['images'] ?? []), $tmpFiles);
@@ -266,7 +266,7 @@ class DocxGenerator
         $xml .= $label(I18n::t('executor', $lang), $fullName, 2200);
         $xml .= $label(I18n::t('group', $lang), $group);
         $teacher = trim((string)($studentInfo['teacher'] ?? ''));
-        $xml .= $label(I18n::t($docType === 'KURS ISHI' ? 'supervisor' : 'checked_by', $lang), $teacher !== '' ? $teacher : '________________');
+        $xml .= $label(I18n::t(in_array($docType, ['KURS ISHI', 'BITIRUV MALAKAVIY ISHI'], true) ? 'supervisor' : 'checked_by', $lang), $teacher !== '' ? $teacher : '________________');
 
         // O'quv yili — bet tagida (ramka/frame bilan), matn uzunligiga bog'liq emas
         $city = self::city((string)($studentInfo['university'] ?? ''), $lang);
