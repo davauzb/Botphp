@@ -24,6 +24,7 @@ require_once __DIR__ . '/lib/Userbot.php';
 require_once __DIR__ . '/lib/PartRewrite.php';
 require_once __DIR__ . '/lib/DocPdf.php';
 require_once __DIR__ . '/lib/Express.php';
+require_once __DIR__ . '/lib/Loyalty.php';
 
 /**
  * Har chaqiruvda yangi PDO ulanish qaytaradi.

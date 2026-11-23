@@ -485,7 +485,7 @@ function handleMessage(array $user, int $chatId, string $text): void
         setUserState($chatId, 'idle');
         Telegram::sendMessage(
             $chatId,
-            "💰 Joriy balansingiz: <b>" . number_format($balance, 0, '', ' ') . " so'm</b>\n\nTo'ldirish summasini tanlang:",
+            "💰 Joriy balansingiz: <b>" . number_format($balance, 0, '', ' ') . " so'm</b>\n\n" . (($ls = Loyalty::status($chatId)) !== '' ? $ls . "\n\n" : '') . "To'ldirish summasini tanlang:",
             topupAmountKeyboard()
         );
         return;
@@ -666,7 +666,13 @@ function handleTopicSubmission(array $user, int $chatId, string $type, string $v
     $paidBy = $isFree ? 'free' : 'balance';
     if (!$isFree && Growth::subCovers($chatId, $price) && Growth::subTake($chatId)) {
         $paidBy = 'sub';                            // 💎 obunadan 1 kredit
-    } elseif (!$isFree) {
+    }
+    $loyal = (!$isFree && $paidBy === 'balance') ? Loyalty::discount($chatId, $type, $price) : 0;
+    if ($loyal > 0) {
+        $price -= $loyal;                           // 🎁 sodiqlik sovg'asi
+        $paidBy = 'loyal';
+    }
+    if (!$isFree && $paidBy !== 'sub' && $price > 0) {
         // Balansdan ATOMIK yechamiz: "balance >= narx" sharti UPDATE ning o'zida — parallel so'rovlarda
         // balans manfiyga tushib ketmaydi.
         $balUpd = db()->prepare('UPDATE users SET balance = balance - :p WHERE telegram_id = :id AND balance >= :p');
@@ -708,7 +714,7 @@ function handleTopicSubmission(array $user, int $chatId, string $type, string $v
             db()->prepare('UPDATE users SET free_used = 0 WHERE telegram_id = :id')->execute(['id' => $chatId]);
         } elseif ($paidBy === 'sub') {
             Growth::subGive($chatId);
-        } else {
+        } elseif ($price > 0) {
             db()->prepare('UPDATE users SET balance = balance + :p WHERE telegram_id = :id')->execute(['p' => $price, 'id' => $chatId]);
         }
         Telegram::sendMessage($chatId, "⚠️ Buyurtmani qabul qilib bo'lmadi, pulingiz qaytarildi. Iltimos, birozdan keyin qayta urinib ko'ring.");
@@ -719,8 +725,15 @@ function handleTopicSubmission(array $user, int $chatId, string $type, string $v
         $header = "✅ Bepul buyurtmangiz qabul qilindi!\n📏 Hajm: {$volume['label']}";
     } elseif ($paidBy === 'sub') {
         $header = "✅ Buyurtma qabul qilindi!\n📏 Hajm: {$volume['label']}  ·  💎 Obunadan (qoldi: " . Growth::sub($chatId)['credits'] . " ta)";
+    } elseif ($loyal > 0) {
+        $header = "✅ Buyurtma qabul qilindi!\n📏 Hajm: {$volume['label']}\n🎁 <b>Sodiqlik sovg'asi:</b> " . number_format($loyal, 0, '', ' ') . " so'm chegirma"
+            . ($price > 0 ? "  ·  💳 Balansdan: " . number_format($price, 0, '', ' ') . " so'm" : " — bu buyurtma bepul!");
     } else {
         $header = "✅ Buyurtma qabul qilindi!\n📏 Hajm: {$volume['label']}  ·  💳 Balansdan yechildi: " . number_format($price, 0, '', ' ') . " so'm";
+        $ll = Loyalty::line($chatId);
+        if ($ll !== '') {
+            $header .= "\n" . $ll;
+        }
     }
     // Foizli progress xabari + ishni darhol ishga tushirish (cron kerak emas)
     Engine::onJobPending($jobId, $header);

@@ -116,7 +116,13 @@ class MiniApp
         $paidBy = $isFree ? 'free' : 'balance';
         if (!$isFree && Growth::subCovers($tg, $price) && Growth::subTake($tg)) {
             $paidBy = 'sub';
-        } elseif (!$isFree) {
+        }
+        $loyal = (!$isFree && $paidBy === 'balance') ? Loyalty::discount($tg, $type, $price) : 0;
+        if ($loyal > 0) {
+            $price -= $loyal;                       // 🎁 sodiqlik sovg'asi
+            $paidBy = 'loyal';
+        }
+        if (!$isFree && $paidBy !== 'sub' && $price > 0) {
             $b = db()->prepare('UPDATE users SET balance = balance - ? WHERE telegram_id = ? AND balance >= ?');
             $b->execute([$price, $tg, $price]);
             if (!$b->rowCount()) {
@@ -134,7 +140,7 @@ class MiniApp
                 db()->prepare('UPDATE users SET free_used = 0 WHERE telegram_id = ?')->execute([$tg]);
             } elseif ($paidBy === 'sub') {
                 Growth::subGive($tg);
-            } else {
+            } elseif ($price > 0) {
                 db()->prepare('UPDATE users SET balance = balance + ? WHERE telegram_id = ?')->execute([$price, $tg]);
             }
             return ['ok' => false, 'msg' => 'Buyurtma yaratilmadi, pul qaytarildi'];
@@ -143,7 +149,8 @@ class MiniApp
         $label = (string)$vols[$vk]['label'];
         $head = $isFree ? "✅ Bepul buyurtmangiz qabul qilindi! (📱 ilova orqali)\n📏 Hajm: $label"
             : ($paidBy === 'sub' ? "✅ Buyurtma qabul qilindi! (📱 ilova orqali)\n📏 Hajm: $label  ·  💎 Obunadan"
-                : "✅ Buyurtma qabul qilindi! (📱 ilova orqali)\n📏 Hajm: $label  ·  💳 Balansdan: " . number_format($price, 0, '', ' ') . " so'm");
+            : ($loyal > 0 ? "✅ Buyurtma qabul qilindi! (📱 ilova orqali)\n📏 Hajm: $label  ·  🎁 Sodiqlik sovg'asi: " . number_format($loyal, 0, '', ' ') . " so'm chegirma"
+                : "✅ Buyurtma qabul qilindi! (📱 ilova orqali)\n📏 Hajm: $label  ·  💳 Balansdan: " . number_format($price, 0, '', ' ') . " so'm"));
         Engine::onJobPending($jobId, $head);
         try {
             AdminEvents::newOrder($jobId, $tg, $type, $topic, $vk, $price, $isFree, $s, $user['username'] ?? null);
