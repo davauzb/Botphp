@@ -384,7 +384,7 @@ class Growth
         if (!$j || !self::canRewrite($tg, $j)) {
             return "Bepul qayta yozish bu buyurtma uchun mavjud emas (30 kunda bir marta, 7 kun ichida).";
         }
-        $claim = db()->prepare('UPDATE users SET rewrite_used = ? WHERE telegram_id = ? AND COALESCE(rewrite_used, 0) < ?');
+        $claim = db()->prepare('UPDATE users SET rewrite_used = ? WHERE telegram_id = ? AND COALESCE(rewrite_used, 0) < CAST(? AS INTEGER)');
         $claim->execute([time(), $tg, time() - 30 * 86400]);
         if (!$claim->rowCount()) {
             return "Bepul qayta yozish allaqachon ishlatilgan.";

@@ -661,6 +661,17 @@ class Engine
     public static function refund(array $job): string
     {
         $chatId = (int)$job['telegram_id'];
+        $xp = class_exists('Express') ? Express::takeFee((int)$job['id']) : 0;
+        if ($xp > 0) {
+            db()->prepare('UPDATE users SET balance = balance + ? WHERE telegram_id = ?')->execute([$xp, $chatId]);
+        }
+        $msg = self::refundMain($job);
+        return $xp > 0 ? trim($msg . " ⚡ Tezkor to'lov (" . number_format($xp, 0, '', ' ') . " so'm) ham qaytarildi.") : $msg;
+    }
+
+    private static function refundMain(array $job): string
+    {
+        $chatId = (int)$job['telegram_id'];
         if ((int)($job['is_free'] ?? 0) === 1) {
             db()->prepare('UPDATE users SET free_used = 0 WHERE telegram_id = ?')->execute([$chatId]);
             return "Bepul urinishingiz qaytarildi.";
@@ -731,7 +742,10 @@ class Engine
         $pr = (int)($job['priority'] ?? 0);
         $st = db()->prepare("SELECT COUNT(*) FROM jobs WHERE status IN ('pending','processing') AND started_at IS NULL
             AND (COALESCE(priority, 0) > ? OR (COALESCE(priority, 0) = ? AND id < ?))");
-        $st->execute([$pr, $pr, $job['id']]);
+        $st->bindValue(1, $pr, PDO::PARAM_INT);           // COALESCE() natijasida affinity yo'q — matn '0' bilan teng chiqmaydi
+        $st->bindValue(2, $pr, PDO::PARAM_INT);
+        $st->bindValue(3, (int)$job['id'], PDO::PARAM_INT);
+        $st->execute();
         return (int)$st->fetchColumn() + 1;
     }
 
@@ -843,10 +857,14 @@ class Engine
         if (!in_array($job['status'], ['pending', 'processing'], true)) {
             return ['inline_keyboard' => []];
         }
-        return ['inline_keyboard' => [[
+        $rows = [[
             ['text' => '🔄 Holatni yangilash', 'callback_data' => 'job:r:' . $job['id']],
             ['text' => '✖️ Bekor qilish', 'callback_data' => 'job:c:' . $job['id']],
-        ]]];
+        ]];
+        if (class_exists('Express') && ($xb = Express::button($job))) {
+            array_unshift($rows, [$xb]);
+        }
+        return ['inline_keyboard' => $rows];
     }
 
     /** Foydalanuvchiga progress xabarini birinchi marta yuboradi. */

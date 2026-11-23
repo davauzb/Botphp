@@ -771,6 +771,15 @@ function handleCallbackQuery(array $cb): void
             Telegram::answerCallbackQuery((string)($cb['id'] ?? ''), Engine::refreshNow((int)$jid, $uid));
         } elseif ($act === 'c') {
             Telegram::answerCallbackQuery((string)($cb['id'] ?? ''), Engine::cancel((int)$jid, $uid), true);
+        } elseif ($act === 'x') {                          // ⚡ tezkor
+            Telegram::answerCallbackQuery((string)($cb['id'] ?? ''), Express::ask($uid, (int)$jid));
+        } elseif ($act === 'xy') {
+            Telegram::answerCallbackQuery((string)($cb['id'] ?? ''), Express::confirm($uid, (int)$jid, (int)($cb['message']['message_id'] ?? 0)), true);
+        } elseif ($act === 'xn') {
+            Telegram::answerCallbackQuery((string)($cb['id'] ?? ''));
+            Telegram::call('deleteMessage', ['chat_id' => $chatId, 'message_id' => (int)($cb['message']['message_id'] ?? 0)]);
+        } else {
+            Telegram::answerCallbackQuery((string)($cb['id'] ?? ''));
         }
         return;
     }
