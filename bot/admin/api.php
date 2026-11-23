@@ -542,6 +542,16 @@ try {
                 return ['ok' => true, 'msg' => "Kalit o'chirildi"];
             });
 
+        case 'backups':
+            out(['ok' => true] + Maintenance::backupList());
+
+        case 'backup_send':
+            if (!AdminSecurity::rate('bk:' . $admin, 6, 600)) {
+                AdminSecurity::fail('rate', 429, "Juda tez-tez. Birozdan keyin urinib ko'ring");
+            }
+            @set_time_limit(120);
+            out(Maintenance::backupSend($admin, strv($b['name'] ?? 'new', 40)));
+
         case 'sources':
             out(['ok' => true, 'items' => Growth::sourcesReport(intv($b['days'] ?? 30, 0, 3650)),
                 'bot' => defined('BOT_USERNAME') && BOT_USERNAME !== 'BOT_USERNAME_HERE' ? (string)BOT_USERNAME : '',

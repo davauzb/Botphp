@@ -891,10 +891,27 @@ async function drawSources(box, days) {
 
 /* ------------------------------------------------------------------ tizim: AI kalitlari va xatolar jurnali */
 async function viewSystem(box) {
-  const keys = h('div', {}), logs = h('div', {}), img = h('div', {}), ub = h('div', {});
-  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '👤 Userbot — HUMO avto-to\'lov'), ub, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
-  if (CFG.role === 'owner') { drawUserbot(ub); drawKeys(keys); drawImgKeys(img); }
+  const keys = h('div', {}), logs = h('div', {}), img = h('div', {}), ub = h('div', {}), bk = h('div', {});
+  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '👤 Userbot — HUMO avto-to\'lov'), ub, h('div', { class: 'sec' }, '🗄 Baza zaxiralari'), bk, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
+  if (CFG.role === 'owner') { drawUserbot(ub); drawBackups(bk); drawKeys(keys); drawImgKeys(img); }
   drawLogs(logs, '', '');
+}
+async function drawBackups(box) {
+  box.replaceChildren(skeleton(1, 70));
+  const r = await api('backups');
+  if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
+  const busy = async (btn, label, fn) => { const o = btn.textContent; btn.disabled = true; btn.textContent = label; try { await fn(); } finally { btn.disabled = false; btn.textContent = o; } };
+  const send = (name, btn) => busy(btn, 'Yuborilmoqda…', async () => { const rr = await api('backup_send', { name }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); if (rr.ok) drawBackups(box); });
+  const info = h('div', { class: 'card', style: { padding: '12px 14px' } },
+    h('div', { class: 't1', style: { whiteSpace: 'normal' } }, r.daily ? '✅ Har kuni ' + p2(r.hour) + ':00 dan keyin avtomatik zaxira olinadi' : "⚠️ Kunlik zaxira o'chiq (Sozlamalar → DB_BACKUP_DAILY)"),
+    h('div', { class: 't2', style: { whiteSpace: 'normal', marginTop: '4px' } }, 'Serverda oxirgi ' + r.keep + ' tasi saqlanadi · Oxirgisi: ' + dt(r.last) + ' · ',
+      r.channel ? badge('kanalga ham yuboriladi', 'ok') : badge('faqat adminga', ''), ' ', r.encrypted ? badge('🔐 shifrlangan', 'ok') : badge('shifrsiz', 'warn')),
+    (() => { const b = h('button', { class: 'btn pri', style: { width: '100%', marginTop: '10px' }, onclick: () => send('new', b) }, "📥 Hozir zaxira olish va Telegram'ga yuborish"); return b; })(),
+    h('div', { class: 't2', style: { whiteSpace: 'normal', marginTop: '6px' } }, "Zaxira faqat sizning Telegram'ingizga yuboriladi (veb orqali yuklab olinmaydi — xavfsizlik uchun). Kanal va parol: Sozlamalar → Rejim bo'limi."));
+  const list = r.items.length ? h('div', { class: 'card', style: { marginTop: '10px' } }, r.items.map(f => h('div', { class: 'row' },
+    h('div', { class: 'av' }, '🗄'), h('div', { class: 'grow' }, h('div', { class: 't1' }, f.name), h('div', { class: 't2' }, dt(f.ts) + ' · ' + bytes(f.size))),
+    h('div', { class: 'right' }, (() => { const b = h('button', { class: 'btn sm', onclick: () => send(f.name, b) }, '📤 Telegram'); return b; })())))) : emptyBox("Hali zaxira yo'q", 'box');
+  box.replaceChildren(info, list);
 }
 async function drawKeys(box) {
   box.replaceChildren(skeleton(2, 70));

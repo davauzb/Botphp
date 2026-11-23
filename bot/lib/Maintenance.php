@@ -319,7 +319,7 @@ class Maintenance
             }
         }
         $storage = dirname(DB_PATH);
-        foreach (['/backup_*.zip' => 3, '/backups/db_*.zip' => 3] as $pat => $keep) {
+        foreach (['/backup_*.zip' => 3, '/backups/db_*.zip' => max(2, min(60, (int)Engine::c('BACKUP_KEEP', 7)))] as $pat => $keep) {
             $files = glob($storage . $pat) ?: [];
             usort($files, fn($a, $b) => filemtime($b) <=> filemtime($a));
             foreach (array_slice($files, $keep) as $f) {
@@ -343,14 +343,19 @@ class Maintenance
         return ['removed' => $removed, 'freed' => $freed];
     }
 
-    /** Baza zaxirasi: zip yo'li (Telegram'ga yuborilsa — adminga ham). */
+    /**
+     * 🗄 Baza zaxirasi (zip). Aylanma: storage/backups/ da oxirgi BACKUP_KEEP tasi saqlanadi (default 7).
+     * $send = true — adminga (va BACKUP_CHAT_ID bo'lsa — o'sha yopiq kanal/guruhga ham) Telegram orqali yuboriladi.
+     * BACKUP_PASSWORD berilgan bo'lsa — zip AES-256 bilan shifrlanadi (Telegram'dagi nusxa begona qo'lga tushsa ham ochilmaydi).
+     */
     public static function backup(bool $send): ?string
     {
-        $dir = dirname(DB_PATH) . '/backups';
+        $dir = self::backupDir();
         if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
             return null;
         }
         @file_put_contents($dir . '/.htaccess', "Require all denied\n");
+        @file_put_contents($dir . '/index.html', '');
         $copy = $dir . '/tmp_' . bin2hex(random_bytes(4)) . '.sqlite';
         $ok = false;
         try {
@@ -374,14 +379,90 @@ class Maintenance
             return null;
         }
         $z->addFile($copy, 'studybot.sqlite');
+        $pw = (string)Engine::c('BACKUP_PASSWORD', '');
+        $enc = false;
+        if ($pw !== '' && method_exists($z, 'setEncryptionName') && defined('ZipArchive::EM_AES_256')) {
+            $enc = $z->setEncryptionName('studybot.sqlite', ZipArchive::EM_AES_256, $pw);
+        }
         $z->close();
         @unlink($copy);
-        if ($send && defined('ADMIN_CHAT_ID') && (int)ADMIN_CHAT_ID > 0 && filesize($zipPath) < 48 * 1048576) {
-            $users = (int)db()->query('SELECT COUNT(*) FROM users')->fetchColumn();
-            $bal = (int)db()->query('SELECT COALESCE(SUM(balance),0) FROM users')->fetchColumn();
-            Telegram::sendDocument((int)ADMIN_CHAT_ID, $zipPath, "🗄 Kunlik baza zaxirasi\n👥 Mijozlar: {$users} · 💰 Balanslar: " . number_format($bal, 0, '', ' ')
-                . " so'm\n\nTiklash: zipdagi studybot.sqlite ni storage/ papkasiga qo'ying.");
+        if (!is_file($zipPath)) {
+            return null;
+        }
+        if ($send) {
+            self::sendBackup($zipPath, "🗄 Kunlik baza zaxirasi", $enc);
         }
         return $zipPath;
+    }
+
+    public static function backupDir(): string
+    {
+        return dirname(DB_PATH) . '/backups';
+    }
+
+    /** Zaxirani Telegram'ga yuborish (admin + BACKUP_CHAT_ID). */
+    public static function sendBackup(string $zipPath, string $title, ?bool $enc = null, ?int $onlyTo = null): bool
+    {
+        if (!is_file($zipPath) || filesize($zipPath) >= 48 * 1048576) {
+            return false;
+        }
+        $enc = $enc ?? ((string)Engine::c('BACKUP_PASSWORD', '') !== '');
+        $users = (int)db()->query('SELECT COUNT(*) FROM users')->fetchColumn();
+        $bal = (int)db()->query('SELECT COALESCE(SUM(balance),0) FROM users')->fetchColumn();
+        $cap = "$title\n👥 Mijozlar: {$users} · 💰 Balanslar: " . number_format($bal, 0, '', ' ') . " so'm"
+            . ($enc ? "\n🔐 Parol bilan shifrlangan (Sozlamalardagi BACKUP_PASSWORD)" : '')
+            . "\n\nTiklash: zipdagi studybot.sqlite ni storage/ papkasiga qo'ying (bot to'xtatilgan holda).";
+        $targets = $onlyTo ? [$onlyTo] : array_values(array_unique(array_filter([
+            defined('ADMIN_CHAT_ID') ? (int)ADMIN_CHAT_ID : 0,
+            (int)preg_replace('/[^\d\-]/', '', (string)Engine::c('BACKUP_CHAT_ID', '')),
+        ])));
+        $ok = false;
+        foreach ($targets as $to) {
+            try {
+                $ok = Telegram::sendDocument($to, $zipPath, $cap) || $ok;
+            } catch (Throwable $e) {
+                logError('maint', 'Zaxira yuborilmadi (' . $to . '): ' . $e->getMessage());
+            }
+        }
+        return $ok;
+    }
+
+    /** Admin panel uchun ro'yxat. */
+    public static function backupList(): array
+    {
+        $files = glob(self::backupDir() . '/db_*.zip') ?: [];
+        usort($files, fn($a, $b) => filemtime($b) <=> filemtime($a));
+        $last = (int)(db()->query("SELECT ts FROM engine_kv WHERE k = 'mt_backup'")->fetchColumn() ?: 0);
+        return [
+            'items' => array_map(fn($f) => ['name' => basename($f), 'size' => (int)filesize($f), 'ts' => (int)filemtime($f)], $files),
+            'keep' => max(2, min(60, (int)Engine::c('BACKUP_KEEP', 7))),
+            'daily' => (bool)Engine::c('DB_BACKUP_DAILY', true),
+            'hour' => (int)Engine::c('DB_BACKUP_HOUR', 3),
+            'channel' => (int)preg_replace('/[^\d\-]/', '', (string)Engine::c('BACKUP_CHAT_ID', '')) !== 0,
+            'encrypted' => (string)Engine::c('BACKUP_PASSWORD', '') !== '',
+            'last' => $last,
+        ];
+    }
+
+    /** Paneldan: tanlangan (yoki yangi) zaxirani adminning o'z Telegram'iga yuborish. */
+    public static function backupSend(int $admin, string $name): array
+    {
+        if ($name === 'new') {
+            $path = self::backup(false);
+            if (!$path) {
+                return ['ok' => false, 'msg' => 'Zaxira olinmadi (xatolar jurnaliga qarang)'];
+            }
+            self::cleanup();
+        } else {
+            if (!preg_match('/^db_\d{8}_\d{6}\.zip$/', $name)) {
+                return ['ok' => false, 'msg' => "Fayl nomi noto'g'ri"];
+            }
+            $path = self::backupDir() . '/' . $name;
+            if (!is_file($path)) {
+                return ['ok' => false, 'msg' => 'Fayl topilmadi'];
+            }
+        }
+        $ok = self::sendBackup($path, $name === 'new' ? '🗄 Baza zaxirasi (paneldan olindi)' : '🗄 Baza zaxirasi: ' . $name, null, $admin);
+        return ['ok' => $ok, 'msg' => $ok ? "Zaxira Telegram'ingizga yuborildi" : "Telegram'ga yuborib bo'lmadi (fayl 48 MB dan katta bo'lishi mumkin)"];
     }
 }
