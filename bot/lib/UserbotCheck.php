@@ -6,6 +6,44 @@
  */
 class UserbotCheck
 {
+    /** PHP CLI ikkilik faylini qidiradi (hostinglarda turli joyda bo'ladi). */
+    public static function findPhpCli(): string
+    {
+        $v = PHP_MAJOR_VERSION . PHP_MINOR_VERSION;
+        $dv = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
+        $cands = [PHP_BINDIR . '/php', PHP_BINDIR . '/php-cli', "/opt/alt/php$v/usr/bin/php", "/opt/cpanel/ea-php$v/root/usr/bin/php", "/usr/local/php$v/bin/php",
+            "/opt/php$v/bin/php", "/opt/php$dv/bin/php", "/usr/bin/php$dv", "/usr/local/bin/php$dv", "/usr/bin/php$v", '/usr/local/bin/php', '/usr/bin/php', '/usr/local/bin/ea-php' . $v];
+        foreach ($cands as $c) {
+            if (@is_executable($c) && !str_contains($c, 'fpm')) {
+                return $c;
+            }
+        }
+        foreach (["php$dv", "php$v", 'php-cli', 'php'] as $n) {
+            $p = trim((string)@shell_exec('command -v ' . escapeshellarg($n) . ' 2>/dev/null'));
+            if ($p !== '' && @is_executable($p)) {
+                $ver = (string)@shell_exec(escapeshellarg($p) . ' -v 2>/dev/null');
+                if (str_contains($ver, '(cli)')) {
+                    return $p;
+                }
+            }
+        }
+        return '';
+    }
+
+    public static function findPython(): string
+    {
+        foreach (['python3', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3.8', 'python'] as $n) {
+            $p = trim((string)@shell_exec('command -v ' . escapeshellarg($n) . ' 2>/dev/null'));
+            if ($p !== '') {
+                $ver = trim((string)@shell_exec(escapeshellarg($p) . ' --version 2>&1'));
+                if (preg_match('/Python 3\.(\d+)/', $ver, $m) && (int)$m[1] >= 8) {
+                    return "$p ($ver)";
+                }
+            }
+        }
+        return '';
+    }
+
     public static function report(): string
     {
         $L = ["👤 <b>Userbot uchun hosting tekshiruvi</b>"];
@@ -29,14 +67,16 @@ class UserbotCheck
         $mem = (string)ini_get('memory_limit');
         $bytes = $mem === '-1' ? PHP_INT_MAX : (int)$mem * (stripos($mem, 'g') !== false ? 1 << 30 : (stripos($mem, 'm') !== false ? 1 << 20 : 1));
         $row($bytes >= 256 << 20, "memory_limit: $mem" . ($bytes >= 256 << 20 ? '' : ' — kamida 256M tavsiya'), false);
-        $cli = '';
-        foreach ([PHP_BINDIR . '/php', '/usr/bin/php', '/usr/local/bin/php', '/opt/alt/php' . PHP_MAJOR_VERSION . PHP_MINOR_VERSION . '/usr/bin/php'] as $c) {
-            if (@is_executable($c)) {
-                $cli = $c;
-                break;
-            }
-        }
+        $cli = self::findPhpCli();
         $row($cli !== '', 'PHP CLI: ' . ($cli ?: 'topilmadi'), false);
+        $py = self::findPython();
+        $row($py !== '', 'Python: ' . ($py ?: 'topilmadi'), false);
+        if ($py !== '') {
+            $tl = trim((string)@shell_exec(escapeshellarg(explode(' ', $py)[0]) . ' -c "import telethon,sys;print(telethon.__version__)" 2>&1'));
+            $pip = trim((string)@shell_exec(escapeshellarg(explode(' ', $py)[0]) . ' -m pip --version 2>&1'));
+            $L[] = '▫️ Telethon: ' . (preg_match('/^\d+\.\d+/', $tl) ? $tl : "o'rnatilmagan") . ' · pip: ' . (str_starts_with($pip, 'pip') ? 'bor' : "yo'q");
+        }
+        $L[] = '▫️ OS: ' . php_uname('s') . ' ' . php_uname('m') . ' · user: ' . (function_exists('get_current_user') ? get_current_user() : '?');
         $ch = curl_init('https://phar.madelineproto.xyz/madeline.php');
         curl_setopt_array($ch, [CURLOPT_NOBODY => true, CURLOPT_TIMEOUT => 10, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true]);
         curl_exec($ch);
