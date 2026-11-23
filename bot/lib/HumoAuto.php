@@ -174,17 +174,18 @@ class HumoAuto
         $pdo = db();
         self::ensure($pdo);
         self::expireOld($pdo);
-        if ($via === 'userbot') {
+        if (str_starts_with($via, 'userbot')) {
+            $peer = str_contains($via, ':') ? substr($via, 8) : '@' . HUMO_BOT_USERNAME;
             try {
                 $pdo->prepare('INSERT INTO engine_kv (k, v, ts) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, ts = excluded.ts')
-                    ->execute(['humo_seen_bot', 'userbot: @' . HUMO_BOT_USERNAME . (stripos($text, 'UZS') !== false ? ' (UZS bor)' : ''), time()]);
+                    ->execute(['humo_seen_bot', 'userbot: ' . $peer . (preg_match("/uzs|сум|so['ʻ’]m/iu", $text) ? ' (summa bor)' : ''), time()]);
             } catch (Throwable $e) {
             }
         }
         $p = self::parse($text);
         if ($p === null) {
             // Chiqim (➖) va boshqa xabarlar jim o'tkaziladi; "UZS" bor, lekin tushunilmagan kirimni admin ko'rishi uchun yozamiz
-            if (stripos($text, 'UZS') !== false && mb_strpos($text, '➖') === false) {
+            if (preg_match("/uzs|сум|so['ʻ’]m/iu", $text) && mb_strpos($text, '➖') === false && !preg_match('/(списан|оплат|покупк|chiqim|xarid|yechildi|🔴)/iu', $text)) {
                 $pdo->prepare("INSERT OR IGNORE INTO humo_events (ekey, ts, msg_date, status, raw) VALUES (?,?,?,'unparsed',?)")
                     ->execute(['u:' . $chatId . ':' . $msgId, time(), $date, mb_substr($text, 0, 300)]);
             }
@@ -306,7 +307,7 @@ class HumoAuto
             return null;
         }
         if (!preg_match('/➕\s*([0-9][0-9 .,]*?)\s*UZS/iu', $t, $m)) {
-            return null;
+            return self::parseGeneric($t);              // Uzcard va boshqa bank botlari formati
         }
         $money = self::money($m[1]);
         if ($money === null) {
@@ -340,6 +341,62 @@ class HumoAuto
             'amount' => $money[0], 'tiyin' => $money[1], 'card' => $cm[1],
             'ts' => $ts, 'balance' => $balance, 'source' => mb_substr($source, 0, 80),
             'key' => $key, 'has_balance' => $balRaw !== '' && $tsRaw !== '',
+        ];
+    }
+
+    /**
+     * Umumiy format (Uzcard, Anor, Kapital, TBC va h.k. bildirishnoma botlari; o'zbek/rus/ingliz):
+     * kirim kalit so'zi + summa (UZS/so'm/сум) + karta oxirgi 4 raqami bo'lishi SHART; chiqim belgilari bo'lsa — rad.
+     */
+    public static function parseGeneric(string $t): ?array
+    {
+        $low = mb_strtolower($t);
+        if (preg_match("/(списан|оплат|покупк|снятие|перевод отправлен|chiqim|xarid|to'lov qilindi|yechildi|debit|purchase|withdraw|🔴|❌|➖)/u", $low)) {
+            return null;
+        }
+        if (!preg_match("/(пополнен|зачислен|поступлен|получен перевод|kirim|to['ʻ’]ldiril|tushum|qabul qilindi|o['ʻ’]tkazma keldi|credited|received|top.?up|deposit|🟢|✅|➕)/u", $low)) {
+            return null;
+        }
+        $num = '([0-9][0-9 .,\x{00A0}]*[0-9])';
+        if (!preg_match('/' . $num . '\s*(?:uzs|so[\'ʻ’]?m|сум|sum)\b/iu', $t, $m) && !preg_match('/(?:uzs|сум)\s*' . $num . '/iu', $t, $m)) {
+            return null;
+        }
+        $money = self::money($m[1]);
+        if ($money === null || $money[0] <= 0) {
+            return null;
+        }
+        if (!preg_match('/(?:\*|•|x|х|\.{2,})\s?(\d{4})\b/u', $t, $cm)) {
+            return null;
+        }
+        $ts = null;
+        $tsRaw = '';
+        if (preg_match('/(\d{1,2}):(\d{2})(?::\d{2})?[,\s]+(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4})/u', $t, $tm)) {
+            $tsRaw = $tm[0];
+            $y = (int)$tm[5] < 100 ? 2000 + (int)$tm[5] : (int)$tm[5];
+            $ts = gmmktime((int)$tm[1] - 5, (int)$tm[2], 0, (int)$tm[4], (int)$tm[3], $y) ?: null;
+        } elseif (preg_match('/(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4})[,\s]+(\d{1,2}):(\d{2})/u', $t, $tm)) {
+            $tsRaw = $tm[0];
+            $y = (int)$tm[3] < 100 ? 2000 + (int)$tm[3] : (int)$tm[3];
+            $ts = gmmktime((int)$tm[4] - 5, (int)$tm[5], 0, (int)$tm[2], (int)$tm[1], $y) ?: null;
+        }
+        $balance = null;
+        $balRaw = '';
+        if (preg_match('/(?:💰|баланс|остаток|qoldiq|balans|balance)[^0-9\n]{0,15}' . $num . '/iu', $t, $bm)) {
+            $b = self::money($bm[1]);
+            if ($b !== null) {
+                $balance = $b[0] * 100 + $b[1];
+                $balRaw = (string)$balance;
+            }
+        }
+        $source = '';
+        if (preg_match('/(?:📍|отправитель|от кого|jo[\'ʻ’]natuvchi|from)[:\s]*([^\n\r]{2,80})/iu', $t, $sm)) {
+            $source = trim($sm[1]);
+        }
+        $key = sha1('g|' . $cm[1] . '|' . $tsRaw . '|' . ($money[0] * 100 + $money[1]) . '|' . $balRaw);
+        return [
+            'amount' => $money[0], 'tiyin' => $money[1], 'card' => $cm[1],
+            'ts' => $ts, 'balance' => $balance, 'source' => mb_substr($source, 0, 80),
+            'key' => $key, 'has_balance' => $balRaw !== '' && $tsRaw !== '', 'generic' => true,
         ];
     }
 

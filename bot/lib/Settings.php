@@ -21,6 +21,7 @@ class Settings
         'STARS_RATE' => ['int', 'money', "1 ⭐ = necha so'm", 'Telegram Stars kursi', 50, 2000],
         'PAY_CARD_NUMBER' => ['text', 'money', "💳 Karta raqami (chek orqali to'lov)", "Mijozga ko'rsatiladi. Bo'sh bo'lsa — config.php dagi HUMO_CARD_NUMBER", 0, 30],
         'PAY_CARD_HOLDER' => ['text', 'money', 'Karta egasi (ixtiyoriy)', 'Masalan: Davron J.', 0, 60],
+        'UB_BOTS' => ['text', 'money', '👤 Userbot: qo\'shimcha bank botlari', "Uzcard yoki boshqa bank bildirishnoma botlari (vergul bilan, masalan: @MyUzcardBot). HUMO boti config'dan olinadi", 0, 200],
         'PAY_HUMO' => ['bool', 'money', "To'lov: ⚡ Humo / Uzcard (Avto)", "Telegram Business orqali avtomatik tasdiqlash. O'chiq bo'lsa — faqat chek (qo'lda)", 0, 1],
         'PAY_CLICK' => ['bool', 'money', "To'lov: 💳 Click", '', 0, 1],
         'PAY_PAYME' => ['bool', 'money', "To'lov: 💳 Payme", '', 0, 1],

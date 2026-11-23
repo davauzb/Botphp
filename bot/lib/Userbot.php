@@ -258,19 +258,55 @@ class Userbot
             'last_poll' => (int)(self::kv('ub_poll')['ts'] ?? 0), 'last_result' => (string)(self::kv('ub_poll')['v'] ?? '')];
     }
 
+    /** O'qiladigan bank botlari: config'dagi HUMO_BOT_USERNAME + Sozlamalardagi UB_BOTS (vergul bilan, 5 tagacha). */
+    public static function peers(): array
+    {
+        $list = [ltrim((string)HUMO_BOT_USERNAME, '@')];
+        foreach (preg_split('/[\s,;]+/u', (string)Engine::c('UB_BOTS', '')) ?: [] as $u) {
+            $u = ltrim(trim($u), '@');
+            if (preg_match('/^[A-Za-z][A-Za-z0-9_]{3,31}$/', $u) && preg_match('/bot$/i', $u)) {
+                $list[] = $u;
+            }
+        }
+        $out = [];
+        foreach ($list as $u) {
+            if ($u !== '' && !isset($out[strtolower($u)])) {
+                $out[strtolower($u)] = '@' . $u;
+            }
+        }
+        return array_slice(array_values($out), 0, 6);
+    }
+
+    private static function lastKey(string $peer, int $i): string
+    {
+        return $i === 0 ? 'LAST_ID' : 'LAST_' . strtoupper(substr(preg_replace('/\W/', '', $peer), 0, 32));
+    }
+
     /** Sinov: oxirgi xabarlarni o'qib ko'radi (hech narsa hisoblamaydi). */
     public static function test(): array
     {
-        $r = self::call(['cmd' => 'fetch', 'peer' => '@' . ltrim((string)HUMO_BOT_USERNAME, '@'), 'limit' => 5, 'min_id' => 0]);
+        $peers = self::peers();
+        $r = self::call(['cmd' => 'fetch_multi', 'peers' => array_fill_keys($peers, 0), 'limit' => 5]);
         if (empty($r['ok'])) {
             return ['ok' => false, 'msg' => self::err($r)];
         }
-        $n = count((array)$r['messages']);
-        $inc = 0;
-        foreach ((array)$r['messages'] as $m) {
-            $inc += HumoAuto::parse((string)$m['text']) !== null ? 1 : 0;
+        $parts = [];
+        $anyOk = false;
+        foreach ($peers as $peer) {
+            $pr = (array)($r['peers'][$peer] ?? []);
+            if (empty($pr['ok'])) {
+                $parts[] = "❌ $peer: " . self::err($pr);
+                continue;
+            }
+            $anyOk = true;
+            $n = count((array)$pr['messages']);
+            $inc = 0;
+            foreach ((array)$pr['messages'] as $m) {
+                $inc += HumoAuto::parse((string)$m['text']) !== null ? 1 : 0;
+            }
+            $parts[] = "✅ $peer: oxirgi $n ta xabar, $inc tasi kirim";
         }
-        return ['ok' => true, 'msg' => "✅ @" . HUMO_BOT_USERNAME . " chati o'qildi: oxirgi $n ta xabar, ulardan $inc tasi kirim (➕)"];
+        return ['ok' => $anyOk, 'msg' => implode("\n", $parts)];
     }
 
     // ------------------------------------------------------------------ fon: o'qish
@@ -344,8 +380,12 @@ class Userbot
         if ($last === 0) {
             self::kvSet('ub_poll', 'start');
         }
-        $minId = (int)self::get('LAST_ID');
-        $r = self::call(['cmd' => 'fetch', 'peer' => '@' . ltrim((string)HUMO_BOT_USERNAME, '@'), 'limit' => 20, 'min_id' => $minId], (int)max(12, min(35, $until - microtime(true) - 2)));
+        $peers = self::peers();
+        $mins = [];
+        foreach ($peers as $i => $peer) {
+            $mins[$peer] = (int)self::get(self::lastKey($peer, $i));
+        }
+        $r = self::call(['cmd' => 'fetch_multi', 'peers' => $mins, 'limit' => 20], (int)max(12, min(35, $until - microtime(true) - 2)));
         if (empty($r['ok'])) {
             self::kvSet('ub_poll', 'xato: ' . mb_substr(self::err($r), 0, 120));
             if (($r['error'] ?? '') === 'not_authorized') {
@@ -354,18 +394,33 @@ class Userbot
             }
             return;
         }
-        $msgs = array_reverse((array)$r['messages']);   // eskidan yangiga
-        $max = $minId;
-        foreach ($msgs as $m) {
-            $max = max($max, (int)$m['id']);
-            if ($minId === 0 && (int)$m['date'] < time() - 3 * 3600) {
-                continue;                             // birinchi ishga tushishda eski xabarlarni hisoblamaymiz
+        $total = 0;
+        $errs = [];
+        foreach ($peers as $i => $peer) {
+            $pr = (array)($r['peers'][$peer] ?? []);
+            if (empty($pr['ok'])) {
+                $errs[] = $peer;
+                continue;
             }
-            HumoAuto::ingest((string)$m['text'], (int)$m['date'], (int)($r['peer_id'] ?? 0), (int)$m['id'], 'userbot');
+            $minId = $mins[$peer];
+            $msgs = array_reverse((array)$pr['messages']);   // eskidan yangiga
+            $max = $minId;
+            foreach ($msgs as $m) {
+                $max = max($max, (int)$m['id']);
+                if ($minId === 0 && (int)$m['date'] < time() - 3 * 3600) {
+                    continue;                             // birinchi ishga tushishda eski xabarlarni hisoblamaymiz
+                }
+                HumoAuto::ingest((string)$m['text'], (int)$m['date'], (int)($pr['peer_id'] ?? 0), (int)$m['id'], $i === 0 ? 'userbot' : 'userbot:' . $peer);
+            }
+            if ($max > $minId) {
+                self::put(self::lastKey($peer, $i), (string)$max);
+            }
+            $total += count($msgs);
         }
-        if ($max > $minId) {
-            self::put('LAST_ID', (string)$max);
+        if ($errs) {
+            self::kvSet('ub_poll', 'ok · ' . $total . ' ta yangi xabar · ⚠️ o\'qilmadi: ' . implode(', ', $errs));
+            return;
         }
-        self::kvSet('ub_poll', 'ok · ' . count($msgs) . ' ta yangi xabar');
+        self::kvSet('ub_poll', 'ok · ' . $total . ' ta yangi xabar' . (count($peers) > 1 ? ' (' . count($peers) . ' ta bot)' : ''));
     }
 }

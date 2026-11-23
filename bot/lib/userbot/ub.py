@@ -62,6 +62,27 @@ async def run(cfg):
                     continue
                 msgs.append({"id": m.id, "date": int(m.date.timestamp()), "text": m.message or ""})
             out({"ok": True, "peer_id": ent.id, "messages": msgs})
+        elif cmd == "fetch_multi":
+            # bir ulanishda bir nechta bank botini o'qish: {"peers": {"@bot": min_id, ...}}
+            if not await c.is_user_authorized():
+                out({"ok": False, "error": "not_authorized"}); return
+            res = {}
+            for peer, min_id in (cfg.get("peers") or {}).items():
+                try:
+                    ent = await c.get_entity(peer)
+                    if not getattr(ent, "bot", False):
+                        res[peer] = {"ok": False, "error": "peer is not a bot"}; continue
+                    msgs = []
+                    async for m in c.iter_messages(ent, limit=int(cfg.get("limit", 20)), min_id=int(min_id or 0)):
+                        if m.out or m.fwd_from is not None or m.via_bot_id or m.sender_id != ent.id:
+                            continue
+                        msgs.append({"id": m.id, "date": int(m.date.timestamp()), "text": m.message or ""})
+                    res[peer] = {"ok": True, "peer_id": ent.id, "messages": msgs}
+                except errors.FloodWaitError:
+                    raise
+                except Exception as e:
+                    res[peer] = {"ok": False, "error": type(e).__name__ + ": " + str(e)[:120]}
+            out({"ok": True, "peers": res})
         elif cmd == "logout":
             await c.log_out()
             out({"ok": True})
