@@ -138,6 +138,9 @@ class JobSteps
                     $steps[] = ['id' => 'abstract', 'k' => 'abstract', 'w' => 1.0, 'label' => 'Annotatsiya va kalit so\'zlar'];
                 }
             }
+            if ((bool)Engine::c('QC_ENABLED', true)) {
+                $steps[] = ['id' => 'qc', 'k' => 'qc', 'w' => 1.0, 'label' => 'Sifat nazorati: matn tekshirilmoqda'];
+            }
             if (Uniq::enabled()) {
                 $steps[] = ['id' => 'uniq', 'k' => 'uniq', 'w' => 1.0, 'label' => 'Unikallik tekshirilmoqda'];
             }
@@ -216,6 +219,9 @@ class JobSteps
                 break;
             case 'uniq':
                 self::stepUniq($job, $state);
+                break;
+            case 'qc':
+                self::stepQC($state);
                 break;
             case 'cw_words':
                 self::stepCrossWords($state);
@@ -571,6 +577,150 @@ class JobSteps
         }
         $state['res']['tqb'][$b] = count($qs);
         $state['res']['tq'] = array_merge((array)($state['res']['tq'] ?? []), array_slice($qs, 0, $cnt));
+    }
+
+    /**
+     * 🛡 SIFAT NAZORATI (yig'ishdan oldin): har bo'lim matni tekshiriladi —
+     *  • AI'ning ortiqcha gaplari («Albatta», «Mana…», «Here is…»), [qavsdagi to'ldiruvchilar], ketma-ket takror abzatslar olib tashlanadi;
+     *  • oxiri chala qolgan (token chegarasida uzilgan) gap kesiladi;
+     *  • rejadagidan juda qisqa yoki oldingi bob bilan juda o'xshash qism (ko'pi bilan 2 ta) qayta yoziladi — har tickda bittadan.
+     */
+    private static function stepQC(array &$state): void
+    {
+        $t = (array)($state['res']['t'] ?? []);
+        if (!$t) {
+            return;
+        }
+        $p = $state['p'];
+        if (!isset($state['res']['qc'])) {
+            $cleaned = 0;
+            foreach ($t as $k => $txt) {
+                $new = self::qcClean((string)$txt);
+                if ($new !== $txt && countWords($new) >= countWords((string)$txt) * 0.8) {
+                    $state['res']['t'][$k] = $new;
+                    $cleaned++;
+                }
+            }
+            $t = $state['res']['t'];
+            $todo = [];
+            $byId = [];
+            foreach ((array)$state['steps'] as $s) {
+                $byId[$s['id']] = $s;
+            }
+            foreach ($t as $k => $txt) {
+                $s = $byId[$k] ?? null;
+                if (!$s || !in_array($s['k'], ['intro', 'chapter', 'concl'], true)) {
+                    continue;
+                }
+                $target = $s['k'] === 'chapter' ? (int)$p['partWords'] : (int)round($p['per'] * 0.7);
+                $words = countWords((string)$txt);
+                $why = null;
+                if ($target > 0 && $words < $target * 0.55) {
+                    $why = 'short';
+                } elseif ($s['k'] === 'chapter') {
+                    foreach ($t as $k2 => $txt2) {
+                        if ($k2 === $k) {
+                            break;                               // faqat oldingi qismlar bilan
+                        }
+                        if (isset($byId[$k2]) && $byId[$k2]['k'] === 'chapter' && textSimilarity((string)$txt, (string)$txt2) > 0.45) {
+                            $why = 'dup';
+                            break;
+                        }
+                    }
+                }
+                if ($why) {
+                    $todo[] = $k . '|' . $why;
+                }
+            }
+            $state['res']['qc'] = ['todo' => array_slice($todo, 0, 2), 'cleaned' => $cleaned, 'fixed' => 0, 'found' => count($todo)];
+        }
+        $todo = (array)$state['res']['qc']['todo'];
+        if (!$todo) {
+            return;
+        }
+        [$id, $why] = array_pad(explode('|', (string)array_shift($todo), 2), 2, 'short');
+        $state['res']['qc']['todo'] = $todo;
+        $step = null;
+        foreach ((array)$state['steps'] as $s) {
+            if ($s['id'] === $id) {
+                $step = $s;
+            }
+        }
+        if ($step) {
+            $old = (string)($state['res']['t'][$id] ?? '');
+            $tmp = $state;
+            $tmp['att'][$id] = 1;                           // «DIQQAT: to'liqroq yozing» qo'shiladi
+            try {
+                self::stepWrite($step, $tmp);
+            } catch (StepRetryException $e) {
+                $e->accept($tmp);                            // yangi matn baribir yaxshiroq bo'lishi mumkin
+            } catch (AIUnavailableException $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                logError('steps', 'QC qayta yozish: ' . $e->getMessage());
+            }
+            $new = self::qcClean((string)($tmp['res']['t'][$id] ?? ''));
+            $maxSim = function (string $x) use ($state, $id): float {
+                $m = 0.0;
+                foreach ((array)$state['res']['t'] as $k2 => $o) {
+                    if ($k2 === $id) {
+                        break;
+                    }
+                    if (preg_match('/^c\d+p\d+$/', (string)$k2)) {
+                        $m = max($m, textSimilarity($x, (string)$o));
+                    }
+                }
+                return $m;
+            };
+            $better = $why === 'dup'
+                ? ($new !== '' && countWords($new) >= countWords($old) * 0.8 && $maxSim($new) < $maxSim($old) - 0.05)
+                : ($new !== '' && countWords($new) > countWords($old) * 1.1);
+            if ($better) {
+                $state['res']['t'][$id] = $new;
+                $state['res']['qc']['fixed']++;
+            }
+        }
+        if ($todo) {
+            throw new StepContinueException('QC davom etadi');
+        }
+    }
+
+    /** AI matnidagi «chiqindi»larni tozalash (mazmunga tegmaydi). */
+    public static function qcClean(string $txt): string
+    {
+        $paras = preg_split('/\n\s*\n/u', trim(str_replace("\r", '', $txt))) ?: [];
+        $out = [];
+        $prev = '';
+        foreach ($paras as $i => $pp) {
+            $pp = trim($pp);
+            // AI'ning kirish/yakun gaplari
+            if (preg_match("/^(albatta|mana[,\s]|quyida\s.{0,60}(keltirilgan|berilgan|yozilgan)|sure[,!\s]|certainly|here is|here's|конечно|вот\s)/iu", $pp) && mb_strlen($pp) < 220) {
+                continue;
+            }
+            if (preg_match("/^(umid qilamanki|agar (yana|qo'shimcha).{0,80}(kerak|savol)|if you need|надеюсь)/iu", $pp) && mb_strlen($pp) < 260) {
+                continue;
+            }
+            $pp = preg_replace('/\[(?!RASM\s)[^\]\n]{2,40}\]/u', '', $pp) ?? $pp;          // [Ism Familiya], [manba] kabi to'ldiruvchilar
+            $pp = preg_replace('/[ \t]{2,}/u', ' ', $pp) ?? $pp;
+            if ($pp === '' || ($prev !== '' && $pp === $prev)) {
+                continue;                                   // ketma-ket takror abzats
+            }
+            $out[] = $pp;
+            $prev = $pp;
+        }
+        // Oxirgi abzats gap o'rtasida uzilgan bo'lsa — oxirgi to'liq gapgacha kesamiz
+        if ($out) {
+            $last = end($out);
+            $isSpecial = str_contains($last, "\n") || str_contains($last, ':') || str_starts_with($last, '|') || str_starts_with($last, '[RASM')
+                || preg_match('/^(•|\d+[\.\)])\s/u', $last);
+            if (!$isSpecial && mb_strlen($last) >= 200 && !preg_match('/[.!?…»"\)]\s*$/u', $last)) {
+                $cut = max(mb_strrpos($last, '. ') ?: 0, mb_strrpos($last, '! ') ?: 0, mb_strrpos($last, '? ') ?: 0);
+                if ($cut > 100 && mb_strlen($last) - $cut < 400) {
+                    $out[count($out) - 1] = mb_substr($last, 0, $cut + 1);
+                }
+            }
+        }
+        return implode("\n\n", $out);
     }
 
     /** Krossvord uchun so'z + savol juftlari (joylashtirishda zaxira bo'lishi uchun ko'proq so'raladi). */

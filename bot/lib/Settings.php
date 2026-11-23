@@ -66,6 +66,7 @@ class Settings
         'LOYALTY_MAX_PRICE' => ['int', 'money', "🎁 Sovg'a chegarasi (so'm)", "Sovg'a buyurtma narxi bundan oshsa — shu summaga chegirma. 0 — cheklovsiz", 0, 1000000],
         'EXPRESS_ENABLED' => ['bool', 'feat', '⚡ Tezkor buyurtma', "Navbatda kutayotgan ish progress xabarida «⚡ Tezkor» tugmasi (qo'shimcha to'lov — navbat boshiga)", 0, 1],
         'EXPRESS_PRICE' => ['int', 'money', "⚡ Tezkor narxi (so'm)", "Navbatni chetlab o'tish narxi", 0, 100000],
+        'QC_ENABLED' => ['bool', 'feat', '🛡 Sifat nazorati', "Yig'ishdan oldin: ortiqcha AI gaplari, chala gaplar tozalanadi; juda qisqa/takror bo'limlar qayta yoziladi", 0, 1],
         'PDF_BUTTON' => ['bool', 'feat', '📄 PDF tugmasi', "Tayyor fayl ostida «📄 PDF» tugmasi — ish PDF nusxada ham yuboriladi", 0, 1],
         'TRANSLATE_ENABLED' => ['bool', 'feat', '🌐 Tarjima', "Tayyor fayl ostida «Boshqa tilga tarjima» tugmasi (dizayn o'zgarmaydi)", 0, 1],
         'TRANSLATE_PRICE' => ['int', 'money', "Tarjima narxi, so'm", '0 — bepul', 0, 1000000],
