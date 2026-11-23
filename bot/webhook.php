@@ -885,6 +885,11 @@ function handleCallbackQuery(array $cb): void
         }
         return;
     }
+    if (preg_match('/^pdf:(\d+)$/', $data, $pm)) {       // 📄 PDF nusxa
+        Telegram::answerCallbackQuery((string)$cb['id'], '📄 PDF tayyorlanmoqda…');
+        DocPdf::send($chatId, (int)$pm[1]);
+        return;
+    }
     if (str_starts_with($data, 'tr:') || str_starts_with($data, 'trl:')) {   // 🌐 tarjima
         Telegram::answerCallbackQuery((string)$cb['id']);
         $pp = explode(':', $data);
@@ -1528,6 +1533,9 @@ function sendOrderList(int $chatId, int $page = 0, ?int $editMessageId = null): 
             }
             if (!empty($r['pres_id'])) {
                 $btns[] = ['text' => "✏️ #{$r['id']} tahrirlash", 'callback_data' => 'edit:' . $r['pres_id']];
+            }
+            if (DocPdf::enabled() && $r['type'] !== 'qayta' && (!empty($r['pres_id']) || SlidePdf::sofficePath())) {
+                $btns[] = ['text' => "📄 PDF", 'callback_data' => 'pdf:' . $r['id']];
             }
             if ($btns) {
                 $kb[] = $btns;

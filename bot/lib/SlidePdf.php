@@ -255,11 +255,15 @@ class SlidePdf
         return $jpg;
     }
 
-    private static function writePdf(string $path, array $jpegs, string $title): bool
+    /** JPEG sahifalardan PDF (hujjatlar uchun A4: 595×842 pt). */
+    public static function jpegsToPdf(string $path, array $jpegs, string $title, int $wpt = 595, int $hpt = 842): bool
+    {
+        return self::writePdf($path, $jpegs, $title, $wpt, $hpt);
+    }
+
+    private static function writePdf(string $path, array $jpegs, string $title, int $wpt = 720, int $hpt = 540): bool
     {
         $n = count($jpegs);
-        $wpt = 720;
-        $hpt = 540;
         $objs = [];                         // id => body (string) — stream'lar alohida
         $objs[1] = "<< /Type /Catalog /Pages 2 0 R >>";
         $kids = [];

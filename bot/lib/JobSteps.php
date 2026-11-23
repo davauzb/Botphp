@@ -1170,6 +1170,9 @@ class JobSteps
         if (!empty($state['res']['pres'])) {
             $rows[] = [['text' => '✏️ Tahrirlash', 'callback_data' => 'edit:' . $state['res']['pres']]];
         }
+        if (DocPdf::enabled() && ($job['type'] !== 'qayta') && (!empty($state['res']['pres']) || SlidePdf::sofficePath())) {
+            $rows[] = [DocPdf::button((int)$job['id'])];
+        }
         $srcForRw = $job['type'] === 'qayta' ? (int)explode(':', (string)$job['volume_key'])[0] : (int)$job['id'];
         if (!empty($state['res']['pres']) && PartRewrite::enabled() && !in_array($job['type'], ['tarjima', 'test'], true)) {
             $rows[] = [PartRewrite::button($srcForRw)];

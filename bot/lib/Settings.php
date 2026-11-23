@@ -52,6 +52,7 @@ class Settings
         'PART_REWRITE_ENABLED' => ['bool', 'feat', '♻️ Qismini qayta yozish', "Tayyor fayl ostida bitta bob/slaydni qayta yozish tugmasi", 0, 1],
         'PART_REWRITE_PRICE' => ['int', 'money', "Qismini qayta yozish narxi, so'm", '0 — bepul', 0, 1000000],
         'BUTTON_COLORS' => ['bool', 'feat', '🎨 Rangli tugmalar', "Tasdiqlash — yashil, bekor qilish — qizil, tanlash — ko'k (Telegram'ning yangi versiyalarida)", 0, 1],
+        'PDF_BUTTON' => ['bool', 'feat', '📄 PDF tugmasi', "Tayyor fayl ostida «📄 PDF» tugmasi — ish PDF nusxada ham yuboriladi", 0, 1],
         'TRANSLATE_ENABLED' => ['bool', 'feat', '🌐 Tarjima', "Tayyor fayl ostida «Boshqa tilga tarjima» tugmasi (dizayn o'zgarmaydi)", 0, 1],
         'TRANSLATE_PRICE' => ['int', 'money', "Tarjima narxi, so'm", '0 — bepul', 0, 1000000],
         'FREE_REWRITE' => ['bool', 'growth', 'Past bahoda bepul qayta yozish', "1-2 ⭐ bergan mijozga bir marta (30 kunda) bepul qayta yozish taklif qilinadi", 0, 1],
