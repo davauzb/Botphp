@@ -19,6 +19,8 @@ class Settings
         'MIN_TOPUP_AMOUNT' => ['int', 'money', "Eng kam to'ldirish, so'm", '', 100, 1000000],
         'PRO_SURCHARGE_PERCENT' => ['int', 'money', "PRO taqdimot qo'shimcha narxi, %", '', 0, 500],
         'STARS_RATE' => ['int', 'money', "1 ⭐ = necha so'm", 'Telegram Stars kursi', 50, 2000],
+        'PAY_CARD_NUMBER' => ['text', 'money', "💳 Karta raqami (chek orqali to'lov)", "Mijozga ko'rsatiladi. Bo'sh bo'lsa — config.php dagi HUMO_CARD_NUMBER", 0, 30],
+        'PAY_CARD_HOLDER' => ['text', 'money', 'Karta egasi (ixtiyoriy)', 'Masalan: Davron J.', 0, 60],
         'PAY_HUMO' => ['bool', 'money', "To'lov: ⚡ Humo / Uzcard (Avto)", "Telegram Business orqali avtomatik tasdiqlash. O'chiq bo'lsa — faqat chek (qo'lda)", 0, 1],
         'PAY_CLICK' => ['bool', 'money', "To'lov: 💳 Click", '', 0, 1],
         'PAY_PAYME' => ['bool', 'money', "To'lov: 💳 Payme", '', 0, 1],
@@ -116,7 +118,7 @@ class Settings
         $defaults = ['MAINTENANCE_MODE' => false, 'MAINTENANCE_TEXT' => "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!", 'FREE_TRIAL' => true,
             'TOPUP_BONUS_PERCENT' => 0, 'TOPUP_BONUS_MIN_AMOUNT' => 0, 'REFERRAL_BONUS' => 3000, 'MIN_TOPUP_AMOUNT' => 1000, 'PRO_SURCHARGE_PERCENT' => 60,
             'STARS_RATE' => 200, 'VIDEO_ENABLED' => false, 'MINIAPP_ENABLED' => false, 'SUB_ENABLED' => false, 'MARKETING_ENABLED' => false,
-            'STD_MAX_IMAGES' => 10, 'PAY_HUMO' => false, 'PAY_CLICK' => false, 'PAY_PAYME' => false, 'STARS_ENABLED' => false, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
+            'STD_MAX_IMAGES' => 10, 'PAY_CARD_NUMBER' => '', 'PAY_CARD_HOLDER' => '', 'PAY_HUMO' => false, 'PAY_CLICK' => false, 'PAY_PAYME' => false, 'STARS_ENABLED' => false, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
         $items = [];
         foreach (self::SCHEMA as $k => [$type, $group, $label, $hint, $min, $max]) {
             $items[] = ['k' => $k, 'type' => $type, 'group' => $group, 'label' => $label, 'hint' => $hint, 'min' => $min, 'max' => $max,

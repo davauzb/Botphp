@@ -274,6 +274,20 @@ function topupMethodKeyboard(): array
     return ['inline_keyboard' => $rows];
 }
 
+/** Qo'lda to'lov kartasi: Sozlamalar (PAY_CARD_NUMBER) > config.php (HUMO_CARD_NUMBER). */
+function manualCard(): array
+{
+    $n = trim((string)Engine::c('PAY_CARD_NUMBER', ''));
+    $h = trim((string)Engine::c('PAY_CARD_HOLDER', ''));
+    if ($n === '' && defined('HUMO_CARD_NUMBER')) {
+        $n = trim((string)HUMO_CARD_NUMBER);
+    }
+    if ($h === '' && defined('HUMO_CARD_HOLDER')) {
+        $h = trim((string)HUMO_CARD_HOLDER);
+    }
+    return ['number' => $n, 'holder' => $h];
+}
+
 /** To'lov usuli yoqilganmi (qo'lda — chek yuborish — har doim yoqilgan). */
 function payMethodOn(string $m): bool
 {
@@ -1087,10 +1101,20 @@ function handleTopupMethodChosen(int $chatId, string $method): void
     if ($method === 'manual') {
         $topupId = createPendingTopup($chatId, $amount, 'manual', $resumeType, $resumeVolumeKey);
         setUserState($chatId, "awaiting_receipt:{$topupId}");
+        $card = manualCard();
+        $digits = preg_replace('/\D+/', '', $card['number']);
+        $pretty = trim(chunk_split($digits, 4, ' '));
+        $bp = (int)Engine::c('TOPUP_BONUS_PERCENT', 0);
+        $bonus = ($bp > 0 && $amount >= (int)Engine::c('TOPUP_BONUS_MIN_AMOUNT', 0)) ? (int)floor($amount * $bp / 100) : 0;
         Telegram::sendMessage(
             $chatId,
-            "📸 " . number_format($amount, 0, '', ' ') . " so'mlik to'lov chekining (skrinshot) rasmini yuboring.\n"
-            . "Administrator tekshirib, tasdiqlagach balansingiz to'ldiriladi."
+            "🧾 <b>Kartaga o'tkazib to'ldirish</b>\n\n"
+            . "1️⃣ Quyidagi kartaga <b>" . number_format($amount, 0, '', ' ') . " so'm</b> o'tkazing:\n\n"
+            . ($digits !== '' ? "💳 <code>{$pretty}</code>\n" . ($card['holder'] !== '' ? "👤 " . Telegram::escape($card['holder']) . "\n" : '') . "<i>(raqam ustiga bossangiz — nusxalanadi)</i>\n\n"
+                : "💳 Karta raqamini administratordan so'rang: «💬 Yordam»\n\n")
+            . "2️⃣ To'lov chekining <b>skrinshotini</b> shu chatga yuboring 📸\n\n"
+            . ($bonus > 0 ? "🎁 Aksiya: balansingizga <b>" . number_format($amount + $bonus, 0, '', ' ') . " so'm</b> tushadi (+{$bp}% bonus)\n" : '')
+            . "⏱ Administrator tekshirib, odatda bir necha daqiqada tasdiqlaydi."
         );
         return;
     }
