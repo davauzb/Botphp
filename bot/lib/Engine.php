@@ -395,7 +395,7 @@ class Engine
                    AND (j.started_at IS NOT NULL
                         OR ((SELECT COUNT(*) FROM jobs a WHERE a.status = 'processing' AND a.started_at IS NOT NULL) < :maxActive
                             AND (SELECT COUNT(*) FROM jobs u WHERE u.telegram_id = j.telegram_id AND u.status = 'processing' AND u.started_at IS NOT NULL) < :perUser))
-                 ORDER BY (j.started_at IS NULL) ASC, j.last_tick ASC, j.id ASC LIMIT 1"
+                 ORDER BY (j.started_at IS NULL) ASC, CASE WHEN j.started_at IS NULL THEN -COALESCE(j.priority, 0) ELSE 0 END ASC, j.last_tick ASC, j.id ASC LIMIT 1"
             );
             $st->execute(['now' => $now, 'maxActive' => $maxActive, 'perUser' => $perUser]);
             $row = $st->fetch(PDO::FETCH_ASSOC);
@@ -728,9 +728,57 @@ class Engine
         if ($job['started_at']) {
             return 0;
         }
-        $st = db()->prepare("SELECT COUNT(*) FROM jobs WHERE status IN ('pending','processing') AND started_at IS NULL AND id < ?");
-        $st->execute([$job['id']]);
+        $pr = (int)($job['priority'] ?? 0);
+        $st = db()->prepare("SELECT COUNT(*) FROM jobs WHERE status IN ('pending','processing') AND started_at IS NULL
+            AND (COALESCE(priority, 0) > ? OR (COALESCE(priority, 0) = ? AND id < ?))");
+        $st->execute([$pr, $pr, $job['id']]);
         return (int)$st->fetchColumn() + 1;
+    }
+
+    /** Shu turdagi oxirgi 30 ta ishning o'rtacha (mediana) bajarilish vaqti, soniya. Ma'lumot bo'lmasa — taxminiy. */
+    public static function typicalDuration(string $type): int
+    {
+        static $cache = [];
+        if (isset($cache[$type])) {
+            return $cache[$type];
+        }
+        $st = db()->prepare("SELECT finished_at - started_at FROM jobs WHERE type = ? AND status = 'done' AND started_at > 0 AND finished_at > started_at
+            ORDER BY id DESC LIMIT 30");
+        $st->execute([$type]);
+        $d = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+        if (count($d) >= 3) {
+            sort($d);
+            $v = $d[intdiv(count($d), 2)];
+        } else {
+            $v = ['slayd' => 150, 'kurs_ishi' => 420, 'diplom' => 900, 'tarjima' => 120, 'qayta' => 60, 'test' => 120, 'tezis' => 90][$type] ?? 240;
+        }
+        return $cache[$type] = max(30, min(3600, $v));
+    }
+
+    /** Navbatdagi ish qachon tayyor bo'lishi (soniya): oldidagilar parallel oqimlarga bo'linadi. */
+    public static function queueEta(array $job): int
+    {
+        $pos = self::queuePosition($job);
+        $slots = max(1, (int)self::c('ENGINE_MAX_ACTIVE_JOBS', 8));
+        $st = db()->query("SELECT type FROM jobs WHERE status IN ('pending','processing') ORDER BY id LIMIT 200");
+        $sum = 0;
+        $n = 0;
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $t) {
+            $sum += self::typicalDuration((string)$t);
+            $n++;
+        }
+        $avg = $n ? $sum / $n : 240;
+        $waves = (int)floor(($pos - 1) / $slots);              // oldingi «to'lqinlar» soni
+        return (int)($waves * $avg * 0.8 + self::typicalDuration((string)$job['type']) + 15);
+    }
+
+    private static function fmtDur(int $sec): string
+    {
+        if ($sec < 90) {
+            return max(10, (int)(round($sec / 10) * 10)) . ' soniya';
+        }
+        $m = (int)ceil($sec / 60);
+        return $m < 60 ? $m . ' daqiqa' : intdiv($m, 60) . ' soat ' . ($m % 60 ? ($m % 60) . ' daqiqa' : '');
     }
 
     public static function progressText(array $job, ?string $note = null, bool $final = false): string
@@ -747,16 +795,19 @@ class Engine
         }
         $lines = self::bar($pct) . " <b>{$pct}%</b>\n";
         if (empty($job['started_at'])) {
-            $lines .= "🕐 Navbatda: " . self::queuePosition($job) . "-o'rin. Tez orada boshlanadi…\n";
+            $pos = self::queuePosition($job);
+            $lines .= "🕐 Navbatda: {$pos}-o'rin" . (!empty($job['priority']) ? ' ⚡ (tezkor)' : '') . ". Tez orada boshlanadi…\n";
+            $lines .= "⏱ Taxminan " . self::fmtDur(self::queueEta($job)) . " ichida tayyor bo'ladi\n";
         } else {
             $phase = (string)($job['phase'] ?? '');
             if ($phase !== '') {
                 $lines .= '⚙️ ' . Telegram::escape($phase) . "\n";
             }
             $eta = self::eta($job);
-            if ($eta !== null && $pct >= 8) {
-                $lines .= "⏱ Taxminan " . ($eta >= 90 ? (int)ceil($eta / 60) . ' daqiqa' : max(10, (int)(round($eta / 10) * 10)) . ' soniya') . " qoldi\n";
+            if ($eta === null || $pct < 8) {           // qadamlar bo'yicha hali hisob yo'q — shu turdagi ishlar tarixidan
+                $eta = max(20, self::typicalDuration((string)$job['type']) - (time() - (int)$job['started_at']));
             }
+            $lines .= "⏱ Taxminan " . self::fmtDur((int)$eta) . " qoldi\n";
         }
         if ($note) {
             $lines .= "\n" . Telegram::escape($note) . "\n";
