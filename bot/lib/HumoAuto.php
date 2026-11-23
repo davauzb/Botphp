@@ -601,6 +601,22 @@ class HumoAuto
         $lines[] = 'Karta: ' . (trim((string)HUMO_CARD_NUMBER) !== '' ? '✅ berilgan' : "❌ HUMO_CARD_NUMBER bo'sh");
         $n = self::activeConnectionCount();
         $lines[] = 'Business ulanishi: ' . ($n > 0 ? "✅ ({$n})" : "❌ yo'q — Telegram → Sozlamalar → Business → Chatbotlar");
+        // Telegram'dagi HAQIQIY holat (bazadagi yozuv eskirgan bo'lishi mumkin)
+        try {
+            foreach ($pdo->query('SELECT id FROM humo_conn ORDER BY updated_at DESC LIMIT 3')->fetchAll(PDO::FETCH_COLUMN) as $cid) {
+                $r = Telegram::call('getBusinessConnection', ['business_connection_id' => (string)$cid]);
+                $c = $r['result'] ?? null;
+                if (!is_array($c)) {
+                    $lines[] = "  ↳ Telegram: ulanish topilmadi ❌ (" . Telegram::escape(mb_substr((string)($r['description'] ?? ''), 0, 60)) . ')';
+                    continue;
+                }
+                $rights = (array)($c['rights'] ?? []);
+                $read = array_key_exists('can_read_messages', $rights) ? !empty($rights['can_read_messages']) : true;
+                $lines[] = '  ↳ Telegram: ' . (!empty($c['is_enabled']) ? 'yoqilgan ✅' : "O'CHIQ ❌") . ' · xabarlarni o\'qish: ' . ($read ? '✅' : '❌')
+                    . ' · ulangan: ' . gmdate('d.m.Y', (int)($c['date'] ?? 0) + 5 * 3600);
+            }
+        } catch (Throwable $e) {
+        }
         $lines[] = 'Qabul qilinadigan karta(lar): ' . (self::cards() ? '*' . implode(', *', self::cards()) : 'hammasi');
         $lines[] = 'Kuzatiladigan bot: @' . Telegram::escape((string)HUMO_BOT_USERNAME) . ((int)HUMO_BOT_ID > 0 ? ' (ID ' . (int)HUMO_BOT_ID . ')' : '');
         try {
