@@ -1,3 +1,18 @@
+# studybot 14-14 — TO'LOVLAR: USERBOT ORQALI HUMO AVTO, QO'LDA TO'LOV KARTASI, XAVFSIZLIK
+
+- **👤 Userbot (HUMO avto-to'lov)** — admin panel → Tizim → «Userbot». Hostingda Python bo'lmasa ham «portable» Python va Telethon
+  avtomatik o'rnatiladi; api_id/api_hash + telefon + kod (+2FA) bilan kiriladi. Kutilayotgan HUMO so'rovi bo'lsa @HUMOcardbot chati
+  har ~35 soniyada o'qiladi va mos to'lov o'zi tasdiqlanadi; «🔄 Hozir o'qish» — darhol. Telegram Business/Premium kerak emas.
+  Bekor qilish: panelda «Chiqish» yoki Telegram → Qurilmalar → «SlayderAi Pay».
+- **To'lov usullari Sozlamalardan**: Humo avto, Click, Payme, Stars — alohida yoqiladi (sukut bo'yicha o'chiq), chek (qo'lda) doim bor.
+- **Chek orqali to'lovda karta raqami** ko'rsatiladi (Sozlamalar → «Karta raqami», bo'sh bo'lsa config HUMO_CARD_NUMBER), bonus aksiyasi summasi bilan.
+- **HUMO**: bir nechta karta qabul qilinadi; boshqa kartaga tushgan xabar /humo da 🚫 bilan ko'rinadi; /humo — Telegram'dagi haqiqiy ulanish holati.
+- **/himoya** — webhook maxfiy kaliti bir buyruq bilan; **/userbot_tekshir** — hosting tekshiruvi.
+- **Mini App**: inline «Ilovani ochish» tugmasi orqali ochiladi (reply-menyudan initData kelmasdi).
+- **Reklama**: `start.php` — reklama sahifasi; `assets/promo/` — reklama videolari.
+
+---
+
 # studybot 14-13 — ODDIY TAQDIMOTDA KO'PROQ RASM
 
 - Oddiy (PRO bo'lmagan) dizaynlarda rasm endi faqat «Ma'lumot»/«Ta'rif» slaydlarining har ikkinchisiga emas, balki
