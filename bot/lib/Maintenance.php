@@ -48,6 +48,13 @@ class Maintenance
             logError('maint', 'broadcast: ' . $e->getMessage());
         }
         try {
+            if (class_exists('Userbot') && class_exists('HumoAuto')) {
+                Userbot::poll($until);                 // 👤 HUMO xabarlarini userbot orqali o'qish
+            }
+        } catch (Throwable $e) {
+            logError('maint', 'userbot: ' . $e->getMessage());
+        }
+        try {
             if (class_exists('Growth')) {
                 Growth::marketingRun($until);
             }

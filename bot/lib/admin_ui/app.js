@@ -868,9 +868,9 @@ async function viewGrowth(box) {
 
 /* ------------------------------------------------------------------ tizim: AI kalitlari va xatolar jurnali */
 async function viewSystem(box) {
-  const keys = h('div', {}), logs = h('div', {}), img = h('div', {});
-  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
-  if (CFG.role === 'owner') { drawKeys(keys); drawImgKeys(img); }
+  const keys = h('div', {}), logs = h('div', {}), img = h('div', {}), ub = h('div', {});
+  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '👤 Userbot — HUMO avto-to\'lov'), ub, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
+  if (CFG.role === 'owner') { drawUserbot(ub); drawKeys(keys); drawImgKeys(img); }
   drawLogs(logs, '', '');
 }
 async function drawKeys(box) {
@@ -894,7 +894,7 @@ async function drawKeys(box) {
     h('div', { class: 'av', style: avStyle(k.provider) }, k.provider[0].toUpperCase()),
     h('div', { class: 'grow' }, h('div', { class: 't1' }, k.provider + ' ' + k.key, ' ', badge(...(ST[k.state] || [k.state, '']))), h('div', { class: 't2' }, k.models + ' · ' + fmt(k.ok) + ' ok / ' + fmt(k.err) + ' xato' + (k.note ? ' · ' + k.note : '')),
       k.last_error ? h('div', { class: 't2', style: { color: 'var(--bad)' } }, k.last_error) : ''),
-    h('div', { class: 'right', style: { display: 'flex', gap: '6px', alignItems: 'center' } },
+    h('div', { class: 'right', style: { display: 'flex', flexDirection: 'row', gap: '6px', alignItems: 'center' } },
       h('button', { class: 'btn sm', onclick: async () => { toast('Tekshirilmoqda…'); const rr = await api('ai_key_test', { id: k.id }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawKeys(box); } }, 'Sinash'),
       h('button', { class: 'btn sm', onclick: async () => { const rr = await act('ai_key_toggle', { id: k.id, on: !k.enabled }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawKeys(box); } }, k.enabled ? "O'chirish" : 'Yoqish'),
       h('button', { class: 'btn sm bad', onclick: async () => { const ok = await confirmBox("Kalitni o'chirish", k.provider + ' ' + k.key + " butunlay o'chiriladi.", "O'chirish", 'bad'); if (!ok) return; const rr = await act('ai_key_delete', { id: k.id }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawKeys(box); } }, '✕'))))) : emptyBox("Paneldan qo'shilgan kalit yo'q (config.php dagilar ishlayapti).", 'cpu');
@@ -906,6 +906,58 @@ async function drawKeys(box) {
   box.replaceChildren(sum, h('div', { style: { height: '10px' } }), list,
     h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px' } }, h('b', {}, "➕ Yangi kalit"), h('div', { style: { margin: '8px 0' } }, ps), hint, key, h('div', { style: { height: '8px' } }), models, h('div', { style: { height: '8px' } }), ep, add,
       h('div', { class: 't2', style: { whiteSpace: 'normal', marginTop: '6px' } }, "Kalit qo'shilishidan oldin kichik so'rov bilan tekshiriladi. Panelda faqat oxirgi 4 belgisi ko'rinadi.")));
+}
+async function drawUserbot(box, extra) {
+  if (!box.isConnected && box.dataset.init) return;
+  box.dataset.init = '1';
+  const r = await api('ub_status');
+  if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
+  const card = (...k) => h('div', { class: 'card', style: { padding: '14px 16px' } }, ...k);
+  const t2 = (s) => h('div', { class: 't2', style: { whiteSpace: 'normal', margin: '4px 0 10px' } }, s);
+  const busy = async (btn, label, fn) => { const o = btn.textContent; btn.disabled = true; btn.textContent = label; try { await fn(); } finally { btn.disabled = false; btn.textContent = o; } };
+  // 1) o'rnatish
+  if (!r.installed) {
+    const log = h('pre', { style: { whiteSpace: 'pre-wrap', fontSize: '12px', background: 'rgba(0,0,0,.25)', padding: '10px', borderRadius: '10px', maxHeight: '160px', overflow: 'auto', margin: '8px 0 0' } }, r.log || '');
+    const b = h('button', { class: 'btn pri', style: { width: '100%' }, onclick: () => busy(b, 'Boshlanmoqda…', async () => { const rr = await act('ub_install', {}); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); setTimeout(() => drawUserbot(box), 2500); }) }, r.installing ? "⏳ O'rnatilmoqda…" : "1️⃣ Python va Telethon'ni o'rnatish");
+    if (r.installing) b.disabled = true;
+    box.replaceChildren(card(h('b', {}, "Userbot hali o'rnatilmagan"), t2("Hostingga «portable» Python (~30 MB) va Telethon kutubxonasi yuklanadi. 1–3 daqiqa davom etadi, keyin bu oyna o'zi yangilanadi."), b, r.log ? log : ''));
+    if (r.installing || (r.log && !/DONE/.test(r.log))) setTimeout(() => { if (box.isConnected) drawUserbot(box); }, 4000);
+    return;
+  }
+  // 2) ulangan
+  if (r.auth) {
+    const test = h('button', { class: 'btn sm', onclick: () => busy(test, 'Tekshirilmoqda…', async () => { const rr = await api('ub_test'); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); }) }, '🔍 Sinash');
+    const tog = h('button', { class: 'btn sm', onclick: async () => { const rr = await act('ub_toggle', { on: !r.enabled }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawUserbot(box); } }, r.enabled ? "⏸ To'xtatish" : '▶️ Yoqish');
+    const out = h('button', { class: 'btn sm bad', onclick: async () => { const ok = await confirmBox('Userbotdan chiqish', "Sessiya o'chiriladi, HUMO avto-to'lov userbot orqali ishlamay qoladi.", 'Chiqish', 'bad'); if (!ok) return; const rr = await act('ub_logout', {}); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawUserbot(box); } }, 'Chiqish');
+    box.replaceChildren(card(h('div', { class: 't1' }, '✅ Ulangan: ', h('b', {}, r.name || ''), ' ', badge(r.enabled ? 'ishlayapti' : "to'xtatilgan", r.enabled ? 'ok' : 'warn')),
+      t2((r.phone ? r.phone + ' · ' : '') + (r.last_poll ? 'oxirgi o\'qish: ' + ago(r.last_poll) + ' — ' + r.last_result : "hali o'qilmagan (kutilayotgan HUMO to'lovi bo'lganda har ~35 soniyada o'qiladi)")),
+      h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, test, tog, out),
+      t2("Telegram → Sozlamalar → Qurilmalar ro'yxatida «SlayderAi Pay» bo'lib ko'rinadi. O'sha yerdan ham o'chirsa bo'ladi.")));
+    return;
+  }
+  // 3) kirish: api → kod → (parol)
+  const inp = (ph, type, val) => { const i = h('input', { class: 'inp', type: type || 'text', placeholder: ph, autocomplete: 'off' }); if (val) i.value = val; return i; };
+  const gap = () => h('div', { style: { height: '8px' } });
+  if (extra === 'password') {
+    const pw = inp('2FA (ikki bosqichli) parol', 'password');
+    const b = h('button', { class: 'btn pri', style: { width: '100%', marginTop: '8px' }, onclick: () => busy(b, 'Tekshirilmoqda…', async () => { const rr = await api('ub_password', { password: pw.value }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); if (rr.ok) drawUserbot(box); }) }, '3️⃣ Kirish');
+    box.replaceChildren(card(h('b', {}, '🔐 Ikki bosqichli parol'), t2("Akkauntingizda «Облачный пароль» yoqilgan. Uni kiriting (faqat shu serverga yuboriladi)."), pw, b));
+    return;
+  }
+  if (r.code_sent) {
+    const code = inp('Telegram yuborgan kod (5 raqam)', 'text');
+    code.inputMode = 'numeric';
+    const b = h('button', { class: 'btn pri', style: { width: '100%', marginTop: '8px' }, onclick: () => busy(b, 'Kirilmoqda…', async () => { const rr = await api('ub_signin', { code: code.value }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); if (rr.ok && rr.need_password) drawUserbot(box, 'password'); else if (rr.ok) drawUserbot(box); }) }, '2️⃣ Kirish');
+    const again = h('button', { class: 'lnk', onclick: async () => { await act('ub_logout', {}); drawUserbot(box); } }, "Boshqa raqam / qaytadan");
+    box.replaceChildren(card(h('b', {}, '📩 Kodni kiriting'), t2(r.phone + " raqamiga bog'langan Telegram ilovasiga (rasmiy «Telegram» chatiga) kod keldi. ⚠️ Kodni hech kimga — jumladan chatga ham — yubormang, faqat shu yerga yozing."), code, b, gap(), again));
+    return;
+  }
+  const id = inp('api_id (raqam)', 'text'), hash = inp('api_hash (32 belgi)', 'password'), ph = inp('+998 90 123 45 67', 'tel', r.phone ? '' : '');
+  id.inputMode = 'numeric';
+  const b = h('button', { class: 'btn pri', style: { width: '100%', marginTop: '8px' }, onclick: () => busy(b, 'Kod yuborilmoqda…', async () => { const rr = await api('ub_code', { api_id: id.value, api_hash: hash.value, phone: ph.value }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); if (rr.ok) drawUserbot(box); }) }, '1️⃣ Kod yuborish');
+  box.replaceChildren(card(h('b', {}, "👤 Telegram akkauntga ulash"),
+    t2("1) my.telegram.org → «API development tools» dan api_id va api_hash ni oling. 2) Bu yerga kiriting va HUMO bildirishnomalari keladigan akkaunt raqamini yozing. Kalitlar faqat shu serverda saqlanadi."),
+    id, gap(), hash, gap(), ph, b));
 }
 async function drawImgKeys(box) {
   box.replaceChildren(skeleton(1, 60));

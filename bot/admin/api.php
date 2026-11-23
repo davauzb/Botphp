@@ -115,7 +115,8 @@ try {
         'support_list', 'support_thread', 'support_reply', 'support_close', 'user_meta',
         'finance', 'finance_export', 'funnel', 'ai_usage', 'queue', 'job_resend', 'job_retry',
         // 14-10: AI kalitlari, xatolar jurnali, hamkorlar, o'sish
-        'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs', 'logs_clear', 'agents', 'agent_save', 'agent_payout', 'growth', 'job_view', 'job_send_me', 'img_keys', 'img_key_save', 'img_key_delete'];
+        'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs', 'logs_clear', 'agents', 'agent_save', 'agent_payout', 'growth', 'job_view', 'job_send_me', 'img_keys', 'img_key_save', 'img_key_delete',
+        'ub_status', 'ub_install', 'ub_code', 'ub_signin', 'ub_password', 'ub_logout', 'ub_toggle', 'ub_test'];
     if ($method !== 'POST' || !in_array($action, $allowed, true)) {
         AdminSecurity::deny();
     }
@@ -466,6 +467,45 @@ try {
 
         case 'job_send_me':
             mutate($admin, $b, fn() => AdminPro::jobSendMe($admin, intv($b['id'] ?? 0, 1, PHP_INT_MAX)));
+
+        // ---------------- 👤 userbot (HUMO avto, faqat owner)
+        case 'ub_status':
+            out(['ok' => true] + Userbot::status());
+
+        case 'ub_install':
+            out(Userbot::install($admin));
+
+        case 'ub_code':
+            if (!AdminSecurity::rate('ubcode:' . $admin, 5, 900)) {
+                AdminSecurity::fail('rate', 429, 'Juda tez-tez. 15 daqiqadan keyin urinib ko\'ring');
+            }
+            @set_time_limit(70);
+            out(Userbot::sendCode($admin, strv($b['api_id'] ?? '', 20), strv($b['api_hash'] ?? '', 64), strv($b['phone'] ?? '', 20)));
+
+        case 'ub_signin':
+            if (!AdminSecurity::rate('ubsign:' . $admin, 8, 900)) {
+                AdminSecurity::fail('rate', 429, 'Juda ko\'p urinish. Birozdan keyin');
+            }
+            @set_time_limit(70);
+            out(Userbot::signIn($admin, strv($b['code'] ?? '', 12)));
+
+        case 'ub_password':
+            if (!AdminSecurity::rate('ubpwd:' . $admin, 6, 900)) {
+                AdminSecurity::fail('rate', 429, 'Juda ko\'p urinish. Birozdan keyin');
+            }
+            @set_time_limit(70);
+            out(Userbot::password($admin, (string)($b['password'] ?? '')));
+
+        case 'ub_logout':
+            @set_time_limit(60);
+            mutate($admin, $b, fn() => Userbot::logout($admin));
+
+        case 'ub_toggle':
+            mutate($admin, $b, fn() => Userbot::toggle($admin, !empty($b['on'])));
+
+        case 'ub_test':
+            @set_time_limit(70);
+            out(Userbot::test());
 
         // ---------------- rasm manbalari kalitlari (faqat owner)
         case 'img_keys':

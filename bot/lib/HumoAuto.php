@@ -50,7 +50,7 @@ class HumoAuto
             return false;
         }
         try {
-            return self::activeConnectionCount() > 0;
+            return self::activeConnectionCount() > 0 || (class_exists('Userbot') && Userbot::active());
         } catch (Throwable $e) {
             return false;
         }
@@ -159,13 +159,28 @@ class HumoAuto
         if ($text === '') {
             return;
         }
+        self::ingest($text, (int)($m['date'] ?? time()), (int)($m['chat']['id'] ?? 0), (int)($m['message_id'] ?? 0), 'business');
+    }
+
+    /**
+     * HUMO bot xabarini qayta ishlash (Business orqali ham, Userbot orqali ham shu yerga keladi).
+     * Chaqiruvchi xabar haqiqatan HUMO botidan ekanini tekshirgan bo'lishi shart.
+     */
+    public static function ingest(string $text, int $date, int $chatId, int $msgId, string $via = 'business'): void
+    {
+        if (!self::enabled() || trim($text) === '') {
+            return;
+        }
         $pdo = db();
         self::ensure($pdo);
         self::expireOld($pdo);
-
-        $chatId = (int)($m['chat']['id'] ?? 0);
-        $msgId = (int)($m['message_id'] ?? 0);
-        $date = (int)($m['date'] ?? time());
+        if ($via === 'userbot') {
+            try {
+                $pdo->prepare('INSERT INTO engine_kv (k, v, ts) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, ts = excluded.ts')
+                    ->execute(['humo_seen_bot', 'userbot: @' . HUMO_BOT_USERNAME . (stripos($text, 'UZS') !== false ? ' (UZS bor)' : ''), time()]);
+            } catch (Throwable $e) {
+            }
+        }
         $p = self::parse($text);
         if ($p === null) {
             // Chiqim (➖) va boshqa xabarlar jim o'tkaziladi; "UZS" bor, lekin tushunilmagan kirimni admin ko'rishi uchun yozamiz
@@ -601,6 +616,11 @@ class HumoAuto
         $lines[] = 'Karta: ' . (trim((string)HUMO_CARD_NUMBER) !== '' ? '✅ berilgan' : "❌ HUMO_CARD_NUMBER bo'sh");
         $n = self::activeConnectionCount();
         $lines[] = 'Business ulanishi: ' . ($n > 0 ? "✅ ({$n})" : "❌ yo'q — Telegram → Sozlamalar → Business → Chatbotlar");
+        if (class_exists('Userbot')) {
+            $u = Userbot::status();
+            $lines[] = '👤 Userbot: ' . ($u['auth'] ? ($u['enabled'] ? '✅ ulangan (' . Telegram::escape($u['name']) . ')' : "⏸ to'xtatilgan") : "— ulanmagan (panel → Tizim)")
+                . ($u['last_poll'] ? ' · oxirgi o\'qish: ' . gmdate('d.m H:i', $u['last_poll'] + 5 * 3600) . ' — ' . Telegram::escape($u['last_result']) : '');
+        }
         // Telegram'dagi HAQIQIY holat (bazadagi yozuv eskirgan bo'lishi mumkin)
         try {
             foreach ($pdo->query('SELECT id FROM humo_conn ORDER BY updated_at DESC LIMIT 3')->fetchAll(PDO::FETCH_COLUMN) as $cid) {
