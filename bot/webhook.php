@@ -367,6 +367,13 @@ function handleMessage(array $user, int $chatId, string $text): void
         return;
     }
 
+    if ($text === '/userbot_tekshir' && ADMIN_CHAT_ID && $chatId === (int)ADMIN_CHAT_ID) {
+        require_once __DIR__ . '/lib/UserbotCheck.php';
+        Telegram::sendMessage($chatId, "⏳ Tekshirilmoqda…");
+        Telegram::sendMessage($chatId, UserbotCheck::report());
+        return;
+    }
+
     if ($text === '/himoya' && ADMIN_CHAT_ID && $chatId === (int)ADMIN_CHAT_ID) {
         Telegram::sendMessage($chatId, Settings::enableWebhookSecret($chatId));
         return;
