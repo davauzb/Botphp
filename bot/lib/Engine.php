@@ -714,7 +714,7 @@ class Engine
         $vk = (string)$job['volume_key'];
         $label = '';
         $t = (string)$job['type'];
-        $head = isset(DocTypes::T[$t]) ? DocTypes::T[$t]['menu'] : ($t === 'tarjima' ? '🌐 Tarjima' : '📄 Buyurtma');
+        $head = isset(DocTypes::T[$t]) ? DocTypes::T[$t]['menu'] : ($t === 'tarjima' ? '🌐 Tarjima' : ($t === 'qayta' ? '♻️ Qismini qayta yozish' : '📄 Buyurtma'));
         $vols = DocTypes::volumes($t) ?? [];
         $label = (string)($vols[$vk]['label'] ?? '');
         if ($t === 'tarjima' && class_exists('Translate')) {

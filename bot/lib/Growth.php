@@ -14,8 +14,9 @@ class Growth
     public static function ensureSchema(PDO $pdo): void
     {
         $cols = [
-            'users' => ['sub_until INTEGER DEFAULT 0', 'sub_credits INTEGER DEFAULT 0', 'agent_id INTEGER', 'pending_req TEXT', 'rewrite_used INTEGER DEFAULT 0'],
-            'jobs' => ['paid_by TEXT', 'requirements TEXT', 'uniq INTEGER', 'parent_id INTEGER'],
+            'users' => ['sub_until INTEGER DEFAULT 0', 'sub_credits INTEGER DEFAULT 0', 'agent_id INTEGER', 'pending_req TEXT', 'rewrite_used INTEGER DEFAULT 0',
+                'source TEXT'],
+            'jobs' => ['paid_by TEXT', 'requirements TEXT', 'uniq INTEGER', 'parent_id INTEGER', 'priority INTEGER DEFAULT 0', 'group_id INTEGER'],
         ];
         foreach ($cols as $t => $defs) {
             foreach ($defs as $d) {
@@ -58,6 +59,42 @@ class Growth
     private static function kvSet(string $k, string $v = '1'): void
     {
         db()->prepare('INSERT INTO engine_kv (k, v, ts) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, ts = excluded.ts')->execute([$k, $v, time()]);
+    }
+
+    // ================================================================== REKLAMA MANBALARI
+
+    /** /start payload ichidan manba kodi: «src_ig», «ref123_src_tgkanal» … (faqat a-z, 0-9, _ ; 2-24 belgi). */
+    public static function sourceFromPayload(string $payload): string
+    {
+        return preg_match('/(?:^|_)src_([a-z0-9]{2,24})/i', $payload, $m) ? strtolower($m[1]) : '';
+    }
+
+    /** Faqat birinchi marta (yangi foydalanuvchi, hali buyurtmasi yo'q) yoziladi — keyingi havolalar manbani o'zgartirmaydi. */
+    public static function setSource(int $tg, string $src): void
+    {
+        if ($src === '') {
+            return;
+        }
+        db()->prepare('UPDATE users SET source = ? WHERE telegram_id = ? AND (source IS NULL OR source = \'\')
+            AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.telegram_id = users.telegram_id)')->execute([$src, $tg]);
+    }
+
+    /** Panel: har manba bo'yicha foydalanuvchilar, buyurtma berganlar, to'laganlar, tushum. */
+    public static function sourcesReport(int $days): array
+    {
+        $from = $days > 0 ? time() - $days * 86400 : 0;
+        $rows = db()->prepare("SELECT COALESCE(NULLIF(u.source,''), CASE WHEN u.agent_id IS NOT NULL THEN 'hamkor' WHEN u.referred_by IS NOT NULL THEN 'referal' ELSE 'organik' END) AS src,
+                COUNT(*) AS users,
+                SUM(EXISTS (SELECT 1 FROM jobs j WHERE j.telegram_id = u.telegram_id)) AS ordered,
+                SUM(EXISTS (SELECT 1 FROM topups t WHERE t.telegram_id = u.telegram_id AND t.status = 'approved')) AS paid,
+                COALESCE(SUM((SELECT SUM(t.amount) FROM topups t WHERE t.telegram_id = u.telegram_id AND t.status = 'approved')), 0) AS revenue
+            FROM users u WHERE u.created_at >= ? GROUP BY src ORDER BY users DESC");
+        $rows->execute([$from]);
+        $out = [];
+        foreach ($rows->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $out[] = ['src' => (string)$r['src'], 'users' => (int)$r['users'], 'ordered' => (int)$r['ordered'], 'paid' => (int)$r['paid'], 'revenue' => (int)$r['revenue']];
+        }
+        return $out;
     }
 
     // ================================================================== OBUNA

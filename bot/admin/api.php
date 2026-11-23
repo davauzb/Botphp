@@ -116,7 +116,7 @@ try {
         'finance', 'finance_export', 'funnel', 'ai_usage', 'queue', 'job_resend', 'job_retry',
         // 14-10: AI kalitlari, xatolar jurnali, hamkorlar, o'sish
         'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs', 'logs_clear', 'agents', 'agent_save', 'agent_payout', 'growth', 'job_view', 'job_send_me', 'img_keys', 'img_key_save', 'img_key_delete',
-        'ub_status', 'ub_install', 'ub_code', 'ub_signin', 'ub_password', 'ub_logout', 'ub_toggle', 'ub_test', 'ub_poll'];
+        'ub_status', 'ub_install', 'ub_code', 'ub_signin', 'ub_password', 'ub_logout', 'ub_toggle', 'ub_test', 'ub_poll', 'sources'];
     if ($method !== 'POST' || !in_array($action, $allowed, true)) {
         AdminSecurity::deny();
     }
@@ -541,6 +541,11 @@ try {
                 AdminSecurity::audit('img_key_delete', $admin, $p);
                 return ['ok' => true, 'msg' => "Kalit o'chirildi"];
             });
+
+        case 'sources':
+            out(['ok' => true, 'items' => Growth::sourcesReport(intv($b['days'] ?? 30, 0, 3650)),
+                'bot' => defined('BOT_USERNAME') && BOT_USERNAME !== 'BOT_USERNAME_HERE' ? (string)BOT_USERNAME : '',
+                'base' => defined('PUBLIC_BASE_URL') ? rtrim((string)PUBLIC_BASE_URL, '/') : '']);
 
         case 'growth':
             out(['ok' => true] + Growth::marketingStats() + ['video_missing' => class_exists('VideoDeck') ? VideoDeck::missing() : []]);

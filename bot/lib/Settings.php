@@ -49,6 +49,8 @@ class Settings
         'STD_MAX_IMAGES' => ['int', 'feat', 'Oddiy taqdimotda rasmlar soni (ko\'pi bilan)', 'PRO dizaynda — PRO_MAX_IMAGES', 0, 20],
         'IMAGE_AI_CHECK' => ['bool', 'feat', '🖼 Rasmni AI bilan tekshirish', "Rasm mavzuga mosligini AI ko'rib tasdiqlaydi (bitta rasmga 1-3 kichik so'rov)", 0, 1],
         'IMAGE_AI_FALLBACK' => ['bool', 'feat', '🎨 Mos rasm topilmasa — AI chizsin', 'Pollinations (kalitsiz), faqat oxirgi chora', 0, 1],
+        'PART_REWRITE_ENABLED' => ['bool', 'feat', '♻️ Qismini qayta yozish', "Tayyor fayl ostida bitta bob/slaydni qayta yozish tugmasi", 0, 1],
+        'PART_REWRITE_PRICE' => ['int', 'money', "Qismini qayta yozish narxi, so'm", '0 — bepul', 0, 1000000],
         'BUTTON_COLORS' => ['bool', 'feat', '🎨 Rangli tugmalar', "Tasdiqlash — yashil, bekor qilish — qizil, tanlash — ko'k (Telegram'ning yangi versiyalarida)", 0, 1],
         'TRANSLATE_ENABLED' => ['bool', 'feat', '🌐 Tarjima', "Tayyor fayl ostida «Boshqa tilga tarjima» tugmasi (dizayn o'zgarmaydi)", 0, 1],
         'TRANSLATE_PRICE' => ['int', 'money', "Tarjima narxi, so'm", '0 — bepul', 0, 1000000],
@@ -118,7 +120,7 @@ class Settings
         $defaults = ['MAINTENANCE_MODE' => false, 'MAINTENANCE_TEXT' => "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!", 'FREE_TRIAL' => true,
             'TOPUP_BONUS_PERCENT' => 0, 'TOPUP_BONUS_MIN_AMOUNT' => 0, 'REFERRAL_BONUS' => 3000, 'MIN_TOPUP_AMOUNT' => 1000, 'PRO_SURCHARGE_PERCENT' => 60,
             'STARS_RATE' => 200, 'VIDEO_ENABLED' => false, 'MINIAPP_ENABLED' => false, 'SUB_ENABLED' => false, 'MARKETING_ENABLED' => false,
-            'STD_MAX_IMAGES' => 10, 'PAY_CARD_NUMBER' => '', 'PAY_CARD_HOLDER' => '', 'PAY_HUMO' => false, 'PAY_CLICK' => false, 'PAY_PAYME' => false, 'STARS_ENABLED' => false, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
+            'STD_MAX_IMAGES' => 10, 'PART_REWRITE_PRICE' => 1000, 'PAY_CARD_NUMBER' => '', 'PAY_CARD_HOLDER' => '', 'PAY_HUMO' => false, 'PAY_CLICK' => false, 'PAY_PAYME' => false, 'STARS_ENABLED' => false, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
         $items = [];
         foreach (self::SCHEMA as $k => [$type, $group, $label, $hint, $min, $max]) {
             $items[] = ['k' => $k, 'type' => $type, 'group' => $group, 'label' => $label, 'hint' => $hint, 'min' => $min, 'max' => $max,

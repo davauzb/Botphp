@@ -15,6 +15,9 @@ if (isset($_GET['ref']) && preg_match('/^\d{3,15}$/', (string)$_GET['ref'])) {
 } elseif (isset($_GET['agt']) && preg_match('/^\d{3,15}$/', (string)$_GET['agt'])) {
     $payload = 'agt' . $_GET['agt'];
 }
+if (isset($_GET['src']) && preg_match('/^[a-z0-9]{2,24}$/i', (string)$_GET['src'])) {
+    $payload .= ($payload !== '' ? '_' : '') . 'src_' . strtolower((string)$_GET['src']);    // 📊 reklama manbasi
+}
 $tg = 'https://t.me/' . rawurlencode($bot) . ($payload !== '' ? '?start=' . $payload : '');
 $e = fn(string $s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 header('Content-Type: text/html; charset=utf-8');

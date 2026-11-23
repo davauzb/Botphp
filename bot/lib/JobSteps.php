@@ -53,6 +53,9 @@ class JobSteps
         $lang = I18n::norm($job['lang'] ?? I18n::userLang($chatId));
         $p = ['topic' => (string)$job['topic'], 'student' => self::jobStudent($job, $chatId), 'lang' => $lang];
 
+        if ($type === 'qayta') {
+            return ['v' => 1, 'type' => $type, 'steps' => PartRewrite::steps(), 'i' => 0, 'p' => $p + ['docLabel' => 'qayta yozish', 'kind' => 'qayta'], 'res' => [], 'att' => [], 'dur' => [], 'shrink' => []];
+        }
         if ($type === 'tarjima') {
             return ['v' => 1, 'type' => $type, 'steps' => Translate::steps(), 'i' => 0, 'p' => $p + ['docLabel' => 'tarjima', 'kind' => 'tarjima'], 'res' => [], 'att' => [], 'dur' => [], 'shrink' => []];
         }
@@ -207,6 +210,12 @@ class JobSteps
                 break;
             case 'video':
                 self::stepVideo($job, $state);
+                break;
+            case 'qr_write':
+                PartRewrite::write($job, $state);
+                break;
+            case 'qr_build':
+                PartRewrite::build($job, $state);
                 break;
             case 'tr_prep':
                 if (!isset($state['res']['segs']) && !isset($state['res']['file'])) {
@@ -1137,6 +1146,12 @@ class JobSteps
             ? "⚠️ Matn AI yordamida yaratildi — himoyadan oldin mazmunini bir bor ko'zdan kechiring."
             : "⚠️ Matn AI yordamida yaratildi — faktlar va sanalarni topshirishdan oldin albatta o'zingiz tekshirib chiqing.";
         $uq = isset($state['res']['uniq']) ? "\n🔎 Unikallik: <b>" . (int)$state['res']['uniq'] . "%</b> (bot yozgan barcha ishlar bilan solishtirildi)" : '';
+        if ($job['type'] === 'qayta') {
+            $label = PartRewrite::MODES[explode(':', (string)$job['volume_key'] . '::')[2]] ?? '';
+            $real = $uq = '';
+            $warn = "Faqat tanlangan qism yangilandi, qolgani o'zgarmadi. Tahrirlovchida ham yangi matn ko'rinadi.";
+            $what = 'ish — qism qayta yozildi va';
+        }
         if ($job['type'] === 'tarjima') {
             $label = Translate::LANGS[(string)($state['p']['lang'] ?? '')] ?? '';
             $real = $uq = '';
@@ -1155,7 +1170,11 @@ class JobSteps
         if (!empty($state['res']['pres'])) {
             $rows[] = [['text' => '✏️ Tahrirlash', 'callback_data' => 'edit:' . $state['res']['pres']]];
         }
-        if (Translate::enabled() && $job['type'] !== 'tarjima') {
+        $srcForRw = $job['type'] === 'qayta' ? (int)explode(':', (string)$job['volume_key'])[0] : (int)$job['id'];
+        if (!empty($state['res']['pres']) && PartRewrite::enabled() && !in_array($job['type'], ['tarjima', 'test'], true)) {
+            $rows[] = [PartRewrite::button($srcForRw)];
+        }
+        if (Translate::enabled() && !in_array($job['type'], ['tarjima', 'qayta'], true)) {
             $rows[] = [Translate::button((int)$job['id'])];
         }
         $kb = $rows ? ['inline_keyboard' => $rows] : null;

@@ -855,7 +855,8 @@ async function viewGrowth(box) {
       isOwner && a.due > 0 ? h('button', { class: 'btn sm ok', style: { marginTop: '6px' }, onclick: async () => { const ok = await confirmBox("To'lov", (a.name || a.tg) + ' ga ' + money(a.due) + " to'landi deb belgilansinmi?", "To'landi", 'ok'); if (!ok) return; const rr = await act('agent_payout', { tg: a.tg, amount: a.due }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); viewGrowth(box); } }, "💵 To'landi") : '')))) : emptyBox("Hali hamkor yo'q. Pastdan qo'shing — u /agent buyrug'i bilan havolasini oladi.", 'users');
   const mkt = g.ok && g.rules.length ? h('div', { class: 'card' }, g.rules.map(x => h('div', { class: 'row' }, h('div', { class: 'grow' }, h('div', { class: 't1' }, RULES[x.rule] || x.rule), h('div', { class: 't2' }, 'Oxirgi: ' + ago(x.last))),
     h('div', { class: 'right' }, h('b', {}, fmt(x.sent)), h('div', { class: 't2' }, fmt(x.conv) + ' ta buyurtma berdi'))))) : emptyBox("Avtomatik marketing hali xabar yubormagan (Sozlamalar → 🚀 O'sish → yoqing)", 'mega');
-  box.replaceChildren(h('div', { class: 'wrap' }, kpis,
+  const srcBox = h('div', {});
+  box.replaceChildren(h('div', { class: 'wrap' }, kpis, h('div', { class: 'sec' }, '📊 Reklama manbalari'), srcBox,
     h('div', { class: 'cols' },
       h('div', {}, h('div', { class: 'sec' }, '🤝 Hamkorlar (agentlar)'), list,
         h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px' } }, h('b', {}, "➕ Hamkor qo'shish / o'zgartirish"),
@@ -863,7 +864,29 @@ async function viewGrowth(box) {
           h('div', { class: 'grid', style: { gridTemplateColumns: '1fr 1fr 70px' } }, tg, nm, pc),
           h('button', { class: 'btn pri', style: { width: '100%', marginTop: '8px' }, onclick: async () => { const id = parseInt(tg.value.replace(/\D/g, ''), 10); if (!id) { toast('Telegram ID kiriting', 'bad'); return; } const rr = await act('agent_save', { tg: id, name: nm.value.trim(), percent: parseInt(pc.value, 10) || 10, active: true }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); if (rr.ok) viewGrowth(box); } }, 'Saqlash'))),
       h('div', {}, h('div', { class: 'sec' }, '📣 Avtomatik marketing'), mkt,
-        g.ok && g.video_missing && g.video_missing.length ? h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px' } }, h('b', {}, '🎬 Videotaqdimot'), h('div', { class: 't2', style: { whiteSpace: 'normal' } }, 'Serverda yetishmayapti: ' + g.video_missing.join(', ') + ". Yoqilgan bo'lsa ham ishlamaydi.")) : ''))));
+        null, g.ok && g.video_missing && g.video_missing.length ? h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px' } }, h('b', {}, '🎬 Videotaqdimot'), h('div', { class: 't2', style: { whiteSpace: 'normal' } }, 'Serverda yetishmayapti: ' + g.video_missing.join(', ') + ". Yoqilgan bo'lsa ham ishlamaydi.")) : ''))));
+  drawSources(srcBox, 30);
+}
+
+async function drawSources(box, days) {
+  box.replaceChildren(skeleton(1, 80));
+  const r = await api('sources', { days });
+  if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
+  const NAMES = { organik: '🌱 Organik (havolasiz)', referal: '🎁 Referal', hamkor: '🤝 Hamkorlar' };
+  const seg = h('div', { class: 'seg sm' }, [[7, '7 kun'], [30, '30 kun'], [0, 'Hammasi']].map(([d, l]) => h('button', { class: d === days ? 'on' : '', onclick: () => drawSources(box, d) }, l)));
+  const pct = (a, b) => b ? Math.round(a * 100 / b) + '%' : '—';
+  const rows = r.items.length ? r.items.map(x => h('div', { class: 'row' },
+    h('div', { class: 'grow' }, h('div', { class: 't1' }, NAMES[x.src] || ('📣 ' + x.src)),
+      h('div', { class: 't2' }, fmt(x.users) + ' kishi · buyurtma berdi ' + fmt(x.ordered) + ' (' + pct(x.ordered, x.users) + ') · to\'ladi ' + fmt(x.paid) + ' (' + pct(x.paid, x.users) + ')')),
+    h('div', { class: 'amt' }, money(x.revenue)))) : [emptyBox("Hali ma'lumot yo'q", 'chart')];
+  const code = h('input', { class: 'inp', placeholder: 'kod: ig, tgkanal, tiktok…', maxlength: '24' });
+  const outL = h('div', { class: 't2', style: { whiteSpace: 'normal', wordBreak: 'break-all', marginTop: '8px', userSelect: 'all' } });
+  const mk = () => { const c = code.value.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24); if (c.length < 2) { outL.textContent = ''; return; }
+    outL.replaceChildren(h('div', {}, '✈️ Telegram: ', h('b', {}, 'https://t.me/' + (r.bot || 'BOT') + '?start=src_' + c)), r.base ? h('div', { style: { marginTop: '4px' } }, '🌐 Sayt (reklama uchun): ', h('b', {}, r.base + '/start.php?src=' + c)) : ''); };
+  code.addEventListener('input', mk);
+  box.replaceChildren(h('div', { class: 'card' }, h('div', { style: { padding: '10px 14px' } }, seg), ...rows),
+    h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px' } }, h('b', {}, '🔗 Manba havolasini yaratish'),
+      h('div', { class: 't2', style: { whiteSpace: 'normal', margin: '4px 0 8px' } }, "Har reklama uchun alohida kod bering (masalan ig, tgkanal1). Shu havoladan kelgan yangi mijozlar yuqoridagi jadvalda alohida qatorda ko'rinadi."), code, outL));
 }
 
 /* ------------------------------------------------------------------ tizim: AI kalitlari va xatolar jurnali */

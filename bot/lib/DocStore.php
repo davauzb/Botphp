@@ -63,6 +63,8 @@ class DocStore
             'full_name' => self::clean($st['full_name'] ?? '', 120),
             'university' => self::clean($st['university'] ?? '', 160),
             'group_name' => self::clean($st['group_name'] ?? '', 60),
+            'kafedra' => self::clean($st['kafedra'] ?? '', 160),
+            'teacher' => self::clean($st['teacher'] ?? '', 100),
         ];
         $sections = [];
         $total = 0;

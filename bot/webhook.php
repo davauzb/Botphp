@@ -90,12 +90,16 @@ try {
             }
         }
         $agentRef = str_starts_with($payload, 'agt') ? (int)substr($payload, 3) : 0;
+        $srcRef = Growth::sourceFromPayload($payload);
         $text = '/start';
     }
 
     $user = getOrCreateUser($chatId, $username, $referrerId);
     if (!empty($agentRef)) {
         Growth::attachAgent($chatId, $agentRef);     // hamkor havolasi
+    }
+    if (!empty($srcRef)) {
+        Growth::setSource($chatId, $srcRef);         // 📊 reklama manbasi (src_…)
     }
 
     // Admin panel orqali bloklangan foydalanuvchi botdan foydalana olmaydi (adminlar bundan mustasno)
@@ -114,6 +118,14 @@ try {
 
     // O'qituvchi talablari: mavzu kutilayotganda fayl, rasm yoki «Talab: ...» matni
     if (str_starts_with((string)$user['state'], 'awaiting_topic:') && Requirements::handle($chatId, $message)) {
+        exit;
+    }
+    // ♻️ Qismini qayta yozish: mijozning izohi
+    if (str_starts_with((string)$user['state'], 'awaiting_rpnote:') && $text !== '' && $text[0] !== '/'
+        && !in_array($text, array_merge(...array_map(fn($row) => array_column($row, 'text'), mainMenu()['keyboard'])), true)) {
+        [, $rj, $ri] = array_pad(explode(':', (string)$user['state']), 3, '0');
+        setUserState($chatId, 'idle');
+        PartRewrite::order($chatId, (int)$rj, (int)$ri, 'izoh', mb_substr($text, 0, 1000));
         exit;
     }
     // Yomon bahodan keyin sabab yozilmoqda
@@ -860,6 +872,17 @@ function handleCallbackQuery(array $cb): void
     }
     if (str_starts_with($data, 'rate:')) {
         handleRating($chatId, $data);
+        return;
+    }
+    if (preg_match('/^(rp|rpp|rpm):(\d+)(?::(\d+))?(?::([a-z]+))?$/', $data, $rm)) {   // ♻️ qismini qayta yozish
+        Telegram::answerCallbackQuery((string)$cb['id']);
+        if ($rm[1] === 'rp') {
+            PartRewrite::askPart($chatId, (int)$rm[2]);
+        } elseif ($rm[1] === 'rpp') {
+            PartRewrite::askMode($chatId, (int)$rm[2], (int)($rm[3] ?? 0));
+        } else {
+            PartRewrite::onMode($chatId, (int)$rm[2], (int)($rm[3] ?? 0), (string)($rm[4] ?? ''));
+        }
         return;
     }
     if (str_starts_with($data, 'tr:') || str_starts_with($data, 'trl:')) {   // 🌐 tarjima

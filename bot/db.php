@@ -21,6 +21,7 @@ require_once __DIR__ . '/lib/Requirements.php';
 require_once __DIR__ . '/lib/MiniApp.php';
 require_once __DIR__ . '/lib/Translate.php';
 require_once __DIR__ . '/lib/Userbot.php';
+require_once __DIR__ . '/lib/PartRewrite.php';
 
 /**
  * Har chaqiruvda yangi PDO ulanish qaytaradi.
@@ -43,7 +44,7 @@ function db(): PDO
     $pdo->exec('PRAGMA synchronous = NORMAL;'); // WAL bilan xavfsiz va ancha tezroq
     $pdo->exec('PRAGMA foreign_keys = ON;');
 
-    $schemaVersion = 20;
+    $schemaVersion = 21;
     // "Yangi baza" ni fayl mavjudligi bilan EMAS, jadval borligi bilan aniqlaymiz: PDO ulanganda fayl darrov yaratiladi,
     // shuning uchun birinchi so'rov install.sql ni yarim yozib yiqilsa (yoki ikki so'rov bir vaqtda kelsa) baza abadiy
     // jadvalsiz qolardi. install.sql dagi barcha buyruqlar IF NOT EXISTS — qayta bajarilsa ham xavfsiz.
