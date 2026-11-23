@@ -341,7 +341,8 @@ class Engine
         }
         // Fon xizmatlari (rassilka, tozalash, baza zaxirasi) — ishlar navbatidan keyin, qolgan vaqt ichida
         try {
-            $mEnd = min($hardEnd, microtime(true) + 20);
+            $ub = class_exists('Userbot') && class_exists('HumoAuto') && Userbot::wantsPoll();
+            $mEnd = min($hardEnd, microtime(true) + ($ub ? 45 : 20));     // userbot o'qishi uchun ko'proq vaqt
             if ($mEnd - microtime(true) > 3) {
                 Maintenance::run($mEnd);
             }

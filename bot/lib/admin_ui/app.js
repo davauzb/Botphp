@@ -931,7 +931,7 @@ async function drawUserbot(box, extra) {
     const out = h('button', { class: 'btn sm bad', onclick: async () => { const ok = await confirmBox('Userbotdan chiqish', "Sessiya o'chiriladi, HUMO avto-to'lov userbot orqali ishlamay qoladi.", 'Chiqish', 'bad'); if (!ok) return; const rr = await act('ub_logout', {}); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawUserbot(box); } }, 'Chiqish');
     box.replaceChildren(card(h('div', { class: 't1' }, '✅ Ulangan: ', h('b', {}, r.name || ''), ' ', badge(r.enabled ? 'ishlayapti' : "to'xtatilgan", r.enabled ? 'ok' : 'warn')),
       t2((r.phone ? r.phone + ' · ' : '') + (r.last_poll ? 'oxirgi o\'qish: ' + ago(r.last_poll) + ' — ' + r.last_result : "hali o'qilmagan (kutilayotgan HUMO to'lovi bo'lganda har ~35 soniyada o'qiladi)")),
-      h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, test, tog, out),
+      h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, (() => { const pb = h('button', { class: 'btn sm pri', onclick: () => busy(pb, "O'qilmoqda…", async () => { const rr = await api('ub_poll'); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawUserbot(box); }) }, "🔄 Hozir o'qish"); return pb; })(), test, tog, out),
       t2("Telegram → Sozlamalar → Qurilmalar ro'yxatida «SlayderAi Pay» bo'lib ko'rinadi. O'sha yerdan ham o'chirsa bo'ladi.")));
     return;
   }

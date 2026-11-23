@@ -313,26 +313,39 @@ class Userbot
     }
 
     /** Maintenance::run() dan: kutilayotgan so'rov bo'lsa har ~35 s, bo'lmasa har 10 daqiqada bir marta o'qiydi. */
-    public static function poll(float $until): void
+    /** Panel: «Hozir o'qish» — kutmasdan darhol o'qiydi va mos to'lovlarni tasdiqlaydi. */
+    public static function pollNow(): array
     {
-        if (!self::active() || !HumoAuto::enabled() || $until - microtime(true) < 25) {
+        if (!self::active()) {
+            return ['ok' => false, 'msg' => 'Userbot ulanmagan yoki to\'xtatilgan'];
+        }
+        $before = (int)db()->query("SELECT COUNT(*) FROM topups WHERE method = 'humo' AND status = 'approved'")->fetchColumn();
+        self::poll(microtime(true) + 45, true);
+        $after = (int)db()->query("SELECT COUNT(*) FROM topups WHERE method = 'humo' AND status = 'approved'")->fetchColumn();
+        $res = (string)(self::kv('ub_poll')['v'] ?? '');
+        return ['ok' => !str_starts_with($res, 'xato'), 'msg' => ($after > $before ? '✅ ' . ($after - $before) . " ta to'lov tasdiqlandi · " : '') . $res];
+    }
+
+    public static function poll(float $until, bool $force = false): void
+    {
+        if (!self::active() || !HumoAuto::enabled() || $until - microtime(true) < 14) {
             return;
         }
         $last = (int)(self::kv('ub_poll')['ts'] ?? 0);
-        $gap = self::wantsPoll() ? self::POLL_EVERY : 600;
+        $gap = $force ? 0 : (self::wantsPoll() ? self::POLL_EVERY : 600);
         if (time() - $last < $gap) {
             return;
         }
         $lock = db()->prepare("UPDATE engine_kv SET ts = ? WHERE k = 'ub_poll' AND ts = ?");
         $lock->execute([time(), $last]);
-        if ($last > 0 && !$lock->rowCount()) {
+        if ($last > 0 && !$lock->rowCount() && !$force) {
             return;                                   // boshqa tick allaqachon o'qiyapti
         }
         if ($last === 0) {
             self::kvSet('ub_poll', 'start');
         }
         $minId = (int)self::get('LAST_ID');
-        $r = self::call(['cmd' => 'fetch', 'peer' => '@' . ltrim((string)HUMO_BOT_USERNAME, '@'), 'limit' => 20, 'min_id' => $minId], (int)min(35, $until - microtime(true) - 3));
+        $r = self::call(['cmd' => 'fetch', 'peer' => '@' . ltrim((string)HUMO_BOT_USERNAME, '@'), 'limit' => 20, 'min_id' => $minId], (int)max(12, min(35, $until - microtime(true) - 2)));
         if (empty($r['ok'])) {
             self::kvSet('ub_poll', 'xato: ' . mb_substr(self::err($r), 0, 120));
             if (($r['error'] ?? '') === 'not_authorized') {
