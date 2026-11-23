@@ -326,12 +326,13 @@ function handleMessage(array $user, int $chatId, string $text): void
         Telegram::sendMessage(
             $chatId,
             "👋 <b>Assalomu alaykum!</b>\n\n"
-            . "Men — <b>StudyBot</b>. Sizga bir necha daqiqada tayyor <b>mustaqil ish</b>, <b>referat</b>, "
-            . "<b>kurs ishi</b>, <b>ilmiy maqola</b>, <b>tezis</b> va <b>taqdimot (slayd)</b> yaratib beraman.\n\n"
+            . "Men — <b>StudyBot</b>. Sizga bir necha daqiqada tayyor <b>taqdimot (slayd)</b>, <b>mustaqil ish</b>, <b>referat</b>, "
+            . "<b>kurs ishi</b>, <b>diplom ishi</b>, <b>ilmiy maqola</b>, <b>tezis</b>, <b>ma'ruza matni</b>, <b>keys</b>, test va krossvord yaratib beraman.\n\n"
             . "📏 Narx hajmga (bet/slayd soniga) qarab belgilanadi\n"
-            . "🎁 Har bir tur bo'yicha birinchi buyurtma <b>bepul</b>\n"
+            . "🎁 Birinchi buyurtma <b>bepul</b>" . (Loyalty::every() >= 2 ? ", keyin har " . Loyalty::every() . "-buyurtma — sovg'a" : '') . "\n"
             . "🎨 Taqdimotda 17 xil professional dizayn (5 tasi ⭐ PRO)\n"
-            . "📚 Haqiqiy ilmiy manbalardan adabiyotlar ro'yxati\n\n"
+            . "📚 Haqiqiy ilmiy manbalardan adabiyotlar ro'yxati · 📄 PDF nusxa\n"
+            . "👥 Guruh uchun bir yo'la buyurtma — chegirma bilan\n\n"
             . "Quyidagi menyudan boshlang 👇",
             mainMenu()
         );
@@ -784,7 +785,7 @@ function handleCallbackQuery(array $cb): void
     }
 
     // Tugma bosilganda Telegram'dagi "aylanayotgan soat" belgisini o'chiramiz (job:/edit: o'zlari javob beradi)
-    if (!str_starts_with($data, 'job:') && !str_starts_with($data, 'edit:') && !str_starts_with($data, 'plan:') && !str_starts_with($data, 'dl:') && !str_starts_with($data, 'humo_') && !empty($cb['id'])) {
+    if (!str_starts_with($data, 'job:') && !str_starts_with($data, 'pdf:') && !str_starts_with($data, 'edit:') && !str_starts_with($data, 'plan:') && !str_starts_with($data, 'dl:') && !str_starts_with($data, 'humo_') && !empty($cb['id'])) {
         Telegram::answerCallbackQuery((string)$cb['id']);
     }
 

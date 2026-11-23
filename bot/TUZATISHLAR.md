@@ -1,3 +1,38 @@
+# studybot 14-15 — 10 TA YANGI IMKONIYAT
+
+Hammasi Sozlamalar (admin panel) orqali yoqiladi/o'chiriladi; yangi narxlar «Narxlar» bo'limida.
+
+- **📄 PDF nusxa** — har tayyor fayl ostida va «📋 Buyurtmalarim»da «📄 PDF» tugmasi. Serverda LibreOffice bo'lsa — asl fayl aynan
+  PDF ga aylanadi; bo'lmasa taqdimot va hujjat (titul, reja, boblar, jadval, rasm, bet raqamlari) GD orqali A4 qilib chiziladi.
+  Tahrirlovchida o'zgartirilgan ish — yangi holatida. Tayyor PDF eslab qolinadi (qayta bosilsa darhol keladi). `PDF_BUTTON`
+- **⏱ Tayyor bo'lish vaqti** — navbatdagi ish uchun «Taxminan N daqiqa ichida tayyor bo'ladi» (shu turdagi oxirgi ishlar
+  vaqtining medianasi va navbat bo'yicha), ish boshlangach — qolgan vaqt.
+- **⚡ Tezkor buyurtma** — navbatda 2-o'rin va undan keyin turgan ishda «⚡ Tezkor — 3 000 so'm» tugmasi: ish navbat boshiga
+  o'tadi. Ish bekor bo'lsa yoki xato bilan tugasa — bu to'lov ham qaytariladi. `EXPRESS_ENABLED`, `EXPRESS_PRICE`
+- **🎁 Sodiqlik dasturi** — har 10-pullik buyurtma sovg'a (20 000 so'mgacha; qimmatrog'iga shu summada chegirma).
+  Balans bo'limida progress (🟩🟩⬜️…🎁), buyurtma qabulida «Yana N ta buyurtmadan keyin — bepul». `LOYALTY_EVERY` (0 — o'chiq), `LOYALTY_MAX_PRICE`
+- **👥 Guruh buyurtmasi** — mavzu so'ralganda «👥 Guruh uchun» tugmasi: «Familiya Ism — Mavzu» ro'yxati yuboriladi,
+  3 va undan ko'p talabaga 15% chegirma, balansdan bir marta yechiladi, har talabaga alohida fayl (titulda o'z ismi).
+  Ko'p progress xabari o'rniga bitta umumiy xabar; reja tasdiqlash so'ralmaydi. `GROUP_ENABLED`, `GROUP_DISCOUNT`, `GROUP_MIN`
+- **Yangi turlar**: 🎓 **Diplom ishi (BMI)** 50–75 bet (ilmiy rahbar, 3 bob × 3–4 band, 20 tagacha manba);
+  🎙 **Ma'ruza matni** (reja, matn, nazorat savollari, tayanch iboralar); 💼 **Keys (case study)** (vaziyat, tahlil, yechimlar,
+  muhokama savollari); 🧩 **Krossvord** (15/25 so'z — panjara avtomatik tuziladi, «Eniga/Bo'yiga» savollari, oxirida javoblar).
+  `DIPLOM_ENABLED`, `MARUZA_ENABLED`, `KEYS_ENABLED`, `KROSSVORD_ENABLED`
+- **🎉 Aksiyalar kalendari** — bayram kunlari (Navro'z, Mustaqillik, O'qituvchilar kuni, sessiya mavsumlari…) to'ldirishga
+  avtomatik +15…25% bonus va o'sha kuni 10:00 dan keyin hammaga bir martalik tabrik xabari. Ro'yxat tahrirlanadi:
+  `PROMO_DAYS` (har qatorda `OY-KUN|foiz|Nomi` yoki `08-25..08-31|20|Nomi`), `PROMO_CALENDAR`, `PROMO_BROADCAST`
+- **🛡 Sifat nazorati** — yig'ishdan oldin har bo'lim tekshiriladi: «Albatta», «Mana…», [to'ldiruvchi] kabi AI chiqindilari,
+  takror abzats va uzilib qolgan oxirgi gap tozalanadi; rejadagidan ancha qisqa yoki oldingi bobga juda o'xshash qism
+  (ko'pi bilan 2 ta) qayta yoziladi. `QC_ENABLED`
+- **🗄 Zaxira** — serverda oxirgi 7 kunlik zaxira (`BACKUP_KEEP`), yopiq kanalga ham yuborish (`BACKUP_CHAT_ID`),
+  AES-256 parol (`BACKUP_PASSWORD`). Panel → Tizim → «Baza zaxiralari»: ro'yxat, «Hozir zaxira olish», istalganini Telegram'ga yuborish.
+- **👤 Userbot: bir nechta bank boti** — `UB_BOTS` ga Uzcard yoki boshqa bank bildirishnoma botlarini yozing (vergul bilan).
+  Kirim xabarlari o'zbek/rus/ingliz formatlarida tushuniladi (summa + karta oxirgi 4 raqami bo'lishi shart, chiqimlar rad etiladi).
+- **Tuzatildi**: navbatdagi o'rin va bepul qayta yozish limitidagi SQLite turi xatosi (`COALESCE(...) = ?` matn bilan
+  solishtirilib, shart doim noto'g'ri/to'g'ri chiqardi).
+
+**O'rnatish:** botga `/yangilash` → «🚀 Yangilash». Bazaga qo'shimcha amal kerak emas.
+
 # studybot 14-14 — TO'LOVLAR: USERBOT ORQALI HUMO AVTO, QO'LDA TO'LOV KARTASI, XAVFSIZLIK
 
 - **👤 Userbot (HUMO avto-to'lov)** — admin panel → Tizim → «Userbot». Hostingda Python bo'lmasa ham «portable» Python va Telethon
