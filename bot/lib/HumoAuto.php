@@ -175,15 +175,32 @@ class HumoAuto
             }
             return;
         }
-        $last4 = trim((string)HUMO_CARD_LAST4);
-        if ($last4 === '') {
-            $digits = preg_replace('/\D+/', '', (string)HUMO_CARD_NUMBER);
-            $last4 = strlen($digits) >= 4 ? substr($digits, -4) : '';
-        }
-        if ($last4 !== '' && $p['card'] !== $last4) {
-            return;     // boshqa kartaga tushgan pul
+        $cards = self::cards();
+        if ($cards && !in_array($p['card'], $cards, true)) {
+            // boshqa kartaga tushgan pul — hisoblanmaydi, lekin /humo da ko'rinsin (sozlama xatosini topish uchun)
+            $pdo->prepare("INSERT OR IGNORE INTO humo_events (ekey, ts, msg_date, amount, tiyin, card, source, status) VALUES (?,?,?,?,?,?,?,'othercard')")
+                ->execute(['c:' . $p['key'], time(), $date, $p['amount'], $p['tiyin'], $p['card'], $p['source']]);
+            return;
         }
         self::credit($p, $date, $chatId, $msgId);
+    }
+
+    /**
+     * Qabul qilinadigan kartalar (oxirgi 4 raqam): HUMO_CARD_LAST4, HUMO_CARD_NUMBER va Sozlamalardagi PAY_CARD_NUMBER.
+     * Bir nechta bo'lishi mumkin — eski karta raqami config'da qolib ketsa ham yangi kartaga tushgan pul hisoblanadi.
+     */
+    public static function cards(): array
+    {
+        $out = [];
+        foreach ([(string)HUMO_CARD_LAST4, (string)HUMO_CARD_NUMBER, class_exists('Engine') ? (string)Engine::c('PAY_CARD_NUMBER', '') : ''] as $v) {
+            foreach (preg_split('/[,;]+/', $v) ?: [] as $one) {
+                $d = preg_replace('/\D+/', '', $one);
+                if (strlen($d) >= 4) {
+                    $out[] = substr($d, -4);
+                }
+            }
+        }
+        return array_values(array_unique($out));
     }
 
     // ------------------------------------------------------------------ tekshiruvlar
@@ -584,6 +601,7 @@ class HumoAuto
         $lines[] = 'Karta: ' . (trim((string)HUMO_CARD_NUMBER) !== '' ? '✅ berilgan' : "❌ HUMO_CARD_NUMBER bo'sh");
         $n = self::activeConnectionCount();
         $lines[] = 'Business ulanishi: ' . ($n > 0 ? "✅ ({$n})" : "❌ yo'q — Telegram → Sozlamalar → Business → Chatbotlar");
+        $lines[] = 'Qabul qilinadigan karta(lar): ' . (self::cards() ? '*' . implode(', *', self::cards()) : 'hammasi');
         $lines[] = 'Kuzatiladigan bot: @' . Telegram::escape((string)HUMO_BOT_USERNAME) . ((int)HUMO_BOT_ID > 0 ? ' (ID ' . (int)HUMO_BOT_ID . ')' : '');
         try {
             $lines[] = 'Webhook: ' . self::webhookCheck();
@@ -605,17 +623,18 @@ class HumoAuto
         }
         $p = $pdo->query("SELECT COUNT(*) FROM topups WHERE method = 'humo' AND status = 'pending'")->fetchColumn();
         $lines[] = "Kutilayotgan so'rovlar: <b>" . (int)$p . '</b>';
-        $ev = $pdo->query('SELECT ts, amount, tiyin, status, topup_id, raw FROM humo_events ORDER BY id DESC LIMIT 8')->fetchAll(PDO::FETCH_ASSOC);
+        $ev = $pdo->query('SELECT ts, amount, tiyin, status, topup_id, raw, card FROM humo_events ORDER BY id DESC LIMIT 8')->fetchAll(PDO::FETCH_ASSOC);
         if ($ev) {
             $lines[] = "\n<b>Oxirgi xabarlar:</b>";
-            $icons = ['matched' => '✅', 'unmatched' => '⚠️', 'unparsed' => '❓', 'error' => '❌'];
+            $icons = ['matched' => '✅', 'unmatched' => '⚠️', 'unparsed' => '❓', 'error' => '❌', 'othercard' => '🚫'];
             foreach ($ev as $e) {
                 $when = gmdate('d.m H:i', (int)$e['ts'] + 5 * 3600);
                 if ($e['status'] === 'unparsed') {
                     $lines[] = "❓ {$when} tushunilmadi: " . Telegram::escape(mb_substr(str_replace(["\n", "\r"], ' ', (string)$e['raw']), 0, 70));
                 } else {
                     $lines[] = ($icons[$e['status']] ?? '•') . " {$when} +" . number_format((int)$e['amount'], 0, '', ' ')
-                        . ($e['topup_id'] ? " → #{$e['topup_id']}" : ($e['status'] === 'unmatched' ? ' (mos so\'rov yo\'q)' : ''));
+                        . ($e['topup_id'] ? " → #{$e['topup_id']}" : ($e['status'] === 'unmatched' ? ' (mos so\'rov yo\'q)'
+                            : ($e['status'] === 'othercard' ? ' (*' . $e['card'] . ' — boshqa karta)' : '')));
                 }
             }
         }
