@@ -1,38 +1,24 @@
 <?php
 
 /**
- * ⭐ JONLI OVOZ — o'zbekcha ifodali nutq (Navoiy TTS) alohida ovoz serverida (voice-server/install.sh).
- * Hosting PHP'da og'ir model ishlamaydi, shuning uchun bot matnni serverga yuboradi, server navbat bilan OGG qaytaradi.
+ * ⭐ JONLI OVOZ — o'zbekcha ifodali nutq (Navoiy TTS) alohida ishchi serverda (lib/voice_worker).
  *
- *  • Ovozlar serverda: har biri 10–25 soniyalik toza namuna. Admin botda /ovoz_qosh bilan qo'shadi
- *    (audio, ovozli xabar yoki VIDEO — ovoz ajratib olinadi). Faqat egasining roziligi bilan!
- *  • Uslublar: 🙂 oddiy, 📖 hikoyachi (iliq, shoshilmasdan), 🤗 mehribon, 😊 xursand, 🎓 rasmiy.
- *  • CPU serverda sekin (1 soniya ovozga ~4 soniya), shuning uchun qisqa matnlar (LIVE_MAX_CHARS) va navbat.
- *    Natija webhook'da ~100 soniyagacha kutiladi, kechiksa — fon tick'ida yetkaziladi.
- *  • Server javob bermasa yoki xato bo'lsa — pul qaytariladi, mijozga oddiy ovoz taklif qilinadi.
- * Sozlash: admin panel → Tizim → «⭐ Jonli ovoz serveri» (manzil + token).
+ * Ishchi o'zi BOTGA ulanadi (voice_api.php): «hello» — holat, «next» — navbatdagi ish, «result» — natija.
+ * Shuning uchun serverga kiruvchi port, domen, HTTPS va token nusxalash kerak emas: admin panelda
+ * «🚀 Server skripti» → Oracle Cloud'da server yaratishda skriptni joylash → hammasi o'zi o'rnatiladi va ulanadi.
+ *
+ *  • Ovozlar: admin botda /ovoz_qosh (video, audio yoki ovozli xabar). Namuna botda saqlanadi (server qayta
+ *    o'rnatilsa — ovozlar avtomatik tiklanadi), ishchi undan eng toza ~11 soniyani o'zi tanlaydi.
+ *  • Uslublar: 📖 hikoyachi, 🙂 oddiy, 🤗 mehribon, 😊 xursand, 🎓 rasmiy.
+ *  • CPU serverda sekin (1 s ovozga ~5 s) — qisqa matnlar (LIVE_MAX_CHARS) va navbat.
+ *  • Xato / vaqt tugashi — pul qaytariladi, oddiy ovoz taklif qilinadi.
  */
 class LiveVoice
 {
-    public static function url(): string
-    {
-        return rtrim((string)(Settings::raw('LIVE_TTS_URL') ?? ''), '/');
-    }
+    public const STYLES = ['hikoya' => '📖 Hikoyachi', 'oddiy' => '🙂 Oddiy', 'mehribon' => '🤗 Mehribon', 'xursand' => '😊 Xursand', 'jiddiy' => '🎓 Rasmiy'];
+    private const ONLINE_SEC = 600;               // shuncha vaqt ichida ishchidan xabar bo'lsa — «ulangan»
 
-    private static function token(): string
-    {
-        return (string)(Settings::raw('LIVE_TTS_TOKEN') ?? '');
-    }
-
-    public static function configured(): bool
-    {
-        return self::url() !== '' && self::token() !== '';
-    }
-
-    public static function enabled(): bool
-    {
-        return (bool)Engine::c('LIVE_TTS_ENABLED', true) && self::configured() && self::voices() !== [];
-    }
+    // ------------------------------------------------------------------ sozlamalar
 
     public static function maxChars(): int
     {
@@ -49,72 +35,92 @@ class LiveVoice
         return max(0, (int)Engine::c('LIVE_PRICE_1000', 2000));
     }
 
-    public const STYLES = ['hikoya' => '📖 Hikoyachi', 'oddiy' => '🙂 Oddiy', 'mehribon' => '🤗 Mehribon', 'xursand' => '😊 Xursand', 'jiddiy' => '🎓 Rasmiy'];
-
-    // ------------------------------------------------------------------ HTTP
-
-    /** @return array{0:int,1:array|string|null} [http kod, javob] */
-    private static function http(string $method, string $path, ?array $body = null, int $timeout = 20, bool $raw = false): array
+    public static function token(): string
     {
-        $ch = curl_init(self::url() . $path);
-        $h = ['Authorization: Bearer ' . self::token(), 'Accept: application/json'];
-        $opt = [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => $timeout, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_CUSTOMREQUEST => $method];
-        if ($body !== null) {
-            $h[] = 'Content-Type: application/json';
-            $opt[CURLOPT_POSTFIELDS] = json_encode($body, JSON_UNESCAPED_UNICODE);
-        }
-        $opt[CURLOPT_HTTPHEADER] = $h;
-        curl_setopt_array($ch, $opt);
-        $res = curl_exec($ch);
-        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $err = curl_error($ch);
-        curl_close($ch);
-        if ($res === false) {
-            return [0, $err];
-        }
-        if ($raw) {
-            return [$code, (string)$res];
-        }
-        $d = json_decode((string)$res, true);
-        return [$code, is_array($d) ? $d : null];
+        return (string)(Settings::raw('LIVE_WORKER_TOKEN') ?? '');
     }
 
-    /** Serverdagi ovozlar (10 daqiqa keshlanadi). */
-    public static function voices(bool $fresh = false): array
+    public static function checkToken(string $t): bool
     {
-        if (!self::configured()) {
-            return [];
+        $real = self::token();
+        return strlen($real) >= 24 && hash_equals($real, $t);
+    }
+
+    private static function pdo(): PDO
+    {
+        static $ok = false;
+        $pdo = db();
+        if (!$ok) {
+            $pdo->exec('CREATE TABLE IF NOT EXISTS live_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, tg INTEGER, payload TEXT,
+                status TEXT NOT NULL DEFAULT \'queued\', cost INTEGER DEFAULT 0, chars INTEGER DEFAULT 0, msg INTEGER DEFAULT 0,
+                created INTEGER, started INTEGER, done INTEGER, error TEXT)');
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_live_jobs_st ON live_jobs(status, id)');
+            $ok = true;
         }
-        $kv = Engine::kvGet('live_voices');
-        if (!$fresh && $kv && time() - (int)$kv['ts'] < 600) {
-            return json_decode((string)$kv['v'], true) ?: [];
-        }
-        [$code, $d] = self::http('GET', '/voices', null, 8);
-        if ($code !== 200 || !is_array($d) || empty($d['ok'])) {
-            // server vaqtincha javob bermasa — eski ro'yxat 1 soatgacha ishlatiladi
-            return ($kv && time() - (int)$kv['ts'] < 3600) ? (json_decode((string)$kv['v'], true) ?: []) : [];
-        }
-        $list = [];
-        foreach ((array)$d['voices'] as $v) {
-            if (preg_match('/^[a-z0-9_]{2,24}$/', (string)($v['key'] ?? ''))) {
-                $list[] = ['key' => (string)$v['key'], 'name' => mb_substr((string)($v['name'] ?? $v['key']), 0, 40), 'gender' => (string)($v['gender'] ?? '')];
+        return $pdo;
+    }
+
+    public static function worker(): array
+    {
+        $kv = Engine::kvGet('live_worker');
+        return $kv ? (json_decode((string)$kv['v'], true) ?: []) : [];
+    }
+
+    public static function online(): bool
+    {
+        $w = self::worker();
+        return !empty($w['seen']) && time() - (int)$w['seen'] < self::ONLINE_SEC;
+    }
+
+    public static function enabled(): bool
+    {
+        return (bool)Engine::c('LIVE_TTS_ENABLED', true) && self::token() !== '' && self::online() && !empty(self::worker()['ready']) && self::voices() !== [];
+    }
+
+    /** Ovozlar ro'yxati (bot — asosiy manba): [key => [name, gender, state, sample]] */
+    private static function vlist(): array
+    {
+        $kv = Engine::kvGet('live_vlist');
+        return $kv ? (json_decode((string)$kv['v'], true) ?: []) : [];
+    }
+
+    private static function vsave(array $l): void
+    {
+        Engine::kvSet('live_vlist', json_encode($l, JSON_UNESCAPED_UNICODE));
+    }
+
+    /** Mijozlarga ko'rinadigan (ishchida tayyor) ovozlar. */
+    public static function voices(): array
+    {
+        $out = [];
+        foreach (self::vlist() as $k => $v) {
+            if (($v['state'] ?? '') === 'ready') {
+                $out[] = ['key' => (string)$k, 'name' => (string)$v['name'], 'gender' => (string)($v['gender'] ?? '')];
             }
         }
-        Engine::kvSet('live_voices', json_encode($list, JSON_UNESCAPED_UNICODE));
-        return $list;
+        return $out;
     }
 
     public static function voiceName(string $key): string
     {
-        foreach (self::voices() as $v) {
-            if ($v['key'] === $key) {
-                return ($v['gender'] === 'm' ? '👨 ' : ($v['gender'] === 'f' ? '👩 ' : '🎙 ')) . $v['name'];
-            }
+        $v = self::vlist()[$key] ?? null;
+        if (!$v) {
+            return '🎙 ' . $key;
         }
-        return '🎙 ' . $key;
+        return (($v['gender'] ?? '') === 'm' ? '👨 ' : (($v['gender'] ?? '') === 'f' ? '👩 ' : '🎙 ')) . $v['name'];
     }
 
-    // ------------------------------------------------------------------ buyurtma
+    private static function sampleDir(): string
+    {
+        $d = rtrim(dirname(DB_PATH), '/') . '/voice_samples';
+        if (!is_dir($d)) {
+            @mkdir($d, 0700, true);
+            @file_put_contents($d . '/.htaccess', "Require all denied\nDeny from all\n");
+        }
+        return $d;
+    }
+
+    // ------------------------------------------------------------------ mijoz buyurtmasi
 
     private static function day(): string
     {
@@ -127,11 +133,16 @@ class LiveVoice
         return (int)($kv['v'] ?? 0);
     }
 
-    /** Matn tayyorlash: belgilar, emoji olib tashlanadi, raqamlar so'z bilan (server o'zi ham tekshiradi). */
     public static function clean(string $text): string
     {
-        $t = Voice::normalize($text, 'uz', false);
-        return mb_substr($t, 0, 1000);
+        return mb_substr(Voice::normalize($text, 'uz', false), 0, 1000);
+    }
+
+    private static function queueAhead(int $id = 0): int
+    {
+        $st = self::pdo()->prepare("SELECT COUNT(*) FROM live_jobs WHERE status IN ('queued','working') AND type = 'tts'" . ($id ? ' AND id < ?' : ''));
+        $st->execute($id ? [$id] : []);
+        return (int)$st->fetchColumn();
     }
 
     public static function order(int $tg, string $text, string $voice, string $style): void
@@ -143,8 +154,14 @@ class LiveVoice
                 . "Qisqartiring yoki uzun matnlar uchun oddiy ovozni tanlang.", ['inline_keyboard' => [[['text' => "🎙 Ovozni o'zgartirish", 'callback_data' => 'tts:menu']]]]);
             return;
         }
-        $pend = db()->prepare("SELECT COUNT(*) FROM engine_kv WHERE k LIKE 'livejob:%' AND v LIKE ?");
-        $pend->execute(['%"tg":' . $tg . ',%']);
+        if (!self::enabled()) {
+            Telegram::sendMessage($tg, "⚠️ Jonli ovoz serveri hozir ulanmagan. Oddiy ovozda yaratib beraymi?", ['inline_keyboard' => [[['text' => '🔊 Oddiy ovozda', 'callback_data' => 'tts:fallback']]]]);
+            Engine::kvSet('ttsfb:' . $tg, mb_substr($text, 0, 4000));
+            return;
+        }
+        $pdo = self::pdo();
+        $pend = $pdo->prepare("SELECT COUNT(*) FROM live_jobs WHERE tg = ? AND type = 'tts' AND status IN ('queued','working')");
+        $pend->execute([$tg]);
         if ((int)$pend->fetchColumn() >= 2) {
             Telegram::sendMessage($tg, "⏳ Oldingi jonli ovozlaringiz hali tayyorlanmoqda — ular kelgach yana yuboring.");
             return;
@@ -154,7 +171,7 @@ class LiveVoice
         $paid = max(0, $len - $freeLeft);
         $cost = $paid > 0 ? (int)(ceil($paid / 1000) * self::price1000()) : 0;
         if ($cost > 0) {
-            $b = db()->prepare('UPDATE users SET balance = balance - ? WHERE telegram_id = ? AND balance >= ?');
+            $b = $pdo->prepare('UPDATE users SET balance = balance - ? WHERE telegram_id = ? AND balance >= ?');
             $b->execute([$cost, $tg, $cost]);
             if (!$b->rowCount()) {
                 Telegram::sendMessage($tg, "⚠️ Jonli ovoz uchun " . number_format($cost, 0, '', ' ') . " so'm kerak — balansingiz yetarli emas"
@@ -165,130 +182,213 @@ class LiveVoice
                 return;
             }
         }
-        [$code, $d] = self::http('POST', '/tts', ['text' => self::clean($text), 'voice' => $voice, 'style' => $style, 'speed' => 1.0], 15);
-        if ($code !== 200 || empty($d['ok']) || empty($d['id']) || !preg_match('/^[0-9a-f]{32}$/', (string)$d['id'])) {
-            if ($cost > 0) {
-                db()->prepare('UPDATE users SET balance = balance + ? WHERE telegram_id = ?')->execute([$cost, $tg]);
+        $ahead = self::queueAhead();
+        $estSec = (int)($ahead * 60 + 20 + $len * 0.4);
+        $mid = Telegram::sendMessage($tg, "⏳ <b>Jonli ovoz tayyorlanmoqda…</b>\n" . self::voiceName($voice) . " · " . (self::STYLES[$style] ?? '')
+            . ($ahead > 0 ? "\n🕐 Navbatda: " . ($ahead + 1) . "-o'rin" : '')
+            . "\n⏱ Taxminan " . ($estSec < 90 ? max(20, (int)(ceil($estSec / 10) * 10)) . ' soniya' : (int)ceil($estSec / 60) . ' daqiqa')
+            . ($cost > 0 ? "\n💳 " . number_format($cost, 0, '', ' ') . " so'm" : ''));
+        $pdo->prepare('INSERT INTO live_jobs (type, tg, payload, cost, chars, msg, created) VALUES (?,?,?,?,?,?,?)')
+            ->execute(['tts', $tg, json_encode(['text' => self::clean($text), 'voice' => $voice, 'style' => $style, 'speed' => 1.0], JSON_UNESCAPED_UNICODE),
+                $cost, $len, (int)$mid, time()]);
+        Engine::kvSet('ltsd:' . $tg . ':' . self::day(), (string)(self::usedToday($tg) + $len));
+        Telegram::call('sendChatAction', ['chat_id' => $tg, 'action' => 'record_voice']);
+    }
+
+    // ------------------------------------------------------------------ ishchi API (voice_api.php)
+
+    /** «hello»: holatni saqlash va ovozlarni sinxronlash. */
+    public static function workerHello(array $d): array
+    {
+        $wv = [];
+        foreach ((array)($d['voices'] ?? []) as $v) {
+            if (is_array($v) && preg_match('/^[a-z0-9_]{2,24}$/', (string)($v['key'] ?? ''))) {
+                $wv[(string)$v['key']] = ['name' => mb_substr((string)($v['name'] ?? $v['key']), 0, 40), 'gender' => in_array($v['gender'] ?? '', ['m', 'f'], true) ? $v['gender'] : ''];
             }
-            logError('livevoice', "submit HTTP $code: " . (is_array($d) ? (string)($d['error'] ?? '') : (string)$d));
-            Telegram::sendMessage($tg, "⚠️ Jonli ovoz serveri hozir javob bermayapti" . ($cost > 0 ? " (pul qaytarildi)" : '') . ".\nOddiy ovozda yaratib beraymi?",
-                ['inline_keyboard' => [[['text' => '🔊 Oddiy ovozda', 'callback_data' => 'tts:fallback']]]]);
-            Engine::kvSet('ttsfb:' . $tg, mb_substr($text, 0, 4000));
+        }
+        $prev = self::worker();
+        Engine::kvSet('live_worker', json_encode(['seen' => time(), 'hello' => time(), 'ready' => !empty($d['ready']), 'error' => mb_substr((string)($d['error'] ?? ''), 0, 300),
+            'version' => mb_substr((string)($d['version'] ?? ''), 0, 20), 'cpu' => (int)($d['cpu'] ?? 0), 'threads' => (int)($d['threads'] ?? 0),
+            'voices' => array_keys($wv)], JSON_UNESCAPED_UNICODE));
+        $notified = Engine::kvGet('live_notified');
+        if (empty($prev['ready']) && !empty($d['ready']) && defined('ADMIN_CHAT_ID') && (int)ADMIN_CHAT_ID > 0
+            && (!$notified || time() - (int)$notified['ts'] > 6 * 3600)) {               // qayta ishga tushishlarda bezovta qilmaslik
+            Engine::kvSet('live_notified', '1');
+            Telegram::sendMessage((int)ADMIN_CHAT_ID, "⭐ <b>Jonli ovoz serveri ulandi!</b>\nOvozlar: " . count($wv) . " ta. Mijozlar «🔊 Matnni ovozga» da ⭐ ovozlarni ko'radi.\nO'z ovozingizni qo'shish: /ovoz_qosh");
+        }
+        $list = self::vlist();
+        $changed = false;
+        foreach ($wv as $k => $v) {                 // ishchidagi, botga noma'lum ovoz (masalan, boshlang'ich «ayol»)
+            if (!isset($list[$k])) {
+                $list[$k] = ['name' => $v['name'], 'gender' => $v['gender'], 'state' => 'ready'];
+                $changed = true;
+            } elseif (($list[$k]['state'] ?? '') !== 'ready' && !self::hasJob('voice_add', $k)) {
+                $list[$k]['state'] = 'ready';
+                $changed = true;
+            }
+        }
+        foreach ($list as $k => $v) {               // botda bor, ishchida yo'q (server qayta o'rnatilgan) — namunadan tiklaymiz
+            if (!isset($wv[$k]) && ($v['state'] ?? '') === 'ready') {
+                if (!empty($v['sample']) && is_file((string)$v['sample'])) {
+                    $list[$k]['state'] = 'pending';
+                    if (!self::hasJob('voice_add', $k)) {
+                        self::addJob('voice_add', 0, ['key' => $k, 'name' => $v['name'], 'gender' => $v['gender'] ?? '']);
+                    }
+                } else {
+                    unset($list[$k]);
+                }
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            self::vsave($list);
+        }
+        return ['ok' => true];
+    }
+
+    private static function hasJob(string $type, string $key): bool
+    {
+        $st = self::pdo()->prepare("SELECT 1 FROM live_jobs WHERE type = ? AND status IN ('queued','working') AND payload LIKE ? LIMIT 1");
+        $st->execute([$type, '%"key":"' . $key . '"%']);
+        return (bool)$st->fetchColumn();
+    }
+
+    private static function addJob(string $type, int $tg, array $payload): int
+    {
+        self::pdo()->prepare('INSERT INTO live_jobs (type, tg, payload, created) VALUES (?,?,?,?)')
+            ->execute([$type, $tg, json_encode($payload, JSON_UNESCAPED_UNICODE), time()]);
+        return (int)self::pdo()->lastInsertId();
+    }
+
+    /** «next»: navbatdagi ishni atomik olish (ovoz qo'shish/o'chirish — birinchi). */
+    public static function claimNext(): ?array
+    {
+        $w = self::worker();
+        if (time() - (int)($w['seen'] ?? 0) >= 15) {         // «oxirgi aloqa» — 15 soniyada bir marta yoziladi
+            $w['seen'] = time();
+            Engine::kvSet('live_worker', json_encode($w, JSON_UNESCAPED_UNICODE));
+        }
+        $pdo = self::pdo();
+        $row = $pdo->query("SELECT * FROM live_jobs WHERE status = 'queued' ORDER BY (type = 'tts') ASC, id ASC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            return null;
+        }
+        $u = $pdo->prepare("UPDATE live_jobs SET status = 'working', started = ? WHERE id = ? AND status = 'queued'");
+        $u->execute([time(), $row['id']]);
+        if (!$u->rowCount()) {
+            return null;
+        }
+        $p = json_decode((string)$row['payload'], true) ?: [];
+        return ['id' => (int)$row['id'], 'type' => (string)$row['type']] + $p;
+    }
+
+    /** «sample»: ovoz qo'shish ishi uchun namuna fayli (base64). */
+    public static function sampleFor(int $id): array
+    {
+        $st = self::pdo()->prepare("SELECT payload FROM live_jobs WHERE id = ? AND type = 'voice_add' AND status = 'working'");
+        $st->execute([$id]);
+        $p = json_decode((string)$st->fetchColumn(), true) ?: [];
+        $f = (string)(self::vlist()[(string)($p['key'] ?? '')]['sample'] ?? '');
+        if ($f === '' || !is_file($f)) {
+            return ['ok' => false, 'error' => 'namuna topilmadi'];
+        }
+        return ['ok' => true, 'b64' => base64_encode((string)file_get_contents($f))];
+    }
+
+    /** «result»: natijani qabul qilish va mijozga yetkazish. */
+    public static function workerResult(array $d): array
+    {
+        $id = (int)($d['id'] ?? 0);
+        $pdo = self::pdo();
+        $st = $pdo->prepare("SELECT * FROM live_jobs WHERE id = ? AND status = 'working'");
+        $st->execute([$id]);
+        $job = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$job) {
+            return ['ok' => true, 'note' => 'ish topilmadi yoki allaqachon yopilgan'];
+        }
+        $ok = !empty($d['ok']);
+        $pdo->prepare("UPDATE live_jobs SET status = ?, done = ?, error = ? WHERE id = ?")
+            ->execute([$ok ? 'done' : 'error', time(), $ok ? null : mb_substr((string)($d['error'] ?? 'xato'), 0, 300), $id]);
+        $p = json_decode((string)$job['payload'], true) ?: [];
+        if ($job['type'] === 'tts') {
+            if ($ok && !empty($d['audio_b64'])) {
+                $bin = base64_decode((string)$d['audio_b64'], true);
+                if ($bin !== false && strlen($bin) > 500) {
+                    $f = rtrim(GENERATED_DIR, '/') . '/live_' . $id . '_' . bin2hex(random_bytes(3)) . '.ogg';
+                    file_put_contents($f, $bin);
+                    if (!empty($job['msg'])) {
+                        Telegram::call('deleteMessage', ['chat_id' => (int)$job['tg'], 'message_id' => (int)$job['msg']]);
+                    }
+                    $sent = Voice::send((int)$job['tg'], ['file' => $f, 'fmt' => 'ogg', 'secs' => (int)round((float)($d['secs'] ?? 0))],
+                        "⭐ " . self::voiceName((string)($p['voice'] ?? '')) . " · " . (self::STYLES[$p['style'] ?? ''] ?? '') . " · " . number_format((int)$job['chars'], 0, '', ' ') . " belgi"
+                        . ((int)$job['cost'] > 0 ? " · 💳 " . number_format((int)$job['cost'], 0, '', ' ') . " so'm" : '') . "\n✍️ Yana matn yuboring — davom etamiz.",
+                        ['inline_keyboard' => [[['text' => "🎙 Ovoz / uslubni o'zgartirish", 'callback_data' => 'tts:menu']]]]);
+                    if ($sent) {
+                        return ['ok' => true];
+                    }
+                }
+            }
+            self::failJob($job, $ok ? 'audio yuborilmadi' : (string)($d['error'] ?? 'xato'));
+            return ['ok' => true];
+        }
+        if ($job['type'] === 'voice_add') {
+            $key = (string)($p['key'] ?? '');
+            $list = self::vlist();
+            if (isset($list[$key])) {
+                $list[$key]['state'] = $ok ? 'ready' : 'error';
+                $list[$key]['error'] = $ok ? '' : mb_substr((string)($d['error'] ?? ''), 0, 200);
+                self::vsave($list);
+            }
+            if ((int)$job['tg'] > 0) {
+                Telegram::sendMessage((int)$job['tg'], $ok
+                    ? "✅ «" . Telegram::escape((string)($p['name'] ?? $key)) . "» ovozi tayyor! «🔊 Matnni ovozga» → ⭐ da tanlab, qisqa matn yuborib sinab ko'ring."
+                    : "⚠️ Ovozni qo'shib bo'lmadi: " . Telegram::escape((string)($d['error'] ?? 'xato')) . "\nBoshqa (musiqasiz, toza) yozuv bilan qayta urining: /ovoz_qosh");
+            }
+        }
+        return ['ok' => true];
+    }
+
+    private static function failJob(array $job, string $why): void
+    {
+        logError('livevoice', 'ish #' . $job['id'] . ' yopildi: ' . $why);
+        if ($job['type'] !== 'tts') {
             return;
         }
-        $id = (string)$d['id'];
-        $pos = max(1, (int)($d['position'] ?? 1));
-        $estSec = (int)(($pos - 1) * 45 + 15 + $len * 0.32);
-        Engine::kvSet('ltsd:' . $tg . ':' . self::day(), (string)(self::usedToday($tg) + $len));
-        $msg = Telegram::sendMessage($tg, "⏳ <b>Jonli ovoz tayyorlanmoqda…</b>\n" . self::voiceName($voice) . " · " . (self::STYLES[$style] ?? '')
-            . ($pos > 1 ? "\n🕐 Navbatda: {$pos}-o'rin" : '') . "\n⏱ Taxminan " . ($estSec < 90 ? max(20, (int)(ceil($estSec / 10) * 10)) . ' soniya' : (int)ceil($estSec / 60) . ' daqiqa')
-            . ($cost > 0 ? "\n💳 " . number_format($cost, 0, '', ' ') . " so'm" : ''));
-        Engine::kvSet('livejob:' . $id, json_encode(['tg' => $tg, 'cost' => $cost, 'chars' => $len, 'voice' => $voice, 'style' => $style,
-            'msg' => (int)$msg, 'ts' => time()]));
-        Telegram::call('sendChatAction', ['chat_id' => $tg, 'action' => 'record_voice']);
-        // Webhook javobi allaqachon qaytgan (fastcgi_finish_request) — qisqa matnlarni shu yerning o'zida kutamiz
-        @set_time_limit(170);
-        $until = microtime(true) + 120;
-        while (microtime(true) < $until) {
-            sleep(4);
-            if (self::check($id)) {
-                return;
-            }
+        $tg = (int)$job['tg'];
+        if ((int)$job['cost'] > 0) {
+            db()->prepare('UPDATE users SET balance = balance + ? WHERE telegram_id = ?')->execute([(int)$job['cost'], $tg]);
         }
-        Engine::kick(0);                                // qolganini fon tick'i yetkazadi
+        if (!empty($job['msg'])) {
+            Telegram::call('deleteMessage', ['chat_id' => $tg, 'message_id' => (int)$job['msg']]);
+        }
+        $p = json_decode((string)$job['payload'], true) ?: [];
+        Engine::kvSet('ttsfb:' . $tg, (string)($p['text'] ?? ''));
+        Telegram::sendMessage($tg, "⚠️ Jonli ovozni yaratib bo'lmadi" . ((int)$job['cost'] > 0 ? ", pul qaytarildi" : '') . ". Oddiy ovozda yaratib beraymi?",
+            ['inline_keyboard' => [[['text' => '🔊 Oddiy ovozda', 'callback_data' => 'tts:fallback'], ['text' => "🎙 Ovozni o'zgartirish", 'callback_data' => 'tts:menu']]]]);
     }
 
-    /** Bitta ishni tekshirish; yetkazilgan yoki yopilgan bo'lsa true. */
-    public static function check(string $id): bool
+    /** Maintenance'dan: osilib qolgan ishlarni yopish (pul qaytariladi). */
+    public static function poll(float $until = 0): void
     {
-        $kv = Engine::kvGet('livejob:' . $id);
-        if (!$kv) {
-            return true;
-        }
-        $j = json_decode((string)$kv['v'], true) ?: [];
-        [$code, $d] = self::http('GET', '/job/' . $id, null, 10);
-        $status = is_array($d) ? (string)($d['status'] ?? '') : '';
-        if ($code === 200 && $status === 'done') {
-            if (!self::claim($id)) {
-                return true;                             // boshqa jarayon allaqachon olgan
+        $pdo = self::pdo();
+        $now = time();
+        $st = $pdo->prepare("SELECT * FROM live_jobs WHERE (status = 'working' AND started < ?) OR (status = 'queued' AND type = 'tts' AND created < ?) LIMIT 20");
+        $st->execute([$now - 600, $now - ((self::online() ? 25 : 10) * 60)]);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $job) {
+            $u = $pdo->prepare("UPDATE live_jobs SET status = 'error', done = ?, error = 'vaqt tugadi' WHERE id = ? AND status IN ('queued','working')");
+            $u->execute([$now, $job['id']]);
+            if ($u->rowCount()) {
+                self::failJob($job, 'vaqt tugadi');
             }
-            [$c2, $audio] = self::http('GET', '/audio/' . $id, null, 60, true);
-            if ($c2 === 200 && is_string($audio) && strlen($audio) > 500) {
-                $f = rtrim(GENERATED_DIR, '/') . '/live_' . $id . '.ogg';
-                file_put_contents($f, $audio);
-                if (!empty($j['msg'])) {
-                    Telegram::call('deleteMessage', ['chat_id' => $j['tg'], 'message_id' => (int)$j['msg']]);
-                }
-                $secs = (int)round((float)($d['secs'] ?? 0));
-                $ok = Voice::send((int)$j['tg'], ['file' => $f, 'fmt' => 'ogg', 'secs' => $secs],
-                    "⭐ " . self::voiceName((string)$j['voice']) . " · " . (self::STYLES[$j['style']] ?? '') . " · " . number_format((int)$j['chars'], 0, '', ' ') . " belgi"
-                    . (!empty($j['cost']) ? " · 💳 " . number_format((int)$j['cost'], 0, '', ' ') . " so'm" : '') . "\n✍️ Yana matn yuboring — davom etamiz.",
-                    ['inline_keyboard' => [[['text' => "🎙 Ovoz / uslubni o'zgartirish", 'callback_data' => 'tts:menu']]]]);
-                if ($ok) {
-                    return true;
-                }
-            }
-            self::fail($j, "audio olinmadi");
-            return true;
         }
-        $expired = time() - (int)($j['ts'] ?? 0) > 25 * 60;
-        if (($code === 200 && $status === 'error') || $code === 404 || $expired) {
-            if (self::claim($id)) {
-                self::fail($j, $expired ? 'vaqt tugadi' : (string)($d['error'] ?? 'server xatosi'));
-            }
-            return true;
-        }
-        return false;
-    }
-
-    /** Ishni atomik «olish» (ikki jarayon bir xil ishni ikki marta yetkazmasin). */
-    private static function claim(string $id): bool
-    {
-        $st = db()->prepare('DELETE FROM engine_kv WHERE k = ?');
-        $st->execute(['livejob:' . $id]);
-        return $st->rowCount() > 0;
-    }
-
-    private static function fail(array $j, string $why): void
-    {
-        $tg = (int)($j['tg'] ?? 0);
-        if (!empty($j['cost'])) {
-            db()->prepare('UPDATE users SET balance = balance + ? WHERE telegram_id = ?')->execute([(int)$j['cost'], $tg]);
-        }
-        logError('livevoice', 'ish yopildi: ' . $why);
-        if ($tg) {
-            if (!empty($j['msg'])) {
-                Telegram::call('deleteMessage', ['chat_id' => $tg, 'message_id' => (int)$j['msg']]);
-            }
-            Telegram::sendMessage($tg, "⚠️ Jonli ovozni yaratib bo'lmadi" . (!empty($j['cost']) ? ", pul qaytarildi" : '') . ". Qayta urinib ko'ring yoki oddiy ovozni tanlang.",
-                ['inline_keyboard' => [[['text' => "🎙 Ovozni o'zgartirish", 'callback_data' => 'tts:menu']]]]);
+        if (mt_rand(1, 50) === 1) {
+            $pdo->prepare("DELETE FROM live_jobs WHERE status IN ('done','error') AND done < ?")->execute([$now - 7 * 86400]);
         }
     }
 
     public static function pending(): bool
     {
-        try {
-            return (bool)db()->query("SELECT 1 FROM engine_kv WHERE k LIKE 'livejob:%' LIMIT 1")->fetchColumn();
-        } catch (Throwable $e) {
-            return false;
-        }
-    }
-
-    /** Maintenance'dan: kutilayotgan ishlarni yetkazish. */
-    public static function poll(float $until): void
-    {
-        if (!self::configured()) {
-            return;
-        }
-        $ids = db()->query("SELECT substr(k, 9) FROM engine_kv WHERE k LIKE 'livejob:%' ORDER BY ts LIMIT 10")->fetchAll(PDO::FETCH_COLUMN);
-        foreach ($ids as $id) {
-            if (microtime(true) > $until - 12) {
-                return;
-            }
-            if (preg_match('/^[0-9a-f]{32}$/', (string)$id)) {
-                self::check((string)$id);
-            }
-        }
+        return false;                                // ishchi o'zi so'raydi — tick zanjiri kerak emas
     }
 
     // ------------------------------------------------------------------ admin: ovoz namunasi qo'shish (bot orqali)
@@ -298,8 +398,8 @@ class LiveVoice
         if (!AdminSecurity::isAdmin($tg)) {
             return;
         }
-        if (!self::configured()) {
-            Telegram::sendMessage($tg, "Avval admin panel → Tizim → «⭐ Jonli ovoz serveri» da manzil va tokenni kiriting.");
+        if (self::token() === '') {
+            Telegram::sendMessage($tg, "Avval jonli ovoz serverini o'rnating: admin panel → Tizim → «⭐ Jonli ovoz» → «🚀 Server skripti».");
             return;
         }
         setUserState($tg, 'awaiting_voice_sample');
@@ -312,7 +412,6 @@ class LiveVoice
             ['inline_keyboard' => [[['text' => '✖️ Bekor qilish', 'callback_data' => 'vs:no']]]]);
     }
 
-    /** Namuna fayli keldi (message ichidan file_id olinadi). */
     public static function sampleFile(int $tg, array $message): bool
     {
         $f = $message['video'] ?? $message['audio'] ?? $message['voice'] ?? $message['video_note'] ?? $message['document'] ?? null;
@@ -321,7 +420,7 @@ class LiveVoice
             return true;
         }
         if ((int)($f['file_size'] ?? 0) > 20 * 1048576) {
-            Telegram::sendMessage($tg, "Fayl 20 MB dan katta — Telegram botlari uni yuklab ololmaydi. Videoning qisqa (30 soniyalik) qismini yuboring.");
+            Telegram::sendMessage($tg, "Fayl 20 MB dan katta — Telegram botlari uni yuklab ololmaydi. Videoning qisqaroq qismini yuboring.");
             return true;
         }
         Engine::kvSet('vsample:' . $tg, json_encode(['file_id' => (string)$f['file_id']]));
@@ -374,7 +473,6 @@ class LiveVoice
             return;
         }
         db()->prepare('DELETE FROM engine_kv WHERE k = ?')->execute(['vsample:' . $tg]);
-        Telegram::sendMessage($tg, "⏳ Namuna yuklanmoqda va serverga yuborilmoqda…");
         $r = Telegram::call('getFile', ['file_id' => (string)$d['file_id']]);
         $path = (string)($r['result']['file_path'] ?? '');
         $bin = false;
@@ -391,93 +489,91 @@ class LiveVoice
             Telegram::sendMessage($tg, "⚠️ Faylni Telegram'dan yuklab bo'lmadi. Qayta urinib ko'ring: /ovoz_qosh");
             return;
         }
-        $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '_', iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $d['name']) ?: '') ?? '');
+        $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '_', (string)(iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $d['name']) ?: '')) ?? '');
         $key = substr(trim($slug, '_'), 0, 16) ?: 'ovoz';
         $key = (preg_match('/^[a-z]/', $key) ? $key : 'v_' . $key) . '_' . substr(bin2hex(random_bytes(2)), 0, 3);
-        @set_time_limit(200);
-        [$code, $res] = self::http('POST', '/voice', ['key' => $key, 'name' => $d['name'], 'gender' => $d['gender'], 'consent' => true,
-            'audio_b64' => base64_encode($bin)], 150);
-        if ($code === 200 && !empty($res['ok'])) {
-            self::voices(true);
-            AdminSecurity::audit('live_voice_add', $tg, $key);
-            Telegram::sendMessage($tg, "✅ «" . Telegram::escape($d['name']) . "» ovozi qo'shildi! Endi «🔊 Matnni ovozga» → «⭐ Jonli ovozlar» da ko'rinadi.\n"
-                . "Sinab ko'ring: ovozni tanlab, qisqa matn yuboring.", mainMenu());
-        } else {
-            Telegram::sendMessage($tg, "⚠️ Server qabul qilmadi: " . Telegram::escape(is_array($res) ? (string)($res['error'] ?? "HTTP $code") : "ulanib bo'lmadi"));
-        }
+        $file = self::sampleDir() . '/' . $key . '.bin';
+        file_put_contents($file, $bin);
+        $list = self::vlist();
+        $list[$key] = ['name' => $d['name'], 'gender' => $d['gender'], 'state' => 'pending', 'sample' => $file];
+        self::vsave($list);
+        self::addJob('voice_add', $tg, ['key' => $key, 'name' => $d['name'], 'gender' => $d['gender']]);
+        AdminSecurity::audit('live_voice_add', $tg, $key);
+        Telegram::sendMessage($tg, "⏳ Namuna ovoz serveriga yuborildi" . (self::online() ? " — 1 daqiqada tayyor bo'ladi, xabar beraman." : ".\n⚠️ Server hozir ulanmagan — ulangach o'zi qo'shiladi."), mainMenu());
     }
 
     // ------------------------------------------------------------------ admin panel
 
-    public static function status(): array
+    /** «🚀 Server skripti»: token (bo'lmasa yaratiladi) va Oracle cloud-init skripti. */
+    public static function setup(int $admin, bool $regenerate): array
     {
-        $out = ['configured' => self::configured(), 'url' => self::url(), 'enabled' => (bool)Engine::c('LIVE_TTS_ENABLED', true),
-            'max_chars' => self::maxChars(), 'ready' => false, 'queue' => 0, 'voices' => [], 'error' => ''];
-        if (!self::configured()) {
-            return $out;
+        if (!defined('PUBLIC_BASE_URL') || !str_starts_with((string)PUBLIC_BASE_URL, 'https://')) {
+            return ['ok' => false, 'msg' => "config.php da PUBLIC_BASE_URL (https://…) yozilmagan"];
         }
-        [$code, $h] = self::http('GET', '/health', null, 8);
-        if ($code !== 200 || !is_array($h)) {
-            $out['error'] = $code === 0 ? "Serverga ulanib bo'lmadi" : "HTTP $code";
-            return $out;
+        if ($regenerate || self::token() === '') {
+            Settings::setRaw('LIVE_WORKER_TOKEN', 'wk_' . bin2hex(random_bytes(24)), $admin);
+            AdminSecurity::audit('live_worker_token', $admin, $regenerate ? 'yangilandi' : 'yaratildi');
         }
-        $out['ready'] = !empty($h['ready']);
-        $out['queue'] = (int)($h['queue'] ?? 0);
-        $out['error'] = (string)($h['error'] ?? '');
-        $out['voices'] = self::voices(true);
-        if ($out['voices'] === [] && $out['ready']) {
-            $out['error'] = "Token noto'g'ri yoki ovozlar yo'q";
-        }
-        return $out;
+        $api = rtrim((string)PUBLIC_BASE_URL, '/') . '/voice_api.php';
+        $t = self::token();
+        $script = "#!/bin/bash\n"
+            . "# SlayderAi jonli ovoz serveri — avtomatik o'rnatish (Oracle Cloud: Initialization script)\n"
+            . "export VOICE_BOT='" . $api . "'\n"
+            . "export VOICE_TOKEN='" . $t . "'\n"
+            . "curl -fsS -m 120 -X POST -H 'Content-Type: application/json' -d '{\"a\":\"install\",\"t\":\"'\"\$VOICE_TOKEN\"'\"}' \"\$VOICE_BOT\" -o /root/slayder-install.sh \\\n"
+            . "  && bash /root/slayder-install.sh >> /var/log/slayder-install.log 2>&1\n";
+        return ['ok' => true, 'script' => $script, 'regenerated' => $regenerate];
     }
 
-    public static function saveConfig(int $admin, string $url, string $token): array
+    public static function status(): array
     {
-        $url = rtrim(trim($url), '/');
-        if ($url !== '' && !preg_match('#^https?://[a-z0-9.\-]+(:\d{2,5})?$#i', $url)) {
-            return ['ok' => false, 'msg' => "Manzil noto'g'ri (masalan: https://1-2-3-4.sslip.io)"];
+        $w = self::worker();
+        $prog = Engine::kvGet('live_progress');
+        $pg = $prog ? (json_decode((string)$prog['v'], true) ?: []) + ['ts' => (int)$prog['ts']] : null;
+        $q = self::pdo()->query("SELECT COUNT(*) FROM live_jobs WHERE status IN ('queued','working')")->fetchColumn();
+        $today = self::pdo()->prepare("SELECT COUNT(*), COALESCE(SUM(chars),0) FROM live_jobs WHERE type = 'tts' AND status = 'done' AND done > ?");
+        $today->execute([strtotime('today', time() + 18000) - 18000]);
+        [$n, $chars] = $today->fetch(PDO::FETCH_NUM) ?: [0, 0];
+        $voices = [];
+        foreach (self::vlist() as $k => $v) {
+            $voices[] = ['key' => (string)$k, 'name' => (string)$v['name'], 'gender' => (string)($v['gender'] ?? ''), 'state' => (string)($v['state'] ?? ''), 'error' => (string)($v['error'] ?? '')];
         }
-        Settings::setRaw('LIVE_TTS_URL', $url, $admin);
-        if (trim($token) !== '') {
-            if (!preg_match('/^[A-Za-z0-9_\-]{24,100}$/', trim($token))) {
-                return ['ok' => false, 'msg' => "Token formati noto'g'ri"];
-            }
-            Settings::setRaw('LIVE_TTS_TOKEN', trim($token), $admin);
-        }
-        if ($url === '') {
-            Settings::setRaw('LIVE_TTS_TOKEN', '', $admin);
-        }
-        db()->prepare('DELETE FROM engine_kv WHERE k = ?')->execute(['live_voices']);
-        AdminSecurity::audit('live_voice_config', $admin, $url);
-        $s = self::status();
-        return ['ok' => $url === '' || ($s['error'] === '' && $s['voices'] !== []), 'msg' => $url === '' ? "Jonli ovoz o'chirildi"
-            : ($s['error'] === '' ? "✅ Ulandi: " . count($s['voices']) . " ta ovoz" . ($s['ready'] ? '' : ' (model hali yuklanmoqda)') : "⚠️ " . $s['error'])];
+        return [
+            'has_token' => self::token() !== '', 'online' => self::online(), 'ready' => !empty($w['ready']), 'seen' => (int)($w['seen'] ?? 0),
+            'error' => (string)($w['error'] ?? ''), 'version' => (string)($w['version'] ?? ''), 'cpu' => (int)($w['cpu'] ?? 0),
+            'enabled' => (bool)Engine::c('LIVE_TTS_ENABLED', true), 'queue' => (int)$q, 'today' => ['n' => (int)$n, 'chars' => (int)$chars],
+            'progress' => $pg, 'voices' => $voices, 'max_chars' => self::maxChars(),
+        ];
     }
 
     public static function deleteVoice(int $admin, string $key): array
     {
-        if (!preg_match('/^[a-z0-9_]{2,24}$/', $key)) {
-            return ['ok' => false, 'msg' => "Kalit noto'g'ri"];
+        $list = self::vlist();
+        if (!isset($list[$key])) {
+            return ['ok' => false, 'msg' => 'Ovoz topilmadi'];
         }
-        [$code, $res] = self::http('POST', '/voice/delete', ['key' => $key], 15);
-        self::voices(true);
+        if (!empty($list[$key]['sample'])) {
+            @unlink((string)$list[$key]['sample']);
+        }
+        unset($list[$key]);
+        self::vsave($list);
+        self::addJob('voice_delete', 0, ['key' => $key]);
         AdminSecurity::audit('live_voice_delete', $admin, $key);
-        return ['ok' => $code === 200, 'msg' => $code === 200 ? "Ovoz o'chirildi" : "Server javob bermadi"];
+        return ['ok' => true, 'msg' => "Ovoz o'chirildi"];
     }
 
-    /** Panel: sinov — namunani adminning Telegram'iga yuboradi (navbat orqali). */
+    /** Panel: sinov — namunaviy ertak adminning Telegram'iga keladi (navbat orqali). */
     public static function test(int $admin, string $voice, string $style): array
     {
-        if (!self::configured()) {
-            return ['ok' => false, 'msg' => 'Avval manzil va tokenni saqlang'];
+        if (!self::online()) {
+            return ['ok' => false, 'msg' => 'Ovoz serveri ulanmagan'];
         }
-        [$code, $d] = self::http('POST', '/tts', ['text' => "Bir bor ekan, bir yo'q ekan, qadim zamonda bir dono chol yashagan ekan. U har kuni ertalab bog'iga chiqib, gullarga suv quyar ekan.",
-            'voice' => $voice, 'style' => $style], 15);
-        if ($code !== 200 || empty($d['id'])) {
-            return ['ok' => false, 'msg' => is_array($d) ? (string)($d['error'] ?? "HTTP $code") : "Serverga ulanib bo'lmadi"];
+        if (!isset(self::vlist()[$voice])) {
+            return ['ok' => false, 'msg' => 'Ovoz topilmadi'];
         }
-        Engine::kvSet('livejob:' . $d['id'], json_encode(['tg' => $admin, 'cost' => 0, 'chars' => 120, 'voice' => $voice, 'style' => $style, 'msg' => 0, 'ts' => time()]));
-        Engine::kick(0);
+        $text = "Bir bor ekan, bir yo'q ekan, qadim zamonda bir dono chol yashagan ekan. U har kuni ertalab bog'iga chiqib, gullarga suv quyar ekan.";
+        self::pdo()->prepare('INSERT INTO live_jobs (type, tg, payload, chars, created) VALUES (?,?,?,?,?)')
+            ->execute(['tts', $admin, json_encode(['text' => $text, 'voice' => $voice, 'style' => $style, 'speed' => 1.0], JSON_UNESCAPED_UNICODE), mb_strlen($text), time()]);
         return ['ok' => true, 'msg' => "Sinov navbatga qo'yildi — ~1 daqiqada Telegram'ingizga keladi"];
     }
 }

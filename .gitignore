@@ -6,3 +6,5 @@ bot/storage/editor/
 bot/storage/backups/
 bot/storage/userbot/
 bot/storage/voice/
+__pycache__/
+*.pyc

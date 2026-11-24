@@ -892,7 +892,7 @@ async function drawSources(box, days) {
 /* ------------------------------------------------------------------ tizim: AI kalitlari va xatolar jurnali */
 async function viewSystem(box) {
   const keys = h('div', {}), logs = h('div', {}), img = h('div', {}), ub = h('div', {}), bk = h('div', {}), vc = h('div', {}), lv = h('div', {});
-  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '👤 Userbot — HUMO avto-to\'lov'), ub, h('div', { class: 'sec' }, '🔊 Ovoz moduli (matnni ovozga)'), vc, h('div', { class: 'sec' }, '⭐ Jonli ovoz serveri (Navoiy)'), lv, h('div', { class: 'sec' }, '🗄 Baza zaxiralari'), bk, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
+  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '👤 Userbot — HUMO avto-to\'lov'), ub, h('div', { class: 'sec' }, '🔊 Ovoz moduli (matnni ovozga)'), vc, h('div', { class: 'sec' }, '⭐ Jonli ovoz (haqiqiy odamdek)'), lv, h('div', { class: 'sec' }, '🗄 Baza zaxiralari'), bk, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
   if (CFG.role === 'owner') { drawUserbot(ub); drawVoice(vc); drawLive(lv); drawBackups(bk); drawKeys(keys); drawImgKeys(img); }
   drawLogs(logs, '', '');
 }
@@ -919,32 +919,67 @@ async function drawVoice(box) {
   box.replaceChildren(...kids);
 }
 async function drawLive(box) {
-  box.replaceChildren(skeleton(1, 70));
   const r = await api('live_status');
   if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
   const busy = async (btn, label, fn) => { const o = btn.textContent; btn.disabled = true; btn.textContent = label; try { await fn(); } finally { btn.disabled = false; btn.textContent = o; } };
-  const url = h('input', { class: 'inp', type: 'text', placeholder: 'https://1-2-3-4.sslip.io', value: r.url || '', maxlength: '200' });
-  const tok = h('input', { class: 'inp', type: 'password', placeholder: r.configured ? "Token saqlangan (o'zgartirish uchun yangisini yozing)" : 'Token (install.sh oxirida chiqadi)', autocomplete: 'off', maxlength: '120' });
-  const save = h('button', { class: 'btn pri', style: { width: '100%', marginTop: '8px' }, onclick: () => busy(save, 'Tekshirilmoqda…', async () => { const rr = await act('live_save', { url: url.value.trim(), token: tok.value.trim() }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); tok.value = ''; drawLive(box); }) }, '💾 Saqlash va tekshirish');
-  const st = !r.configured ? badge('ulanmagan', '') : (r.error ? badge(r.error, 'bad') : (r.ready ? badge('ishlayapti ✓', 'ok') : badge('model yuklanmoqda…', 'warn')));
+  const scriptBox = h('div', {});
+  const showScript = async (regenerate) => {
+    const rr = await act('live_setup', { regenerate: !!regenerate });
+    if (!rr.ok) { toast(rr.msg || 'Xatolik', 'bad'); return; }
+    const ta = h('textarea', { class: 'inp', readonly: true, style: { minHeight: '150px', fontFamily: 'monospace', fontSize: '11px' } }); ta.value = rr.script;
+    const copy = h('button', { class: 'btn pri', style: { width: '100%', marginTop: '8px' }, onclick: async () => {
+      let ok = false; try { await navigator.clipboard.writeText(rr.script); ok = true; } catch (e) { ta.select(); try { ok = document.execCommand('copy'); } catch (e2) {} }
+      toast(ok ? 'Skript nusxalandi ✓' : "Matnni belgilab, qo'lda nusxalang", ok ? 'ok' : 'bad'); } }, '📋 Skriptni nusxalash');
+    const steps = [
+      ['1', "cloud.oracle.com → «Sign up» (bepul; karta faqat tekshirish uchun, pul yechilmaydi)"],
+      ['2', '☰ Menyu → Compute → Instances → «Create instance»'],
+      ['3', 'Image: «Ubuntu 22.04». Shape: «Ampere» → VM.Standard.A1.Flex → 4 OCPU, 24 GB'],
+      ['4', "Boot volume: «Specify a custom boot volume size» → 50 GB"],
+      ['5', "Pastda «Show advanced options» → «Management» → «Paste cloud-init script» → nusxalangan skriptni joylang"],
+      ['6', "«Create» → 20–40 daqiqada server o'zi o'rnatiladi va shu yerda «✅ Ulangan» chiqadi. SSH, port, token kiritish — kerak emas"],
+    ];
+    scriptBox.replaceChildren(h('div', { class: 'card', style: { padding: '12px 14px', marginTop: '10px' } },
+      h('b', {}, '🚀 Bitta skript bilan o\'rnatish'),
+      h('div', { style: { margin: '8px 0' } }, steps.map(([n, t]) => h('div', { class: 't2', style: { whiteSpace: 'normal', margin: '4px 0' } }, h('b', {}, n + '. '), t))),
+      ta, copy,
+      h('div', { class: 't2', style: { whiteSpace: 'normal', marginTop: '6px' } }, "🔐 Skriptda maxfiy token bor — uni hech kimga bermang. Oracle «Out of capacity» desa — boshqa Availability Domain'ni tanlang yoki keyinroq urining.")));
+    if (regenerate) drawLive(box);
+  };
+  const ago = s => { if (!s) return '—'; const d = Math.max(0, Math.floor(Date.now() / 1000) - s); return d < 90 ? d + ' s oldin' : (d < 5400 ? Math.round(d / 60) + ' daq oldin' : dt(s)); };
+  const pg = r.progress;
+  let st;
+  if (!r.has_token) st = badge("o'rnatilmagan", '');
+  else if (r.online && r.ready) st = badge('✅ Ulangan va ishlayapti', 'ok');
+  else if (r.online) st = badge(r.error ? 'model xatosi' : '⏳ model yuklanmoqda', r.error ? 'bad' : 'warn');
+  else if (pg && pg.err) st = badge("o'rnatishda xato", 'bad');
+  else if (pg) st = badge("⏳ o'rnatilmoqda " + Math.min(pg.step, 7) + '/7', 'warn');
+  else st = badge(r.seen ? 'ulanmagan' : "server hali ulanmagan", r.seen ? 'bad' : '');
   const info = h('div', { class: 'card', style: { padding: '12px 14px' } },
-    h('div', { class: 't1', style: { whiteSpace: 'normal' } }, 'Holat: ', st, ' ', r.configured ? badge('navbat: ' + r.queue, '') : '', ' ', r.enabled ? '' : badge("o'chiq (LIVE_TTS_ENABLED)", '')),
-    h('div', { class: 't2', style: { whiteSpace: 'normal', margin: '6px 0 8px' } }, "Haqiqiy odamdek o'zbekcha ovoz alohida serverda ishlaydi (Oracle Cloud bepul serveri mos). O'rnatish: repodagi voice-server/install.sh → oxirida manzil va token chiqadi. Yangi ovoz qo'shish: botga /ovoz_qosh yozing va video/audio yuboring."),
-    url, h('div', { style: { height: '8px' } }), tok, save);
+    h('div', { class: 't1', style: { whiteSpace: 'normal' } }, 'Holat: ', st, ' ', r.enabled ? '' : badge("o'chiq (LIVE_TTS_ENABLED)", '')),
+    h('div', { class: 't2', style: { whiteSpace: 'normal', margin: '6px 0' } },
+      r.has_token ? ('Oxirgi aloqa: ' + ago(r.seen) + (r.version ? ' · v' + r.version : '') + (r.cpu ? ' · ' + r.cpu + ' CPU' : '') + ' · navbat: ' + r.queue + ' · bugun: ' + r.today.n + ' ta ovoz')
+        : "Haqiqiy odamdek o'zbekcha ovoz (Navoiy TTS) alohida bepul serverda ishlaydi. Server o'zi botga ulanadi — faqat bitta skriptni Oracle Cloud'ga joylaysiz."),
+    pg && !(r.online && r.ready) ? h('div', { class: 't2', style: { whiteSpace: 'normal', color: pg.err ? 'var(--bad)' : '' } }, (pg.err ? '⚠️ ' : '⏳ ') + pg.msg + ' · ' + ago(pg.ts)) : '',
+    r.error ? h('div', { class: 't2', style: { whiteSpace: 'normal', color: 'var(--bad)' } }, r.error) : '',
+    (() => { const b = h('button', { class: 'btn ' + (r.has_token ? '' : 'pri'), style: { width: '100%', marginTop: '10px' }, onclick: () => busy(b, '…', () => showScript(false)) }, r.has_token ? '📋 Server skriptini ko\'rsatish' : '🚀 Server skriptini olish'); return b; })(),
+    r.has_token ? h('button', { class: 'lnk', style: { marginTop: '8px' }, onclick: async () => { const ok = await confirmBox('Tokenni yangilash', "Eski server botga ulana olmay qoladi — yangi skript bilan qayta o'rnatish kerak bo'ladi.", 'Yangilash', 'bad'); if (ok) showScript(true); } }, '🔄 Tokenni yangilash') : '',
+    scriptBox);
   const kids = [info];
   if (r.voices && r.voices.length) {
     let style = 'hikoya';
     const ss = h('div', { class: 'seg sm', style: { flexWrap: 'wrap', margin: '8px 0' } });
     const drawS = () => ss.replaceChildren(...[['hikoya', '📖 Hikoyachi'], ['oddiy', '🙂 Oddiy'], ['mehribon', '🤗 Mehribon'], ['xursand', '😊 Xursand'], ['jiddiy', '🎓 Rasmiy']].map(([k, t]) => h('button', { class: style === k ? 'on' : '', onclick: () => { style = k; drawS(); } }, t)));
     drawS();
-    kids.push(h('div', { class: 'card', style: { marginTop: '10px' } }, h('div', { style: { padding: '10px 14px 0' } }, h('b', {}, 'Ovozlar'), ss),
+    const SB = { ready: ['tayyor', 'ok'], pending: ['qo\'shilmoqda', 'warn'], error: ['xato', 'bad'] };
+    kids.push(h('div', { class: 'card', style: { marginTop: '10px' } }, h('div', { style: { padding: '10px 14px 0' } }, h('b', {}, 'Ovozlar'), h('div', { class: 't2' }, "Yangi ovoz: botga /ovoz_qosh yozing va video/audio yuboring"), ss),
       r.voices.map(v => h('div', { class: 'row' }, h('div', { class: 'av' }, v.gender === 'm' ? '👨' : (v.gender === 'f' ? '👩' : '🎙')),
-        h('div', { class: 'grow' }, h('div', { class: 't1' }, v.name), h('div', { class: 't2' }, v.key)),
+        h('div', { class: 'grow' }, h('div', { class: 't1' }, v.name, ' ', badge(...(SB[v.state] || [v.state, '']))), h('div', { class: 't2', style: { whiteSpace: 'normal' } }, v.error || v.key)),
         h('div', { class: 'right', style: { display: 'flex', flexDirection: 'row', gap: '6px' } },
-          (() => { const b = h('button', { class: 'btn sm', onclick: () => busy(b, '…', async () => { const rr = await api('live_test', { voice: v.key, style }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); }) }, '🧪 Sinash'); return b; })(),
-          h('button', { class: 'btn sm bad', onclick: async () => { const ok = await confirmBox("Ovozni o'chirish", v.name + " serverdan butunlay o'chiriladi.", "O'chirish", 'bad'); if (!ok) return; const rr = await act('live_voice_delete', { key: v.key }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawLive(box); } }, '✕'))))));
+          v.state === 'ready' ? (() => { const b = h('button', { class: 'btn sm', onclick: () => busy(b, '…', async () => { const rr = await api('live_test', { voice: v.key, style }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); }) }, '🧪 Sinash'); return b; })() : '',
+          h('button', { class: 'btn sm bad', onclick: async () => { const ok = await confirmBox("Ovozni o'chirish", v.name + " butunlay o'chiriladi.", "O'chirish", 'bad'); if (!ok) return; const rr = await act('live_voice_delete', { key: v.key }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawLive(box); } }, '✕'))))));
   }
   box.replaceChildren(...kids);
+  if (r.has_token && !(r.online && r.ready)) setTimeout(() => { if (box.isConnected && !scriptBox.childElementCount) drawLive(box); }, 15000);
 }
 async function drawBackups(box) {
   box.replaceChildren(skeleton(1, 70));

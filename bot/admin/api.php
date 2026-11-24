@@ -545,8 +545,8 @@ try {
         case 'live_status':
             out(['ok' => true] + LiveVoice::status());
 
-        case 'live_save':
-            out(LiveVoice::saveConfig($admin, strv($b['url'] ?? '', 200), strv($b['token'] ?? '', 120)));
+        case 'live_setup':
+            out(LiveVoice::setup($admin, !empty($b['regenerate'])));
 
         case 'live_test':
             if (!AdminSecurity::rate('lt:' . $admin, 6, 600)) {

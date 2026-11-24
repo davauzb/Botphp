@@ -1,3 +1,14 @@
+# studybot 14-18 — ⭐ JONLI OVOZ: BITTA SKRIPT BILAN O'RNATISH
+
+- **Ovoz serveri endi botga o'zi ulanadi** (`voice_api.php`): port, domen, HTTPS, SSH va token nusxalash kerak emas.
+- **O'rnatish**: admin panel → Tizim → «⭐ Jonli ovoz» → «🚀 Server skriptini olish» → skriptni Oracle Cloud'da server
+  yaratishda «Paste cloud-init script» ga joylash → server 20–40 daqiqada o'zi o'rnatiladi; bosqichlar panelda ko'rinadi,
+  tayyor bo'lganda botga xabar keladi. Batafsil: `lib/voice_worker/README.md`.
+- **O'z ovozingiz**: `/ovoz_qosh` → video/audio. Videoni qirqish shart emas — eng toza ~11 soniya avtomatik tanlanadi
+  (uzun namuna sintezni ~2× sekinlashtirardi). Namuna botda saqlanadi — server qayta o'rnatilsa ovozlar tiklanadi.
+- Ishchi o'chsa yoki ish osilib qolsa — 10 daqiqada yopiladi, pul qaytadi, oddiy ovoz taklif qilinadi.
+- Avvalgi `voice-server/` (qo'lda o'rnatiladigan HTTP server) olib tashlandi.
+
 # studybot 14-17 — ⭐ JONLI OVOZ (HAQIQIY ODAMDEK O'ZBEKCHA, O'Z OVOZINGIZ BILAN)
 
 - **⭐ Jonli ovoz** — «🔊 Matnni ovozga» menyusida ⭐ ovozlar: Navoiy TTS (Aisha, Apache-2.0) modeli ifodali, his-tuyg'u

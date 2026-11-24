@@ -232,8 +232,7 @@ class Engine
                 return;
             }
             // 2b) rassilka (yoki userbot kutayotgan HUMO to'lovi) bor-u, tick yo'q
-            if ($active === 0 && (Maintenance::pending() || (class_exists('Userbot') && class_exists('HumoAuto') && Userbot::wantsPoll())
-                || (class_exists('LiveVoice') && LiveVoice::pending()))) {
+            if ($active === 0 && (Maintenance::pending() || (class_exists('Userbot') && class_exists('HumoAuto') && Userbot::wantsPoll()))) {
                 self::kvSet('last_kick', '1');
                 self::kick(0);
                 return;
@@ -365,8 +364,6 @@ class Engine
                 self::kick(1);                                   // rassilka davom etmoqda
             } elseif (class_exists('Userbot') && class_exists('HumoAuto') && Userbot::wantsPoll()) {
                 self::kick(Userbot::nextPollIn());               // 👤 HUMO to'lovi kutilmoqda — userbot o'qishi uchun
-            } elseif (class_exists('LiveVoice') && LiveVoice::pending()) {
-                self::kick(8);                                   // ⭐ jonli ovoz tayyorlanmoqda
             } else {
                 $d = self::nextDelay();
                 if ($d !== null) {

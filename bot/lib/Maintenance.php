@@ -55,8 +55,8 @@ class Maintenance
             logError('maint', 'userbot: ' . $e->getMessage());
         }
         try {
-            if (class_exists('LiveVoice') && LiveVoice::pending()) {
-                LiveVoice::poll($until);               // ⭐ jonli ovoz natijalarini yetkazish
+            if (class_exists('LiveVoice') && LiveVoice::token() !== '') {
+                LiveVoice::poll($until);               // ⭐ jonli ovoz: osilib qolgan ishlarni yopish (pul qaytariladi)
             }
         } catch (Throwable $e) {
             logError('maint', 'livevoice: ' . $e->getMessage());
