@@ -1,0 +1,26 @@
+Options -Indexes
+ServerSignature Off
+# Maxfiy fayllar hech qachon veb orqali berilmasin
+<FilesMatch "\.(sqlite|sqlite3|db|sql|log|md|lock|bak|env|json|zip|pptx|docx)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+<FilesMatch "^(config|db)\.php$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# Authorization sarlavhasi PHP'ga yetib borsin (Payme to'lovlari va tahrirlovchi sessiyasi uchun; FastCGI/CGI da bo'lmasa "Ruxsat yo'q" xatosi chiqadi)
+<IfModule mod_setenvif.c>
+  SetEnvIfNoCase Authorization "(.+)" HTTP_AUTHORIZATION=$1
+</IfModule>

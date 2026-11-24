@@ -1,0 +1,1454 @@
+<?php
+
+require_once __DIR__ . '/JobFunctions.php';
+require_once __DIR__ . '/PlanReview.php';
+require_once __DIR__ . '/DocStore.php';
+require_once __DIR__ . '/I18n.php';
+require_once __DIR__ . '/SpeechDoc.php';
+require_once __DIR__ . '/Bibliography.php';
+require_once __DIR__ . '/DocTypes.php';
+require_once __DIR__ . '/SlidePreview.php';
+require_once __DIR__ . '/Defense.php';
+require_once __DIR__ . '/Requirements.php';
+require_once __DIR__ . '/Uniq.php';
+require_once __DIR__ . '/TestDoc.php';
+require_once __DIR__ . '/VideoDeck.php';
+require_once __DIR__ . '/Translate.php';
+
+/**
+ * Ish turlari uchun reja (qadamlar) va har bir qadamni bajarish.
+ * Har qadam natijasi $state['res'] ga yoziladi va bazaga saqlanadi — uzilsa, shu joydan davom etadi.
+ */
+class JobSteps
+{
+    private const PART_WORDS = 520;     // bitta AI so'rovida yoziladigan taxminiy so'z soni (har so'rov ~20-40s ichida tugashi uchun)
+
+    // ------------------------------------------------------------------ reja
+
+    /** Buyurtma yaratilganda saqlangan talaba ma'lumoti (jobs.student); eski buyurtmalarda — foydalanuvchi profili. */
+    private static function jobStudent(array $job, int $chatId): array
+    {
+        $s = json_decode((string)($job['student'] ?? ''), true);
+        if (is_array($s) && !empty($s['full_name'])) {
+            return $s;
+        }
+        return fetchStudentInfo($chatId);
+    }
+
+    public static function init(array $job): array
+    {
+        $st = self::initSteps($job);
+        // O'qituvchi talablari biriktirilgan bo'lsa — eng avval ularni qisqa bandlarga keltiramiz (bitta kichik so'rov)
+        if (trim((string)($job['requirements'] ?? '')) !== '' && Requirements::enabled()) {
+            array_unshift($st['steps'], ['id' => 'req', 'k' => 'req', 'w' => 1.0, 'label' => "O'qituvchi talablari o'rganilmoqda"]);
+        }
+        return $st;
+    }
+
+    private static function initSteps(array $job): array
+    {
+        $type = (string)$job['type'];
+        $chatId = (int)$job['telegram_id'];
+        $steps = [];
+        $lang = I18n::norm($job['lang'] ?? I18n::userLang($chatId));
+        $p = ['topic' => (string)$job['topic'], 'student' => self::jobStudent($job, $chatId), 'lang' => $lang];
+
+        if ($type === 'qayta') {
+            return ['v' => 1, 'type' => $type, 'steps' => PartRewrite::steps(), 'i' => 0, 'p' => $p + ['docLabel' => 'qayta yozish', 'kind' => 'qayta'], 'res' => [], 'att' => [], 'dur' => [], 'shrink' => []];
+        }
+        if ($type === 'tarjima') {
+            return ['v' => 1, 'type' => $type, 'steps' => Translate::steps(), 'i' => 0, 'p' => $p + ['docLabel' => 'tarjima', 'kind' => 'tarjima'], 'res' => [], 'att' => [], 'dur' => [], 'shrink' => []];
+        }
+        if (DocTypes::kind($type) === 'test') {
+            $vols = DocTypes::volumes($type) ?? [];
+            $v = $vols[$job['volume_key']] ?? reset($vols);
+            $n = max(5, (int)($v['questions'] ?? 20));
+            $p += ['questions' => $n, 'docLabel' => DocTypes::label($type), 'dtype' => $type, 'kind' => 'test'];
+            for ($b = 0, $nb = (int)ceil($n / 10); $b < $nb; $b++) {
+                $steps[] = ['id' => "tq{$b}", 'k' => 'test_q', 'b' => $b, 'w' => 2.0, 'label' => 'Savollar ' . ($b * 10 + 1) . '-' . min($n, $b * 10 + 10) . ' tuzilmoqda'];
+            }
+            $steps[] = ['id' => 'build', 'k' => 'build_test', 'w' => 1.0, 'label' => 'Test fayli (DOCX) shakllantirilmoqda'];
+            $steps[] = ['id' => 'deliver', 'k' => 'deliver', 'w' => 1.0, 'label' => 'Telegram’ga yuborilmoqda'];
+            return ['v' => 1, 'type' => $type, 'steps' => $steps, 'i' => 0, 'p' => $p, 'res' => [], 'att' => [], 'dur' => [], 'shrink' => []];
+        }
+        if (DocTypes::kind($type) === 'cross') {
+            $vols = DocTypes::volumes($type) ?? [];
+            $v = $vols[$job['volume_key']] ?? reset($vols);
+            $p += ['words' => max(8, (int)($v['words'] ?? 15)), 'docLabel' => DocTypes::label($type), 'dtype' => $type, 'kind' => 'cross'];
+            $steps[] = ['id' => 'cw', 'k' => 'cw_words', 'w' => 2.5, 'label' => "So'zlar va savollar tuzilmoqda"];
+            $steps[] = ['id' => 'build', 'k' => 'cw_build', 'w' => 1.0, 'label' => 'Krossvord panjarasi joylashtirilmoqda'];
+            $steps[] = ['id' => 'deliver', 'k' => 'deliver', 'w' => 1.0, 'label' => 'Telegram’ga yuborilmoqda'];
+            return ['v' => 1, 'type' => $type, 'steps' => $steps, 'i' => 0, 'p' => $p, 'res' => [], 'att' => [], 'dur' => [], 'shrink' => []];
+        }
+        if (DocTypes::isDoc($type)) {
+            $vols = DocTypes::volumes($type) ?? [];
+            $v = $vols[$job['volume_key']] ?? reset($vols);
+            $kind = DocTypes::kind($type);
+            $p += ['docType' => DocTypes::docType($type), 'docLabel' => DocTypes::label($type), 'kind' => $kind, 'dtype' => $type,
+                'tableCh' => (int)DocTypes::opt($type, 'table_ch', 2)];
+            $res = [];
+            $single = DocTypes::opt($type, 'single', $type === 'tezis' ? 'tezis' : null);
+            if ($single) {
+                $words = max(400, (int)$v['min_words']);
+                $p += ['chapters' => 0, 'per' => $words, 'parts' => 1, 'partWords' => $words, 'sub' => 0, 'single' => $single];
+                $steps[] = ['id' => 'tezis', 'k' => 'tezis', 'w' => max(2.0, $words / 100), 'label' => ($single === 'esse' ? 'Esse' : 'Tezis') . ' matni yozilmoqda'];
+            } else {
+                if ($kind === 'article') {          // maqola: tuzilma qat'iy — reja uchun AI so'rovi yuborilmaydi
+                    $chapters = 2;
+                    $res['titles'] = [I18n::t('art_method', $lang), I18n::t('art_results', $lang)];
+                    $res['subs'] = [];
+                    $per = max(300, (int)round($v['min_words'] / 3.2));
+                    $sub = 0;
+                } elseif (($fixed = DocTypes::fixed($type, $lang)) !== null) {     // laboratoriya / amaliyot: tuzilma tayyor
+                    $chapters = count($fixed);
+                    $res['titles'] = array_map(fn($t, $i) => ($i + 1) . '. ' . $t, $fixed, array_keys($fixed));
+                    $per = max(150, (int)round($v['min_words'] / ($chapters + 1)));
+                    $sub = (int)($v['sub'] ?? 0);
+                    $res['subs'] = [];
+                    if ($sub > 0) {               // bandlar nomi yo'q — qismlarga bo'lib yoziladi
+                        $p['parts_only'] = true;
+                    }
+                } else {
+                    $chapters = max(1, (int)$v['chapters']);
+                    $per = max(150, (int)round($v['min_words'] / ($chapters + 1)));
+                    $sub = array_key_exists('sub', $v) ? (int)$v['sub'] : ($type === 'referat' ? 0 : ($per >= 1200 ? 3 : ($per >= 450 ? 2 : 0)));
+                }
+                $parts = $sub > 0 ? $sub : max(1, (int)ceil($per / self::PART_WORDS));
+                $partWords = (int)ceil($per / $parts);
+                if (!empty($p['parts_only'])) {
+                    $sub = 0;
+                }
+                $p += ['chapters' => $chapters, 'per' => $per, 'parts' => $parts, 'partWords' => $partWords, 'sub' => $sub];
+                if ($kind === 'paper' && empty($res['titles'])) {
+                    $steps[] = ['id' => 'outline', 'k' => 'outline', 'w' => 1.5, 'label' => 'Reja va bob sarlavhalari tuzilmoqda'];
+                    if (PlanReview::enabled() && empty($job['group_id'])) {   // guruh ishida reja tasdiqlash so'ralmaydi
+                        $steps[] = PlanReview::stepDef();
+                    }
+                }
+                $steps[] = ['id' => 'intro', 'k' => 'intro', 'w' => max(1.0, $per * 0.7 / 100), 'label' => 'Kirish qismi yozilmoqda'];
+                for ($c = 1; $c <= $chapters; $c++) {
+                    for ($j = 1; $j <= $parts; $j++) {
+                        $steps[] = ['id' => "c{$c}p{$j}", 'k' => 'chapter', 'c' => $c, 'j' => $j, 'w' => max(1.0, $partWords / 100),
+                            'label' => ($kind === 'article' ? ($c === 1 ? 'Metodologiya' : 'Natijalar va muhokama') : "{$c}-bob") . ' yozilmoqda'
+                                . ($parts > 1 ? ($sub > 0 ? " ({$c}.{$j}-band)" : " ({$j}/{$parts} qism)") : '')];
+                    }
+                }
+                $steps[] = ['id' => 'concl', 'k' => 'concl', 'w' => max(1.0, $per * 0.7 / 100), 'label' => 'Xulosa yozilmoqda'];
+                if ($kind === 'article') {
+                    $steps[] = ['id' => 'abstract', 'k' => 'abstract', 'w' => 1.0, 'label' => 'Annotatsiya va kalit so\'zlar'];
+                }
+            }
+            if ((bool)Engine::c('QC_ENABLED', true)) {
+                $steps[] = ['id' => 'qc', 'k' => 'qc', 'w' => 1.0, 'label' => 'Sifat nazorati: matn tekshirilmoqda'];
+            }
+            if (Uniq::enabled()) {
+                $steps[] = ['id' => 'uniq', 'k' => 'uniq', 'w' => 1.0, 'label' => 'Unikallik tekshirilmoqda'];
+            }
+            if (Defense::enabled() && $type !== 'esse') {
+                $steps[] = ['id' => 'qa', 'k' => 'defense', 'w' => 1.0, 'label' => 'Himoya savollari tayyorlanmoqda'];
+            }
+            $steps[] = ['id' => 'biblio', 'k' => 'biblio', 'w' => 1.0, 'label' => 'Haqiqiy ilmiy manbalar qidirilmoqda'];
+            if (DocTypes::images($type) > 0 && (bool)Engine::c('DOC_IMAGES', true)) {
+                $steps[] = ['id' => 'dimg', 'k' => 'doc_images', 'w' => 1.5, 'label' => 'Rasmlar tanlanmoqda'];
+            }
+            $steps[] = ['id' => 'build', 'k' => 'build_doc', 'w' => 2.0, 'label' => 'Hujjat (DOCX) shakllantirilmoqda'];
+            $steps[] = ['id' => 'deliver', 'k' => 'deliver', 'w' => 1.5, 'label' => 'Telegram’ga yuborilmoqda'];
+            return ['v' => 1, 'type' => $type, 'steps' => $steps, 'i' => 0, 'p' => $p, 'res' => $res, 'att' => [], 'dur' => [], 'shrink' => []];
+        } elseif ($type === 'slayd') {
+            $v = SLAYD_VOLUMES[$job['volume_key']] ?? array_values(SLAYD_VOLUMES)[0];
+            // Muqova + Reja + "Rahmat!" slaydlari avtomatik qo'shiladi (+3), shuning uchun AI'dan shuncha kam so'raymiz —
+            // aks holda "8-10 slayd" tarifida 11 ta slayd chiqardi.
+            $count = max(4, (int)$v['slides'] - 3);
+            $nb = (int)ceil($count / 4);
+            $dk = (string)($job['design_key'] ?? '');
+            $p += ['count' => $count, 'designKey' => isset(pptxDesigns()[$dk]) ? $dk : DEFAULT_PPTX_DESIGN];
+            $steps[] = ['id' => 'outline', 'k' => 'slide_outline', 'w' => 2.0, 'label' => 'Taqdimot rejasi tuzilmoqda'];
+            if (PlanReview::enabled() && empty($job['group_id'])) {   // guruh ishida reja tasdiqlash so'ralmaydi
+                $steps[] = PlanReview::stepDef();
+            }
+            for ($b = 0; $b < $nb; $b++) {
+                $from = $b * 4 + 1;
+                $to = min($count, $b * 4 + 4);
+                $steps[] = ['id' => "b{$b}", 'k' => 'slide_batch', 'b' => $b, 'w' => 3.0, 'label' => "Slaydlar {$from}-{$to} matni yozilmoqda"];
+            }
+            if (Defense::enabled()) {
+                $steps[] = ['id' => 'qa', 'k' => 'defense', 'w' => 1.0, 'label' => 'Himoya savollari tayyorlanmoqda'];
+            }
+            $steps[] = ['id' => 'images', 'k' => 'slide_images', 'w' => 2.0, 'label' => 'Rasmlar tanlanmoqda'];
+            $steps[] = ['id' => 'build', 'k' => 'slide_build', 'w' => 3.0, 'label' => 'Taqdimot (PPTX) shakllantirilmoqda'];
+            if (SlidePreview::enabled()) {
+                $steps[] = ['id' => 'preview', 'k' => 'slide_preview', 'w' => 1.0, 'label' => 'Slaydlar ko\'rinishi tayyorlanmoqda'];
+            }
+            $steps[] = ['id' => 'deliver', 'k' => 'deliver', 'w' => 1.5, 'label' => 'Telegram’ga yuborilmoqda'];
+            if (VideoDeck::enabled()) {
+                $steps[] = ['id' => 'video', 'k' => 'video', 'w' => 4.0, 'label' => 'Ovozli video tayyorlanmoqda'];
+            }
+        } else {
+            throw new RuntimeException("Noma'lum job turi: $type");
+        }
+        return ['v' => 1, 'type' => $type, 'steps' => $steps, 'i' => 0, 'p' => $p, 'res' => [], 'att' => [], 'dur' => [], 'shrink' => []];
+    }
+
+    // ------------------------------------------------------------------ bajarish
+
+    public static function exec(array $step, array $job, array &$state): void
+    {
+        AIClient::$context = Requirements::context((string)($state['res']['reqd'] ?? ''));
+        switch ($step['k']) {
+            case 'req':
+                if (!isset($state['res']['reqd'])) {
+                    try {
+                        $state['res']['reqd'] = Requirements::digest((string)($job['requirements'] ?? ''), (string)$state['p']['topic']);
+                    } catch (AIUnavailableException $e) {
+                        throw $e;
+                    } catch (Throwable $e) {
+                        logError('steps', 'Talablar: ' . $e->getMessage());
+                        $state['res']['reqd'] = '';
+                    }
+                }
+                break;
+            case 'test_q':
+                self::stepTestQ($step, $state);
+                break;
+            case 'build_test':
+                $qs = (array)($state['res']['tq'] ?? []);
+                if (count($qs) < 5) {
+                    throw new RuntimeException('Test savollari yetarli emas');
+                }
+                $state['res']['file'] = TestDoc::generate((string)$state['p']['topic'], array_slice($qs, 0, (int)$state['p']['questions']), (array)$state['p']['student'], (string)($state['p']['lang'] ?? 'uz'));
+                break;
+            case 'uniq':
+                self::stepUniq($job, $state);
+                break;
+            case 'qc':
+                self::stepQC($state);
+                break;
+            case 'cw_words':
+                self::stepCrossWords($state);
+                break;
+            case 'cw_build':
+                if (empty($state['res']['cw'])) {
+                    self::stepCrossWords($state);            // oldingi so'zlar yaxshi kesishmagan — yangilari
+                }
+                $L = Crossword::layout((array)$state['res']['cw'], (int)$state['p']['words']);
+                if (count($L['words']) < max(6, (int)floor($state['p']['words'] * 0.7)) && (int)($state['att']['build'] ?? 0) < 2) {
+                    unset($state['res']['cw']);
+                    throw new StepRetryException("Krossvord: so'zlar kam joylashdi (" . count($L['words']) . ')');
+                }
+                if (count($L['words']) < 5) {
+                    throw new RuntimeException("Krossvord tuzib bo'lmadi");
+                }
+                $state['res']['file'] = Crossword::generate((string)$state['p']['topic'], $L, (array)$state['p']['student'], (string)($state['p']['lang'] ?? 'uz'));
+                break;
+            case 'video':
+                self::stepVideo($job, $state);
+                break;
+            case 'qr_write':
+                PartRewrite::write($job, $state);
+                break;
+            case 'qr_build':
+                PartRewrite::build($job, $state);
+                break;
+            case 'tr_prep':
+                if (!isset($state['res']['segs']) && !isset($state['res']['file'])) {
+                    Translate::prep($job, $state);
+                }
+                break;
+            case 'tr_batch':
+                if (isset($state['res']['segs'])) {
+                    Translate::batch($state);
+                }
+                break;
+            case 'tr_build':
+                if (!isset($state['res']['file'])) {
+                    Translate::build($job, $state);
+                }
+                break;
+            case 'outline':
+                self::outline($state);
+                break;
+            case 'plan_review':
+                PlanReview::exec($job, $state);
+                break;
+            case 'intro':
+            case 'chapter':
+            case 'concl':
+                self::stepWrite($step, $state);
+                break;
+            case 'build_doc':
+                self::stepBuildDoc($job, $state);
+                break;
+            case 'tezis':
+                self::stepTezis($state);
+                break;
+            case 'abstract':
+                self::stepAbstract($state);
+                break;
+            case 'biblio':
+                self::stepBiblio($state);
+                break;
+            case 'doc_images':
+                self::stepDocImages($state);
+                break;
+            case 'slide_outline':
+                $state['res']['outline'] = generateSlideOutline($state['p']['topic'], (int)$state['p']['count'], [], (string)($state['p']['lang'] ?? 'uz'));
+                break;
+            case 'slide_batch':
+                self::stepSlideBatch($step, $state);
+                break;
+            case 'slide_images':
+                self::stepSlideImages($state);
+                break;
+            case 'slide_build':
+                self::stepSlideBuild($job, $state);
+                break;
+            case 'slide_preview':
+                self::stepSlidePreview($state);
+                break;
+            case 'defense':
+                self::stepDefense($state);
+                break;
+            case 'deliver':
+                self::stepDeliver($job, $state);
+                break;
+            default:
+                throw new RuntimeException('Noma\'lum qadam: ' . $step['k']);
+        }
+    }
+
+    // ---- mustaqil ish / referat ----
+
+    private static function system(array $p): string
+    {
+        return "Siz o'zbek tilida ilmiy-akademik uslubda {$p['docLabel']} yozuvchi yordamchisiz. "
+            . "Faqat ishonchli, umumiy tan olingan ma'lumotlardan foydalaning. Aniq statistik raqam, muallif ismi yoki sana "
+            . "bilmasangiz — buni O'YLAB TOPMANG, umumiy tarzda yozing. Boshqa bo'limlarda aytilgan fikr va misollarni TAKRORLAMANG. "
+            . "FAQAT oddiy matn yozing: markdown belgilari (#, *, **), sarlavha, JSON, \"Albatta\" kabi kirish "
+            . "gaplar yoki izohlar BO'LMASIN. Abzatslarni bo'sh qator bilan ajrating. Mazmunan zarur bo'lsa (bo'limda ko'pi bilan bitta) "
+            . "3-5 punktli qisqa ro'yxat qo'shish mumkin: har punkt alohida qatorda \"• \" belgisi bilan boshlansin." . I18n::directive($p['lang'] ?? 'uz');
+    }
+
+    /**
+     * Bob sarlavhalari rejasi (PlanReview «Boshqa reja» uchun ham ochiq). Bitta AI so'rovida: boblar, har bob ichidagi
+     * bandlar (1.1, 1.2 …), mavzuning inglizcha nomi (adabiyotlar qidiruvi uchun) va boblar uchun inglizcha rasm iboralari.
+     */
+    public static function outline(array &$state): void
+    {
+        $p = $state['p'];
+        $sub = (int)($p['sub'] ?? 0);
+        $angles = array_slice(I18n::angles($p['lang'] ?? 'uz', chapterAngles()), 0, $p['chapters']);
+        while (count($angles) < $p['chapters']) {
+            $angles[] = 'mavzuning qo\'shimcha jihatlari va amaliy ahamiyati';
+        }
+        $list = implode("\n", array_map(fn($i, $a) => ($i + 1) . ". $a", array_keys($angles), $angles));
+        $prompt = "\"{$p['topic']}\" mavzusidagi {$p['docLabel']} uchun ANIQ {$p['chapters']} ta bob sarlavhasini tuzing. "
+            . "Boblar quyidagi yo'nalishlarda bo'lsin (har biri o'z yo'nalishiga mos, qisqa va aniq sarlavha):\n$list\n\n"
+            . ($sub > 0 ? "Har bob ichida ANIQ $sub ta band (kichik bo'lim) sarlavhasi bo'lsin — bob mavzusini mantiqiy bo'laklarga ajratsin, bir-birini takrorlamasin. " : '')
+            . "Yana: \"en\" — mavzuning inglizcha qisqa nomi (ilmiy manbalar qidirish uchun, 2-6 so'z); har bobga \"rasm\" — shu bob uchun "
+            . "fotosurat qidirish iborasi INGLIZ tilida (2-5 so'z): suratga olsa bo'ladigan ANIQ narsa yoki sahna, mavhum so'zlarsiz; "
+            . "aniq shaxs/joy/hodisa bo'lsa — uning inglizcha nomi.\n"
+            . 'Faqat JSON qaytaring: {"en":"...","boblar":[{"nom":"1. ...",' . ($sub > 0 ? '"bandlar":["...","..."],' : '') . '"rasm":"..."}]}';
+        if (!empty($state['res']['plan_avoid'])) {      // foydalanuvchi «Boshqa reja» so'ragan — oldingisidan farq qilsin
+            $prompt .= "\n\nFOYDALANUVCHIGA OLDINGI REJA YOQMADI. Quyidagi sarlavhalarni TAKRORLAMANG, boshqacha, yangicha so'zlar va yondashuv bilan yozing:\n- "
+                . implode("\n- ", $state['res']['plan_avoid']);
+        }
+        $prompt .= I18n::directive($p['lang'] ?? 'uz');
+        $titles = [];
+        $subs = [];
+        $rasm = [];
+        $en = '';
+        try {
+            $raw = AIClient::generateText($prompt, "Faqat JSON formatda javob bering.", 700 + $p['chapters'] * ($sub > 0 ? 160 : 60), ['temperature' => 0.4]);
+            $data = json_decode(extractJson($raw), true);
+            $en = cleanImageQuery((string)($data['en'] ?? ''));
+            foreach (($data['boblar'] ?? []) as $t) {
+                if (is_string($t) && trim($t) !== '') {
+                    $titles[] = trim($t);
+                    $subs[] = [];
+                    $rasm[] = '';
+                } elseif (is_array($t) && trim((string)($t['nom'] ?? '')) !== '') {
+                    $titles[] = trim((string)$t['nom']);
+                    $bs = [];
+                    foreach ((array)($t['bandlar'] ?? []) as $bnd) {
+                        $bnd = trim(preg_replace('/^\s*\d+(\.\d+)*[\.\)]?\s*/u', '', (string)$bnd) ?? '');
+                        if (mb_strlen($bnd) >= 3) {
+                            $bs[] = mb_substr($bnd, 0, 140);
+                        }
+                    }
+                    $subs[] = $bs;
+                    $rasm[] = cleanImageQuery((string)($t['rasm'] ?? ''));
+                }
+            }
+        } catch (AIUnavailableException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            logError('steps', 'outline: ' . $e->getMessage());
+        }
+        $final = [];
+        $finalSubs = [];
+        for ($i = 0; $i < $p['chapters']; $i++) {
+            $t = $titles[$i] ?? null;
+            if ($t === null || mb_strlen($t) < 4) {
+                $a = $angles[$i];
+                $t = mb_strtoupper(mb_substr($a, 0, 1)) . mb_substr($a, 1);
+            }
+            $t = preg_replace('/^\s*\d+[\.\)]\s*/u', '', $t);
+            $final[] = ($i + 1) . '. ' . mb_substr($t, 0, 140);
+            $bs = array_slice($subs[$i] ?? [], 0, $sub);
+            $finalSubs[] = $sub > 0 && count($bs) === $sub ? $bs : [];
+        }
+        $state['res']['titles'] = $final;
+        $state['res']['subs'] = $finalSubs;
+        $state['res']['rasm'] = array_slice($rasm, 0, $p['chapters']);
+        if ($en !== '') {
+            $state['res']['en'] = $en;
+        }
+    }
+
+    private static function stepWrite(array $step, array &$state): void
+    {
+        $p = $state['p'];
+        $key = $step['id'];
+        $titles = $state['res']['titles'] ?? [];
+        $shrink = (float)($state['shrink'][$key] ?? 1.0);
+        $attempt = (int)($state['att'][$key] ?? 0);
+        $role = $step['k'];
+
+        if ($role === 'intro') {
+            $target = (int)round($p['per'] * 0.7 * $shrink);
+            $prompt = "\"{$p['topic']}\" mavzusidagi {$p['docLabel']} uchun KIRISH qismini yozing (taxminan $target so'z): mavzuning dolzarbligi, "
+                . "maqsad va vazifalari, ishning tuzilishi. Ish boblari:\n" . implode("\n", $titles);
+        } elseif ($role === 'concl') {
+            $target = (int)round($p['per'] * 0.7 * $shrink);
+            $prompt = "\"{$p['topic']}\" mavzusidagi {$p['docLabel']} uchun XULOSA qismini yozing (taxminan $target so'z): har bir bobdan kelib chiqadigan "
+                . "asosiy xulosalar va amaliy tavsiyalar. Ish boblari:\n" . implode("\n", $titles);
+            if (($extra = (string)DocTypes::opt((string)($p['dtype'] ?? ''), 'concl_extra', '')) !== '') {
+                $prompt .= "\n\n" . $extra;
+            }
+        } else {
+            $c = (int)$step['c'];
+            $j = (int)$step['j'];
+            $target = (int)round($p['partWords'] * $shrink);
+            $title = $titles[$c - 1] ?? ($c . '. Bob');
+            $others = [];
+            foreach ($titles as $i => $t) {
+                if ($i !== $c - 1) {
+                    $others[] = $t;
+                }
+            }
+            $subList = $state['res']['subs'][$c - 1] ?? [];
+            $subTitle = $subList[$j - 1] ?? '';
+            if ($subTitle !== '') {
+                $siblings = [];
+                foreach ($subList as $k => $st) {
+                    if ($k !== $j - 1) {
+                        $siblings[] = $c . '.' . ($k + 1) . '. ' . $st;
+                    }
+                }
+                $prompt = "\"{$p['topic']}\" mavzusidagi {$p['docLabel']}ning «{$title}» bobidagi «{$c}.{$j}. {$subTitle}» bandini yozing. Taxminan $target so'z. "
+                    . "Band sarlavhasini yozmang (u avtomatik qo'yiladi). Faqat shu band mavzusini yoriting; shu bobning boshqa bandlari (ularni takrorlamang):\n"
+                    . implode("\n", $siblings) . "\nBoshqa boblar:\n" . implode("\n", $others);
+            } else {
+                $prompt = "\"{$p['topic']}\" mavzusidagi {$p['docLabel']}ning quyidagi bobini yozing: «{$title}». Taxminan $target so'z. "
+                    . "Bu bob FAQAT o'z mavzusiga qaratilsin; quyidagi boshqa boblarning mazmunini takrorlamang:\n" . implode("\n", $others);
+            }
+            if ($c === min((int)($p['tableCh'] ?? 2), (int)$p['chapters']) && $j === 1 && (bool)Engine::c('DOC_TABLES', true) && empty($state['res']['table_asked'])) {
+                $prompt .= "\n\nMatn ichida mavzuga mos BITTA kichik jadval bering (raqamlarsiz, sifat bo'yicha taqqoslash yoki tasnif: 3-5 qator, 2-4 ustun). "
+                    . "Jadval FAQAT shu formatda (boshqa markdown ishlatmang):\nJADVAL: jadval nomi\n| Ustun 1 | Ustun 2 |\n| qiymat | qiymat |\n"
+                    . "Jadvaldan oldin uni tanishtiruvchi va keyin izohlovchi oddiy abzats bo'lsin.";
+            }
+            if ($p['parts'] > 1 && $subTitle === '') {
+                $prompt .= "\n\nBu bobning {$j}/{$p['parts']} qismi.";
+                if ($j > 1) {
+                    $prev = $state['res']['t']["c{$c}p" . ($j - 1)] ?? '';
+                    $tail = function_exists('mb_substr') ? mb_substr($prev, -350) : substr($prev, -350);
+                    $prompt .= " Oldingi qism shunday tugagan: «…{$tail}». Uni takrorlamasdan mantiqiy davom eting.";
+                }
+                if ($j < $p['parts']) {
+                    $prompt .= " Bobni yakunlamang — keyingi qism davom etadi.";
+                }
+            }
+            $seen = [];
+            foreach (($state['res']['t'] ?? []) as $k => $txt) {
+                if (preg_match('/^c(\d+)p1$/', $k, $mm) && (int)$mm[1] < $c) {
+                    $first = trim(preg_split('/(?<=[.!?])\s/u', trim($txt), 2)[0] ?? '');
+                    if ($first !== '') {
+                        $seen[] = '- ' . (function_exists('mb_substr') ? mb_substr($first, 0, 160) : substr($first, 0, 160));
+                    }
+                }
+            }
+            if ($seen) {
+                $prompt .= "\n\nOldingi boblar shunday boshlangan (bunday fikrlarni qaytarmang):\n" . implode("\n", $seen);
+            }
+        }
+        $prompt .= I18n::directive($p['lang'] ?? 'uz');
+        if ($attempt > 0) {
+            $prompt .= "\n\nDIQQAT: oldingi urinishda natija yetarli bo'lmadi. Bu safar $target so'zga yaqin, mazmunli, misol va tushuntirishlar bilan to'liq yozing.";
+        }
+
+        $maxTokens = min(7000, (int)($target * 2.6) + 600);
+        $raw = AIClient::generateText($prompt, self::system($p), $maxTokens);
+        $text = self::cleanBody($raw);
+        $words = countWords($text);
+
+        $retry = null;
+        if ($words < $target * 0.5) {
+            $retry = new StepRetryException("Matn juda qisqa ($words/$target so'z)");
+        } elseif ($role === 'chapter') {
+            foreach (($state['res']['t'] ?? []) as $k => $prevText) {
+                if ($k !== $key && preg_match('/^c(\d+)p/', $k, $mm) && (int)$mm[1] < (int)$step['c'] && textSimilarity($text, $prevText) > 0.5) {
+                    $retry = new StepRetryException('Bob oldingi bob bilan juda o\'xshash');
+                    break;
+                }
+            }
+        }
+        if ($words < 25) {
+            throw new StepRetryException('AI bo\'sh yoki juda qisqa javob qaytardi');
+        }
+        if ($retry) {
+            $retry->maxAttempts = 2;
+            $retry->acceptAfterRetries = true;
+            $retry->acceptFn = function (array &$st) use ($key, $text) {
+                $st['res']['t'][$key] = $text;
+            };
+            throw $retry;
+        }
+        $state['res']['t'][$key] = $text;
+    }
+
+    /** AI javobidagi markdown va ortiqcha belgilarni tozalaydi. */
+    public static function cleanBody(string $raw): string
+    {
+        $t = trim($raw);
+        if ($t !== '' && ($t[0] === '{' || strpos($t, '"matn"') !== false)) {         // tasodifan JSON qaytarilgan bo'lsa
+            $d = json_decode(extractJson($t), true);
+            if (is_array($d)) {
+                $parts = [];
+                array_walk_recursive($d, function ($v) use (&$parts) {
+                    if (is_string($v)) {
+                        $parts[] = $v;
+                    }
+                });
+                $t = implode("\n\n", $parts);
+            }
+        }
+        $t = preg_replace('/```[a-z]*\n?|```/i', '', $t) ?? $t;
+        $t = preg_replace('/^\s{0,3}#{1,6}\s*/m', '', $t) ?? $t;
+        $t = preg_replace('/^\s*[-•*]\s+/mu', '• ', $t) ?? $t;            // ro'yxat punktlari DOCX'da haqiqiy ro'yxatga aylanadi
+        $t = preg_replace('/(\*\*|__|\*|`)/', '', $t) ?? $t;
+        $t = preg_replace("/^(Albatta|Mana|Quyida)[^\n]{0,80}:\s*\n/iu", '', $t) ?? $t;
+        $t = preg_replace("/\r\n?/", "\n", $t) ?? $t;
+        $t = preg_replace("/\n{3,}/", "\n\n", $t) ?? $t;
+        return trim($t);
+    }
+
+    /** Test savollari: 10 tadan, oldingi savollar takrorlanmasin. */
+    private static function stepTestQ(array $step, array &$state): void
+    {
+        $b = (int)$step['b'];
+        if (isset($state['res']['tqb'][$b])) {
+            return;
+        }
+        $p = $state['p'];
+        $from = $b * 10 + 1;
+        $cnt = min(10, (int)$p['questions'] - $b * 10);
+        $prev = array_map(fn($q) => '- ' . mb_substr($q['q'], 0, 70), (array)($state['res']['tq'] ?? []));
+        $level = ['oson', "o'rta", "o'rta", 'qiyin'][$b % 4];
+        $prompt = "\"{$p['topic']}\" mavzusi bo'yicha $cnt ta test savoli tuzing (umumiy raqamlash $from-dan; qiyinlik: asosan $level). "
+            . "Har savolda 4 ta variant, faqat bittasi to'g'ri; noto'g'ri variantlar ham ishonarli bo'lsin, «hammasi to'g'ri» kabi variantlar bo'lmasin. "
+            . "Savollar mavzuning turli jihatlarini qamrab olsin: ta'riflar, faktlar, sabab-oqibat, qo'llanilishi, taqqoslash."
+            . ($prev ? "\nAvvalgi savollar (TAKRORLAMANG):\n" . implode("\n", array_slice($prev, -40)) : '')
+            . "\n" . 'JSON: {"savollar":[{"s":"savol matni","v":["variant 1","variant 2","variant 3","variant 4"],"j":0}]} — "j" to\'g\'ri variant indeksi (0-3).'
+            . I18n::directive($p['lang'] ?? 'uz');
+        $raw = AIClient::generateText($prompt, "Faqat JSON formatda javob bering. Faqat ishonchli, aniq faktlarga asoslangan savollar tuzing.", 3800, ['temperature' => 0.6]);
+        $d = json_decode(extractJson($raw), true);
+        $qs = TestDoc::normalize((array)($d['savollar'] ?? []));
+        if (count($qs) < max(3, (int)floor($cnt * 0.6))) {
+            $e = new StepRetryException('Test savollari kam: ' . count($qs));
+            $e->maxAttempts = 3;
+            if ($qs) {
+                $e->acceptAfterRetries = true;
+                $e->acceptFn = function (array &$st) use ($b, $qs) {
+                    $st['res']['tqb'][$b] = count($qs);
+                    $st['res']['tq'] = array_merge((array)($st['res']['tq'] ?? []), $qs);
+                };
+            }
+            throw $e;
+        }
+        $state['res']['tqb'][$b] = count($qs);
+        $state['res']['tq'] = array_merge((array)($state['res']['tq'] ?? []), array_slice($qs, 0, $cnt));
+    }
+
+    /**
+     * 🛡 SIFAT NAZORATI (yig'ishdan oldin): har bo'lim matni tekshiriladi —
+     *  • AI'ning ortiqcha gaplari («Albatta», «Mana…», «Here is…»), [qavsdagi to'ldiruvchilar], ketma-ket takror abzatslar olib tashlanadi;
+     *  • oxiri chala qolgan (token chegarasida uzilgan) gap kesiladi;
+     *  • rejadagidan juda qisqa yoki oldingi bob bilan juda o'xshash qism (ko'pi bilan 2 ta) qayta yoziladi — har tickda bittadan.
+     */
+    private static function stepQC(array &$state): void
+    {
+        $t = (array)($state['res']['t'] ?? []);
+        if (!$t) {
+            return;
+        }
+        $p = $state['p'];
+        if (!isset($state['res']['qc'])) {
+            $cleaned = 0;
+            foreach ($t as $k => $txt) {
+                $new = self::qcClean((string)$txt);
+                if ($new !== $txt && countWords($new) >= countWords((string)$txt) * 0.8) {
+                    $state['res']['t'][$k] = $new;
+                    $cleaned++;
+                }
+            }
+            $t = $state['res']['t'];
+            $todo = [];
+            $byId = [];
+            foreach ((array)$state['steps'] as $s) {
+                $byId[$s['id']] = $s;
+            }
+            foreach ($t as $k => $txt) {
+                $s = $byId[$k] ?? null;
+                if (!$s || !in_array($s['k'], ['intro', 'chapter', 'concl'], true)) {
+                    continue;
+                }
+                $target = $s['k'] === 'chapter' ? (int)$p['partWords'] : (int)round($p['per'] * 0.7);
+                $words = countWords((string)$txt);
+                $why = null;
+                if ($target > 0 && $words < $target * 0.55) {
+                    $why = 'short';
+                } elseif ($s['k'] === 'chapter') {
+                    foreach ($t as $k2 => $txt2) {
+                        if ($k2 === $k) {
+                            break;                               // faqat oldingi qismlar bilan
+                        }
+                        if (isset($byId[$k2]) && $byId[$k2]['k'] === 'chapter' && textSimilarity((string)$txt, (string)$txt2) > 0.45) {
+                            $why = 'dup';
+                            break;
+                        }
+                    }
+                }
+                if ($why) {
+                    $todo[] = $k . '|' . $why;
+                }
+            }
+            $state['res']['qc'] = ['todo' => array_slice($todo, 0, 2), 'cleaned' => $cleaned, 'fixed' => 0, 'found' => count($todo)];
+        }
+        $todo = (array)$state['res']['qc']['todo'];
+        if (!$todo) {
+            return;
+        }
+        [$id, $why] = array_pad(explode('|', (string)array_shift($todo), 2), 2, 'short');
+        $state['res']['qc']['todo'] = $todo;
+        $step = null;
+        foreach ((array)$state['steps'] as $s) {
+            if ($s['id'] === $id) {
+                $step = $s;
+            }
+        }
+        if ($step) {
+            $old = (string)($state['res']['t'][$id] ?? '');
+            $tmp = $state;
+            $tmp['att'][$id] = 1;                           // «DIQQAT: to'liqroq yozing» qo'shiladi
+            try {
+                self::stepWrite($step, $tmp);
+            } catch (StepRetryException $e) {
+                $e->accept($tmp);                            // yangi matn baribir yaxshiroq bo'lishi mumkin
+            } catch (AIUnavailableException $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                logError('steps', 'QC qayta yozish: ' . $e->getMessage());
+            }
+            $new = self::qcClean((string)($tmp['res']['t'][$id] ?? ''));
+            $maxSim = function (string $x) use ($state, $id): float {
+                $m = 0.0;
+                foreach ((array)$state['res']['t'] as $k2 => $o) {
+                    if ($k2 === $id) {
+                        break;
+                    }
+                    if (preg_match('/^c\d+p\d+$/', (string)$k2)) {
+                        $m = max($m, textSimilarity($x, (string)$o));
+                    }
+                }
+                return $m;
+            };
+            $better = $why === 'dup'
+                ? ($new !== '' && countWords($new) >= countWords($old) * 0.8 && $maxSim($new) < $maxSim($old) - 0.05)
+                : ($new !== '' && countWords($new) > countWords($old) * 1.1);
+            if ($better) {
+                $state['res']['t'][$id] = $new;
+                $state['res']['qc']['fixed']++;
+            }
+        }
+        if ($todo) {
+            throw new StepContinueException('QC davom etadi');
+        }
+    }
+
+    /** AI matnidagi «chiqindi»larni tozalash (mazmunga tegmaydi). */
+    public static function qcClean(string $txt): string
+    {
+        $paras = preg_split('/\n\s*\n/u', trim(str_replace("\r", '', $txt))) ?: [];
+        $out = [];
+        $prev = '';
+        foreach ($paras as $i => $pp) {
+            $pp = trim($pp);
+            // AI'ning kirish/yakun gaplari
+            if (preg_match("/^(albatta|mana[,\s]|quyida\s.{0,60}(keltirilgan|berilgan|yozilgan)|sure[,!\s]|certainly|here is|here's|конечно|вот\s)/iu", $pp) && mb_strlen($pp) < 220) {
+                continue;
+            }
+            if (preg_match("/^(umid qilamanki|agar (yana|qo'shimcha).{0,80}(kerak|savol)|if you need|надеюсь)/iu", $pp) && mb_strlen($pp) < 260) {
+                continue;
+            }
+            $pp = preg_replace('/\[(?!RASM\s)[^\]\n]{2,40}\]/u', '', $pp) ?? $pp;          // [Ism Familiya], [manba] kabi to'ldiruvchilar
+            $pp = preg_replace('/[ \t]{2,}/u', ' ', $pp) ?? $pp;
+            if ($pp === '' || ($prev !== '' && $pp === $prev)) {
+                continue;                                   // ketma-ket takror abzats
+            }
+            $out[] = $pp;
+            $prev = $pp;
+        }
+        // Oxirgi abzats gap o'rtasida uzilgan bo'lsa — oxirgi to'liq gapgacha kesamiz
+        if ($out) {
+            $last = end($out);
+            $isSpecial = str_contains($last, "\n") || str_contains($last, ':') || str_starts_with($last, '|') || str_starts_with($last, '[RASM')
+                || preg_match('/^(•|\d+[\.\)])\s/u', $last);
+            if (!$isSpecial && mb_strlen($last) >= 200 && !preg_match('/[.!?…»"\)]\s*$/u', $last)) {
+                $cut = max(mb_strrpos($last, '. ') ?: 0, mb_strrpos($last, '! ') ?: 0, mb_strrpos($last, '? ') ?: 0);
+                if ($cut > 100 && mb_strlen($last) - $cut < 400) {
+                    $out[count($out) - 1] = mb_substr($last, 0, $cut + 1);
+                }
+            }
+        }
+        return implode("\n\n", $out);
+    }
+
+    /** Krossvord uchun so'z + savol juftlari (joylashtirishda zaxira bo'lishi uchun ko'proq so'raladi). */
+    private static function stepCrossWords(array &$state): void
+    {
+        if (!empty($state['res']['cw'])) {
+            return;
+        }
+        $p = $state['p'];
+        $ask = (int)ceil($p['words'] * 1.8);
+        $prompt = "\"{$p['topic']}\" mavzusi bo'yicha krossvord uchun $ask ta so'z va savol tuzing. Talablar:\n"
+            . "- har bir javob BITTA so'z (3-12 harf), bo'shliq, chiziqcha, raqam va tutuq belgisisiz (o' va g' mumkin), bosh kelishikda;\n"
+            . "- so'zlar mavzuga aniq tegishli atamalar, nomlar, tushunchalar bo'lsin; turli uzunlikda (bir nechtasi 8+ harfli);\n"
+            . "- savol (ta'rif) qisqa va aniq bo'lsin (1 gap), javob so'zining o'zi yoki o'zagi savolda BO'LMASIN;\n"
+            . "- faqat ishonchli, umumiy tan olingan faktlar.\n"
+            . 'JSON: {"sozlar":[{"soz":"ATAMA","savol":"qisqa ta\'rif"}]}' . I18n::directive($p['lang'] ?? 'uz');
+        $raw = AIClient::generateText($prompt, "Faqat JSON formatda javob bering.", 2600, ['temperature' => 0.5]);
+        $d = json_decode(extractJson($raw), true);
+        $items = Crossword::normalize((array)($d['sozlar'] ?? []));
+        if (count($items) < max(8, (int)ceil($p['words'] * 0.9))) {
+            $e = new StepRetryException("Krossvord so'zlari kam: " . count($items));
+            $e->maxAttempts = 3;
+            if (count($items) >= 8) {
+                $e->acceptAfterRetries = true;
+                $e->acceptFn = function (array &$st) use ($items) {
+                    $st['res']['cw'] = $items;
+                };
+            }
+            throw $e;
+        }
+        $state['res']['cw'] = $items;
+    }
+
+    /**
+     * Ichki unikallik: har qism bot avval yozgan ishlar bilan solishtiriladi; juda o'xshash qism (ko'pi bilan 3 ta) qayta ifodalanadi.
+     * Natija % — res['uniq'], iz bazaga yoziladi (keyingi ishlar shu bilan ham solishtiriladi).
+     */
+    private static function stepUniq(array $job, array &$state): void
+    {
+        $t = (array)($state['res']['t'] ?? []);
+        if (!$t) {
+            return;
+        }
+        try {
+            $corpus = Uniq::corpus((int)$job['id']);
+            foreach ($t as $key => $txt) {
+                if (in_array($key, (array)($state['res']['uq_done'] ?? []), true) || count((array)($state['res']['uq_done'] ?? [])) >= 3 || !$corpus) {
+                    continue;
+                }
+                $fp = Uniq::fp((string)$txt);
+                if (Uniq::maxOverlap($fp, $corpus) <= Uniq::LIMIT) {
+                    continue;
+                }
+                self::needTime(40);
+                $words = countWords((string)$txt);
+                $prompt = "Quyidagi matnni mazmuni va hajmini (taxminan $words so'z) saqlagan holda BUTUNLAY qayta ifodalang: boshqa so'zlar, boshqa gap "
+                    . "tuzilishi va abzatslar tartibi bilan. \"JADVAL:\" va \"|\" bilan boshlanadigan qatorlarni o'zgartirmasdan qoldiring. Faqat yangi matnni qaytaring.\n\n" . $txt;
+                $new = self::cleanBody(AIClient::generateText($prompt, self::system($state['p']), min(6000, (int)($words * 2.6) + 500), ['temperature' => 0.9]));
+                if (countWords($new) >= $words * 0.6) {
+                    $state['res']['t'][$key] = $new;
+                }
+                $state['res']['uq_done'][] = $key;
+            }
+            $all = Uniq::fp(implode("\n", (array)$state['res']['t']));
+            $state['res']['uniq'] = max(0, min(100, (int)round(100 * (1 - Uniq::maxOverlap($all, $corpus)))));
+            Uniq::store((int)$job['id'], (int)$job['telegram_id'], $all);
+            db()->prepare('UPDATE jobs SET uniq = ? WHERE id = ?')->execute([$state['res']['uniq'], (int)$job['id']]);
+        } catch (AIUnavailableException | StepContinueException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            logError('steps', 'Unikallik: ' . $e->getMessage());
+        }
+    }
+
+    /** Himoya savollari (xato bo'lsa — jim o'tkaziladi, buyurtma to'xtamaydi). */
+    private static function stepDefense(array &$state): void
+    {
+        if (isset($state['res']['qa'])) {
+            return;
+        }
+        $p = $state['p'];
+        $titles = $state['res']['titles'] ?? array_map(fn($o) => (string)($o['sarlavha'] ?? ''), $state['res']['outline'] ?? []);
+        try {
+            $state['res']['qa'] = Defense::make((string)$p['topic'], $titles, (string)($p['lang'] ?? 'uz'), (string)($p['docLabel'] ?? 'taqdimot'));
+        } catch (AIUnavailableException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            logError('steps', 'Himoya savollari: ' . $e->getMessage());
+            $state['res']['qa'] = [];
+        }
+    }
+
+    /** Deadline yaqin bo'lsa — keyingi tickda davom. */
+    private static function needTime(int $sec): void
+    {
+        if (AIClient::$deadline !== null && microtime(true) > AIClient::$deadline - $sec) {
+            throw new StepContinueException();
+        }
+    }
+
+    /** Tezis: bitta so'rovda butun matn (sarlavhasiz ilmiy uslub). */
+    private static function stepTezis(array &$state): void
+    {
+        $p = $state['p'];
+        $target = (int)round($p['per'] * (float)($state['shrink']['tezis'] ?? 1.0));
+        $prompt = ($p['single'] ?? '') === 'esse'
+            ? "\"{$p['topic']}\" mavzusida ESSE (insho) yozing (taxminan $target so'z). Tuzilishi: qiziqarli kirish fikri va asosiy g'oya (tezis), "
+                . "asosiy qism — 2-4 ta dalil, har biriga hayotiy yoki tarixiy misol va muallifning shaxsiy munosabati, yakuniy xulosa. "
+                . "6-9 abzats, ravon publitsistik-ilmiy uslubda, birinchi shaxsda mulohaza yuritib, sarlavhalarsiz."
+            : "\"{$p['topic']}\" mavzusida ilmiy konferensiya uchun TEZIS yozing (taxminan $target so'z). Tuzilishi: mavzuning dolzarbligi, "
+                . "tadqiqot maqsadi, asosiy fikrlar va natijalar, qisqa xulosa va taklif. 4-6 abzats, ilmiy-rasmiy uslubda, sarlavhalarsiz.";
+        $raw = AIClient::generateText($prompt . I18n::directive($p['lang'] ?? 'uz'), self::system($p), min(5000, (int)($target * 2.6) + 600));
+        $text = self::cleanBody($raw);
+        if (countWords($text) < $target * 0.5) {
+            $e = new StepRetryException('Tezis juda qisqa');
+            $e->maxAttempts = 2;
+            $e->acceptAfterRetries = true;
+            $e->acceptFn = function (array &$st) use ($text) {
+                $st['res']['t']['tezis'] = $text;
+            };
+            throw $e;
+        }
+        $state['res']['t']['tezis'] = $text;
+    }
+
+    /** Maqola: annotatsiya, kalit so'zlar va inglizcha nom — kirish va xulosa asosida (kichik so'rov). */
+    private static function stepAbstract(array &$state): void
+    {
+        $p = $state['p'];
+        $t = $state['res']['t'] ?? [];
+        $intro = mb_substr((string)($t['intro'] ?? ''), 0, 900);
+        $concl = mb_substr((string)($t['concl'] ?? ''), 0, 700);
+        $prompt = "\"{$p['topic']}\" mavzusidagi ilmiy maqola uchun annotatsiya va kalit so'zlar tuzing.\nKirish: «{$intro}»\nXulosa: «{$concl}»\n"
+            . 'JSON: {"annotatsiya":"60-90 so\'zli annotatsiya: maqsad, usul, natija","kalit":["5-7 ta kalit so\'z"],"en":"mavzuning inglizcha qisqa nomi"}'
+            . I18n::directive($p['lang'] ?? 'uz');
+        try {
+            $d = json_decode(extractJson(AIClient::generateText($prompt, 'Faqat JSON formatda javob bering.', 900, ['temperature' => 0.4])), true) ?: [];
+        } catch (AIUnavailableException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            $d = [];
+        }
+        $state['res']['abstract'] = trim((string)($d['annotatsiya'] ?? ''));
+        $kw = array_values(array_filter(array_map(fn($k) => trim((string)$k), (array)($d['kalit'] ?? []))));
+        $state['res']['keywords'] = array_slice($kw, 0, 8);
+        $en = cleanImageQuery((string)($d['en'] ?? ''));
+        if ($en !== '') {
+            $state['res']['en'] = $en;
+        }
+    }
+
+    /** Haqiqiy adabiyotlar (Crossref). Topilmasa — umumiy ro'yxat qoladi. */
+    private static function stepBiblio(array &$state): void
+    {
+        if (isset($state['res']['biblio']) || !Bibliography::enabled()) {
+            return;
+        }
+        self::needTime(20);
+        $en = (string)($state['res']['en'] ?? '');
+        if ($en === '') {
+            $en = ImageSearch::english((string)$state['p']['topic']);
+        }
+        $dt = (string)($state['p']['dtype'] ?? '');
+        $n = (int)DocTypes::opt($dt, 'biblio', ['kurs_ishi' => 12, 'mustaqil_ish' => 8, 'maqola' => 10, 'referat' => 6, 'tezis' => 5][$dt] ?? 8);
+        $refs = [];
+        try {
+            $refs = Bibliography::find($en, $n);
+        } catch (Throwable $e) {
+            logError('steps', 'Adabiyotlar: ' . $e->getMessage());
+        }
+        $state['res']['biblio'] = count($refs) >= 3 ? $refs : [];
+    }
+
+    /** Hujjat uchun 1-3 rasm (boblar mavzusiga). */
+    private static function stepDocImages(array &$state): void
+    {
+        $p = $state['p'];
+        $max = min(DocTypes::images((string)($p['dtype'] ?? '')), count($state['res']['titles'] ?? []));
+        for ($i = 0; $i < $max; $i++) {
+            if (isset($state['res']['dimg'][$i])) {
+                continue;
+            }
+            self::needTime(14);
+            $title = preg_replace('/^\d+\.\s*/u', '', (string)$state['res']['titles'][$i]);
+            $en = (string)($state['res']['rasm'][$i] ?? '');
+            ImageSearch::$topicEn = (string)($state['res']['en'] ?? '');
+            $path = null;
+            try {
+                $path = ImageSearch::fetchImage(mb_substr((string)$p['topic'], 0, 80) . ': ' . $title, true, $en);
+            } catch (Throwable $e) {
+                logError('steps', 'Hujjat rasmi: ' . $e->getMessage());
+            }
+            $state['res']['dimg'][$i] = $path ? ['path' => $path, 'cap' => mb_substr($title, 0, 120)] : null;
+            if ($path) {
+                $state['res']['tmp'][] = $path;
+            }
+        }
+    }
+
+    private static function stepBuildDoc(array $job, array &$state): void
+    {
+        $p = $state['p'];
+        $lang = (string)($p['lang'] ?? 'uz');
+        $t = $state['res']['t'] ?? [];
+        $kind = (string)($p['kind'] ?? 'paper');
+        $sections = [];
+        $images = [];
+        if ($kind === 'article' && !empty($state['res']['abstract'])) {
+            $sections[] = ['heading' => I18n::t('annotation', $lang), 'text' => $state['res']['abstract']];
+            if (!empty($state['res']['keywords'])) {
+                $sections[] = ['heading' => I18n::t('keywords', $lang), 'text' => implode(', ', $state['res']['keywords'])];
+            }
+        }
+        if (!empty($t['tezis'])) {
+            $sections[] = ['heading' => '—', 'text' => $t['tezis']];
+        }
+        if (!empty($t['intro'])) {
+            $sections[] = ['heading' => I18n::t('intro', $lang), 'text' => $t['intro']];
+        }
+        $imgN = 0;
+        foreach (($state['res']['titles'] ?? []) as $i => $title) {
+            $c = $i + 1;
+            $subs = $state['res']['subs'][$i] ?? [];
+            $texts = [];
+            for ($j = 1; $j <= ($p['parts'] ?? 1); $j++) {
+                $body = trim((string)($t["c{$c}p{$j}"] ?? ''));
+                if ($body === '') {
+                    continue;
+                }
+                $sub = $subs[$j - 1] ?? '';
+                if ($sub !== '') {
+                    // AI ba'zan band sarlavhasini o'zi ham yozib yuboradi — takrorlanmasin
+                    $body = preg_replace('/^\s*' . preg_quote("{$c}.{$j}", '/') . '\.?\s*[^\n]{0,160}\n+/u', '', $body) ?? $body;
+                    $texts[] = "{$c}.{$j}. {$sub}\n\n" . $body;
+                } else {
+                    $texts[] = $body;
+                }
+            }
+            if (!$texts) {
+                continue;
+            }
+            $img = $state['res']['dimg'][$i] ?? null;
+            if ($img && is_file((string)$img['path'])) {
+                $imgN++;
+                $images[$imgN] = $img['path'];
+                // rasm bobning birinchi abzatsidan keyin (band sarlavhasi bo'lsa — undan keyingi abzatsdan keyin)
+                $first = $texts[0];
+                $parts = preg_split("/\n\n/u", $first, 3);
+                $at = ($subs && count($parts) >= 2) ? 2 : 1;
+                $head = implode("\n\n", array_slice($parts, 0, $at));
+                $tail = implode("\n\n", array_slice($parts, $at));
+                $texts[0] = $head . "\n\n[RASM {$imgN}: {$img['cap']}]" . ($tail !== '' ? "\n\n" . $tail : '');
+            }
+            $sections[] = ['heading' => $title, 'text' => implode("\n\n", $texts)];
+        }
+        if (!empty($t['concl'])) {
+            $sections[] = ['heading' => I18n::t('conclusion', $lang), 'text' => $t['concl']];
+        }
+        if (!$sections) {
+            throw new RuntimeException('Hujjat uchun matn yo\'q');
+        }
+        $refs = $state['res']['biblio'] ?? [];
+        if ($refs) {
+            $sections[] = ['heading' => I18n::t('biblio', $lang), 'text' => Bibliography::sectionText($refs, $lang)];
+        } else {
+            $sections = DocxGenerator::withBiblio($sections, $lang);          // umumiy ro'yxat (manba topilmasa)
+        }
+        $state['res']['file'] = DocxGenerator::generate($p['topic'], $sections, $p['student'], $p['docType'], $lang, false, ['images' => $images]);
+        try {                // tahrirlash uchun nusxa; xato bo'lsa ham hujjat yuboriladi
+            $state['res']['pres'] = DocStore::createFromGenerated((int)$job['telegram_id'], $p['topic'], $p['docType'], $lang, $p['student'], $sections, $images);
+        } catch (Throwable $e) {
+            logError('steps', 'Hujjat nusxasi: ' . $e->getMessage());
+        }
+        if (!empty($state['res']['qa'])) {
+            try {
+                $state['res']['extra'] = SpeechDoc::qaDocx((string)$p['topic'], $state['res']['qa'], $lang);
+            } catch (Throwable $e) {
+                logError('steps', 'Himoya savollari fayli: ' . $e->getMessage());
+            }
+        }
+        unset($state['res']['t']);        // bazadagi holat kichik bo'lib qolsin
+    }
+
+    // ---- slayd ----
+
+    private static function stepSlideBatch(array $step, array &$state): void
+    {
+        $outline = $state['res']['outline'] ?? [];
+        $b = (int)$step['b'];
+        $idx = array_values(array_filter(range($b * 4, $b * 4 + 3), fn($i) => isset($outline[$i])));
+        if (!$idx) {
+            return;
+        }
+        // Faqat hali matni olinmagan slaydlarni so'raymiz (qayta urinishda tayyorlari qayta yozilmaydi)
+        $todo = array_values(array_filter($idx, fn($i) => empty($state['res']['ai'][$i])));
+        if ($todo) {
+            $res = generateSlideBatch($state['p']['topic'], $outline, $todo, (string)($state['p']['lang'] ?? 'uz'), isProDesign($state['p']['designKey'] ?? null));
+            foreach ($res as $i => $item) {
+                if ($item) {
+                    $state['res']['ai'][$i] = $item;
+                }
+            }
+            // To'plam javobi buzilsa/uzilsa (uzun JSON), yetishmagan slaydlarni BITTALAB so'raymiz — kichik so'rov ancha ishonchli
+            foreach ($todo as $i) {
+                if (!empty($state['res']['ai'][$i])) {
+                    continue;
+                }
+                try {
+                    $one = generateSlideBatch($state['p']['topic'], $outline, [$i], (string)($state['p']['lang'] ?? 'uz'), isProDesign($state['p']['designKey'] ?? null));
+                    if (!empty($one[$i])) {
+                        $state['res']['ai'][$i] = $one[$i];
+                    }
+                } catch (AIUnavailableException $e) {
+                    throw $e;
+                } catch (Throwable $e) {
+                    logError('steps', "Slayd #" . ($i + 1) . " matnini bittalab olishda xato: " . $e->getMessage());
+                }
+            }
+        }
+        $missing = count(array_filter($idx, fn($i) => empty($state['res']['ai'][$i])));
+        if ($missing > 0) {
+            $e = new StepRetryException("Slayd matni to'liq chiqmadi ($missing/" . count($idx) . " yetishmaydi)");
+            $e->maxAttempts = 3;
+            $e->acceptAfterRetries = true;
+            $e->acceptFn = function (array &$st) {
+            };
+            throw $e;
+        }
+    }
+
+    private static function stepSlideImages(array &$state): void
+    {
+        $outline = $state['res']['outline'] ?? [];
+        $topic = (string)($state['p']['topic'] ?? '');
+        $pro = isProDesign($state['p']['designKey'] ?? null);
+        ImageSearch::$topicEn = (string)($outline[0]['en_topic'] ?? '');
+        $want = [];                 // rasm olinadigan slaydlar (indekslar)
+        if ($pro) {
+            // PRO: muqova + imkon qadar ko'p slayd (tekis taqsimlab), ko'pi bilan PRO_MAX_IMAGES ta
+            if (!isset($state['res']['cover'])) {
+                if (AIClient::$deadline !== null && microtime(true) > AIClient::$deadline - 14) {
+                    throw new StepContinueException();
+                }
+                $cp = null;
+                try {
+                    $cp = ImageSearch::fetchImage($topic, true, (string)($outline[0]['en_topic'] ?? ''));
+                } catch (Throwable $e) {
+                    logError('steps', 'Muqova rasmi: ' . $e->getMessage());
+                }
+                $state['res']['cover'] = $cp ?: '';
+                if ($cp) {
+                    $state['res']['tmp'][] = $cp;
+                }
+            }
+            $elig = [];
+            foreach ($outline as $i => $o) {
+                if (($o['turi'] ?? 'matn') !== 'reja') {
+                    $elig[] = $i;
+                }
+            }
+            $max = max(1, (int)Engine::c('PRO_MAX_IMAGES', 6));
+            if (count($elig) <= $max) {
+                $want = $elig;
+            } else {
+                for ($k = 0; $k < $max; $k++) {
+                    $want[] = $elig[(int)floor($k * count($elig) / $max)];
+                }
+            }
+        } else {
+            // oddiy dizayn: rasm sig'adigan barcha slaydlar (matn, ta'rif, kartalar, xulosa, xronologiya), ko'pi bilan STD_MAX_IMAGES ta
+            $elig = [];
+            foreach ($outline as $i => $o) {
+                if (in_array($o['turi'] ?? 'matn', ['matn', 'tarif', 'kartalar', 'xulosa', 'xronologiya'], true)) {
+                    $elig[] = $i;
+                }
+            }
+            $max = max(1, (int)Engine::c('STD_MAX_IMAGES', 10));
+            if (count($elig) <= $max) {
+                $want = $elig;
+            } else {
+                for ($k = 0; $k < $max; $k++) {
+                    $want[] = $elig[(int)floor($k * count($elig) / $max)];
+                }
+            }
+        }
+        foreach ($want as $i) {
+            if (isset($state['res']['img'][$i])) {
+                continue;
+            }
+            if (AIClient::$deadline !== null && microtime(true) > AIClient::$deadline - 14) {
+                throw new StepContinueException();       // vaqt tugayapti — keyingi tickda davom
+            }
+            $o = $outline[$i];
+            $q = ($o['sarlavha'] ?? '') ?: $topic;
+            if ($pro && $topic !== '') {
+                $q = mb_substr($topic, 0, 80) . ': ' . mb_substr((string)$q, 0, 60);
+            }
+            $en = (string)($o['rasm'] ?? '');
+            $path = null;
+            try {
+                $path = ImageSearch::fetchImage($q, $pro, $en);
+            } catch (Throwable $e) {
+                logError('steps', 'Rasm: ' . $e->getMessage());
+            }
+            $state['res']['img'][$i] = $path ?: '';
+            if ($path) {
+                $state['res']['tmp'][] = $path;
+            }
+        }
+    }
+
+    private static function stepSlideBuild(array $job, array &$state): void
+    {
+        $p = $state['p'];
+        $lang = I18n::norm($p['lang'] ?? null);
+        $outline = $state['res']['outline'] ?? [];
+        $slides = [];
+        foreach ($outline as $i => $o) {
+            $s = buildSlideFromAi($o, $state['res']['ai'][$i] ?? null);
+            $img = $state['res']['img'][$i] ?? '';
+            if ($img !== '' && is_file($img) && (in_array($s['kind'], ['matn', 'tarif'], true) || isProDesign($p['designKey'] ?? null))) {
+                $s['image'] = $img;
+            }
+            $slides[] = $s;
+        }
+        if (hasRepeatedSlides(array_map(fn($s) => ['punktlar' => array_map(fn($q) => $q['text'], $s['points'])], $slides))) {
+            logError('steps', "Diqqat: taqdimotda o'xshash slaydlar bor (topic: {$p['topic']}).");
+        }
+        $agendaItems = [];
+        foreach ($slides as $s) {
+            if ($s['kind'] !== 'xulosa') {
+                $agendaItems[] = $s['title'];
+            }
+        }
+        $agenda = ['kind' => 'reja', 'title' => I18n::t('agenda', $lang), 'items' => array_slice($agendaItems, 0, 8)];
+        $info = [];
+        if (!empty($p['student']['full_name'])) {
+            $info[] = I18n::t('executor', $lang) . ': ' . $p['student']['full_name'];
+        }
+        if (!empty($p['student']['group_name'])) {
+            $info[] = I18n::t('group', $lang) . ': ' . $p['student']['group_name'];
+        }
+        $isPro = isProDesign($p['designKey'] ?? null);
+        $cover = (string)($state['res']['cover'] ?? '');
+        $titleSlide = ['kind' => 'title', 'title' => $p['topic'], 'bullets' => $info];
+        $thanksSlide = ['kind' => 'thanks', 'title' => I18n::t('thanks', $lang), 'bullets' => [I18n::t('thanks_sub', $lang)]];
+        if ($isPro && $cover !== '' && is_file($cover)) {
+            $titleSlide['image'] = $cover;
+            $thanksSlide['image'] = $cover;
+        }
+        // Bo'lim ajratuvchi slaydlar (AI so'rovisiz; 10+ slaydli tariflarda, tarif oralig'i ichida)
+        $sections = buildSections($outline, $slides, sectionCount(count($slides)));
+        $body = [];
+        $k = 0;
+        foreach ($slides as $i => $sl) {
+            if (isset($sections[$i])) {
+                $k++;
+                $body[] = ['kind' => 'bolim', 'title' => $sections[$i]['name'], 'lead' => sprintf('%02d', $k), 'items' => $sections[$i]['titles']];
+            }
+            $body[] = $sl;
+        }
+        $final = array_merge([$titleSlide, $agenda], $body, [$thanksSlide]);
+        $design = pptxDesigns()[$p['designKey']] ?? pptxDesigns()[DEFAULT_PPTX_DESIGN];
+        $design['lang'] = $lang;
+        if ($isPro) {
+            try {            // PRO (16:9, foto fon, effektlar, nutq matni); xato bo'lsa oddiy dizaynga o'tamiz — buyurtma yo'qolmasin
+                $state['res']['file'] = ProDeck::generate($final, (string)$p['designKey'], $lang, (string)$p['topic']);
+            } catch (Throwable $e) {
+                logError('steps', 'PRO taqdimot qurilmadi, oddiy dizayn: ' . $e->getMessage());
+                $isPro = false;
+                $design = pptxDesigns()[DEFAULT_PPTX_DESIGN];
+                $design['lang'] = $lang;
+                $p['designKey'] = DEFAULT_PPTX_DESIGN;
+            }
+        }
+        if (!$isPro) {
+            $state['res']['file'] = PptxGenerator::generate($final, $design);
+            try {            // tahrirlash uchun nusxa (rasmlar o'chirilishidan OLDIN); xato bo'lsa ham taqdimot yuboriladi
+                $state['res']['pres'] = EditorStore::createFromGenerated((int)$job['telegram_id'], $p['topic'], $p['designKey'], $final, $lang);
+            } catch (Throwable $e) {
+                logError('steps', 'Tahrirlash nusxasi: ' . $e->getMessage());
+            }
+        }
+        if (SpeechDoc::enabled()) {
+            try {            // himoya uchun konspekt (AI'siz, tayyor matndan) — xato bo'lsa ham taqdimot yuboriladi
+                $state['res']['extra'] = SpeechDoc::generate($final, (string)$p['topic'], $lang, (array)($state['res']['qa'] ?? []));
+            } catch (Throwable $e) {
+                logError('steps', 'Konspekt: ' . $e->getMessage());
+            }
+        }
+        if (VideoDeck::enabled()) {
+            $state['res']['narr'] = VideoDeck::narration($final);
+        }
+        unset($state['res']['ai'], $state['res']['outline']);
+    }
+
+    /** 🎬 Ovozli video: PNG → TTS → bo'laklar → MP4 (bir necha tickda davom etadi; xato bo'lsa jim o'tkaziladi). */
+    private static function stepVideo(array $job, array &$state): void
+    {
+        $v = (array)($state['res']['vid'] ?? []);
+        if (!empty($v['done']) || empty($state['res']['narr'])) {
+            return;
+        }
+        $file = (string)($state['res']['file'] ?? '');
+        $chatId = (int)$job['telegram_id'];
+        $lang = (string)($state['p']['lang'] ?? 'uz');
+        $dir = rtrim(GENERATED_DIR, '/') . '/';
+        $left = fn() => AIClient::$deadline !== null ? AIClient::$deadline - microtime(true) : 120;
+        try {
+            if (!isset($v['png'])) {
+                if ($left() < 40) {
+                    throw new StepContinueException();
+                }
+                $png = SlidePreview::renderAll($file, count($state['res']['narr']), min(90, $left() - 8));
+                $v['png'] = $png;
+                foreach ($png as $f) {
+                    $state['res']['tmp'][] = $f;
+                }
+                if (!$png) {
+                    $v['done'] = true;
+                    logError('video', 'Slaydlar PNG ga aylanmadi');
+                }
+                $state['res']['vid'] = $v;
+                if ($png) {
+                    throw new StepContinueException();  // ovozlar — keyingi tickda (vaqt yetishi uchun)
+                }
+                return;
+            }
+            foreach ((array)$v['png'] as $k => $png) {
+                if (!array_key_exists((string)$k, (array)($v['pcm'] ?? []))) {
+                    if ($left() < 50) {
+                        $state['res']['vid'] = $v;
+                        throw new StepContinueException();
+                    }
+                    $pcm = $dir . 'tts_' . bin2hex(random_bytes(5)) . '.pcm';
+                    $v['pcm'][(string)$k] = VideoDeck::tts((string)($state['res']['narr'][(int)$k] ?? ''), $lang, $pcm) ? $pcm : '';
+                    if ($v['pcm'][(string)$k] !== '') {
+                        $state['res']['tmp'][] = $pcm;
+                    }
+                }
+                if (!isset($v['seg'][(string)$k])) {
+                    if ($left() < 45) {
+                        $state['res']['vid'] = $v;
+                        throw new StepContinueException();
+                    }
+                    $seg = $dir . 'seg_' . bin2hex(random_bytes(5)) . '.mp4';
+                    $pcmK = (string)$v['pcm'][(string)$k];
+                    $v['seg'][(string)$k] = VideoDeck::segment((string)$png, $pcmK !== '' ? $pcmK : null, $seg) ? $seg : '';
+                    if ($v['seg'][(string)$k] !== '') {
+                        $state['res']['tmp'][] = $seg;
+                    }
+                }
+            }
+            $segs = array_values(array_filter((array)$v['seg']));
+            if (count(array_filter((array)$v['pcm'])) === 0 || count($segs) < 2) {
+                $v['done'] = true;                     // ovoz umuman chiqmadi — video yubormaymiz
+                $state['res']['vid'] = $v;
+                logError('video', 'Ovoz yoki bo\'laklar yetarli emas');
+                return;
+            }
+            if ($left() < 50) {
+                $state['res']['vid'] = $v;
+                throw new StepContinueException();
+            }
+            $mp4 = $dir . 'video_' . bin2hex(random_bytes(5)) . '.mp4';
+            $v['done'] = true;
+            $state['res']['vid'] = $v;
+            if (VideoDeck::concat($segs, $mp4)) {
+                $state['res']['tmp'][] = $mp4;
+                if (filesize($mp4) < 49 * 1024 * 1024) {
+                    Telegram::call('sendVideo', ['chat_id' => $chatId, 'caption' => "🎬 Ovozli videotaqdimot — himoyaga tayyorlanish yoki masofaviy topshirish uchun.", 'supports_streaming' => 'true'],
+                        ['video' => [$mp4, 'taqdimot.mp4']]);
+                }
+            }
+        } catch (StepContinueException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            logError('video', $e->getMessage());
+            $v['done'] = true;
+            $state['res']['vid'] = $v;
+        }
+    }
+
+    /** Telegram albomi uchun 4 ta slayd rasmi (xato bo'lsa — jim o'tkaziladi, fayl baribir yuboriladi). */
+    private static function stepSlidePreview(array &$state): void
+    {
+        if (isset($state['res']['pv'])) {
+            return;
+        }
+        $file = (string)($state['res']['file'] ?? '');
+        $state['res']['pv'] = [];
+        if ($file === '' || !is_file($file)) {
+            return;
+        }
+        $left = AIClient::$deadline !== null ? AIClient::$deadline - microtime(true) - 5 : 40;
+        if ($left < 12) {
+            unset($state['res']['pv']);
+            throw new StepContinueException();
+        }
+        $z = new ZipArchive();
+        $total = 0;
+        if ($z->open($file) === true) {
+            for ($i = 0; $i < $z->numFiles; $i++) {
+                $total += (int)preg_match('#^ppt/slides/slide\d+\.xml$#', (string)$z->getNameIndex($i));
+            }
+            $z->close();
+        }
+        $pv = SlidePreview::make($file, SlidePreview::pick($total), !empty($state['res']['pres']) ? (string)$state['res']['pres'] : null, min(45, $left));
+        $state['res']['pv'] = $pv;
+        foreach ($pv as $f) {
+            $state['res']['tmp'][] = $f;
+        }
+    }
+
+    // ---- yuborish va yakun ----
+
+    private static function stepDeliver(array $job, array &$state): void
+    {
+        $chatId = (int)$job['telegram_id'];
+        $file = (string)($state['res']['file'] ?? '');
+        if (!empty($state['res']['sent'])) {
+            return;
+        }
+        if ($file === '' || !is_file($file)) {
+            throw new RuntimeException('Tayyor fayl topilmadi');
+        }
+        $topic = Telegram::escape((string)$state['p']['topic']);
+        $vols = DocTypes::volumes((string)$job['type']) ?? [];
+        $label = $vols[$job['volume_key']]['label'] ?? '';
+        $what = DocTypes::label((string)$job['type']);
+        $real = !empty($state['res']['biblio']) ? "\n📚 Adabiyotlar ro'yxatida " . count($state['res']['biblio']) . " ta haqiqiy ilmiy manba (Crossref) bor." : '';
+        $warn = $job['type'] === 'slayd'
+            ? "⚠️ Matn AI yordamida yaratildi — himoyadan oldin mazmunini bir bor ko'zdan kechiring."
+            : "⚠️ Matn AI yordamida yaratildi — faktlar va sanalarni topshirishdan oldin albatta o'zingiz tekshirib chiqing.";
+        $uq = isset($state['res']['uniq']) ? "\n🔎 Unikallik: <b>" . (int)$state['res']['uniq'] . "%</b> (bot yozgan barcha ishlar bilan solishtirildi)" : '';
+        if ($job['type'] === 'qayta') {
+            $label = PartRewrite::MODES[explode(':', (string)$job['volume_key'] . '::')[2]] ?? '';
+            $real = $uq = '';
+            $warn = "Faqat tanlangan qism yangilandi, qolgani o'zgarmadi. Tahrirlovchida ham yangi matn ko'rinadi.";
+            $what = 'ish — qism qayta yozildi va';
+        }
+        if ($job['type'] === 'tarjima') {
+            $label = Translate::LANGS[(string)($state['p']['lang'] ?? '')] ?? '';
+            $real = $uq = '';
+            $warn = "Dizayn o'zgarmagan, faqat matn o'girildi. ⚠️ Tarjima AI yordamida qilindi — topshirishdan oldin ko'rib chiqing.";
+            $what = 'tarjima';
+        }
+        if (($state['p']['kind'] ?? '') === 'cross') {
+            $real = $uq = '';
+            $warn = "📌 Oxirgi betda — javoblar (to'ldirilgan panjara). ⚠️ Savollar AI yordamida tuzildi — foydalanishdan oldin ko'rib chiqing.";
+        }
+        if (($state['p']['kind'] ?? '') === 'test') {
+            $real = '';
+            $warn = "📌 Oxirgi betda — javoblar kaliti. ⚠️ Savollar AI yordamida tuzildi — foydalanishdan oldin ko'rib chiqing.";
+        }
+        $caption = "✅ \"{$topic}\" mavzusidagi {$what} tayyor ($label).{$real}{$uq}\n$warn";
+        if ($job['type'] === 'slayd' && !empty($state['res']['narr']) && empty($state['res']['vid']['done'])) {
+            $caption .= "\n🎬 Ovozli videotaqdimot bir necha daqiqada alohida keladi.";
+        }
+        $rows = [];
+        if (!empty($state['res']['pres'])) {
+            $rows[] = [['text' => '✏️ Tahrirlash', 'callback_data' => 'edit:' . $state['res']['pres']]];
+        }
+        if (DocPdf::enabled() && ($job['type'] !== 'qayta') && (!empty($state['res']['pres']) || SlidePdf::sofficePath())) {
+            $rows[] = [DocPdf::button((int)$job['id'])];
+        }
+        $srcForRw = $job['type'] === 'qayta' ? (int)explode(':', (string)$job['volume_key'])[0] : (int)$job['id'];
+        if (!empty($state['res']['pres']) && PartRewrite::enabled() && !in_array($job['type'], ['tarjima', 'test', 'krossvord'], true)) {
+            $rows[] = [PartRewrite::button($srcForRw)];
+        }
+        if (Translate::enabled() && !in_array($job['type'], ['tarjima', 'qayta', 'krossvord'], true)) {
+            $rows[] = [Translate::button((int)$job['id'])];
+        }
+        $kb = $rows ? ['inline_keyboard' => $rows] : null;
+        $caption = GroupOrder::captionPrefix($job) . $caption;
+        if (!empty($state['res']['pv']) && empty($state['res']['pv_sent']) && empty($job['group_id'])) {
+            $state['res']['pv_sent'] = true;          // albom bir marta (qayta urinishda takrorlanmaydi)
+            try {
+                SlidePreview::send($chatId, $state['res']['pv'], "👀 <b>Taqdimotingizdan lavhalar</b>\nTo'liq fayl — pastda 👇");
+            } catch (Throwable $e) {
+                logError('steps', 'Preview yuborilmadi: ' . $e->getMessage());
+            }
+        }
+        if (!Telegram::sendDocument($chatId, $file, $caption, $kb)) {
+            throw new RuntimeException('Fayl Telegram orqali yuborilmadi');
+        }
+        $state['res']['sent'] = true;
+        $extra = (string)($state['res']['extra'] ?? '');
+        if ($extra !== '' && is_file($extra) && empty($state['res']['sent2'])) {
+            $state['res']['sent2'] = true;
+            $fid = Telegram::$lastFileId;
+            try {
+                Telegram::sendDocument($chatId, $extra, $job['type'] === 'slayd'
+                    ? "🎤 Himoya uchun konspekt: har slaydning asosiy fikrlari" . (isProDesign($state['p']['designKey'] ?? null) ? ", og'zaki nutq matni" : '') . (!empty($state['res']['qa']) ? ' va 10 ta ehtimoliy savol-javob' : '') . ". Chop etib, himoyaga tayyorlanishda foydalaning."
+                    : "🎓 Himoya uchun " . count((array)($state['res']['qa'] ?? [])) . " ta ehtimoliy savol va qisqa javob. Himoyadan oldin bir ko'rib chiqing.");
+            } catch (Throwable $e) {
+                logError('steps', 'Konspekt yuborilmadi: ' . $e->getMessage());
+            }
+            Telegram::$lastFileId = $fid;            // «Buyurtmalarim» uchun asosiy fayl id'si saqlansin
+            @unlink($extra);
+        }
+        // «Buyurtmalarim» uchun: fayl keyinroq ham (server nusxasi o'chgach) Telegram'dan qayta yuborilishi mumkin
+        if (Telegram::$lastFileId) {
+            try {
+                db()->prepare('UPDATE jobs SET tg_file_id = ?, tg_file_name = ? WHERE id = ?')
+                    ->execute([Telegram::$lastFileId, basename($file), (int)$job['id']]);
+            } catch (Throwable $e) {
+                logError('steps', 'file_id saqlanmadi: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /** Ish tugagach: baholash so'rovi va referal bonusi. */
+    public static function afterDone(array $job, array $state): void
+    {
+        $jobId = (int)$job['id'];
+        $chatId = (int)$job['telegram_id'];
+        try {
+            Telegram::sendMessage($chatId, "Natijani qanday baholaysiz?", ['inline_keyboard' => [[
+                ['text' => '⭐', 'callback_data' => "rate:{$jobId}:1"],
+                ['text' => '⭐⭐', 'callback_data' => "rate:{$jobId}:2"],
+                ['text' => '⭐⭐⭐', 'callback_data' => "rate:{$jobId}:3"],
+                ['text' => '⭐⭐⭐⭐', 'callback_data' => "rate:{$jobId}:4"],
+                ['text' => '⭐⭐⭐⭐⭐', 'callback_data' => "rate:{$jobId}:5"],
+            ]]]);
+            maybeRewardReferrer($chatId, (bool)$job['is_free']);
+        } catch (Throwable $e) {
+            logError('steps', 'afterDone: ' . $e->getMessage());
+        }
+    }
+}

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>StudyBot — buyurtma</title>
+<style nonce="{{NONCE}}">
+:root{--bg:#f4f6fb;--card:#fff;--ink:#141b2d;--mute:#6b7487;--line:#e4e8f0;--acc:#3b5bdb;--acc2:#7048e8;--ok:#2b8a3e;--bad:#e03131;--r:16px}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1320;--card:#181e2e;--ink:#eef1f8;--mute:#98a2b8;--line:#283048}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:0 0 110px}
+.hero{padding:22px 16px 18px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border-radius:0 0 26px 26px}
+.hero h1{margin:0;font-size:22px;letter-spacing:-.3px}.hero p{margin:6px 0 0;opacity:.88;font-size:13.5px}
+.hero .bal{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.pill{background:rgba(255,255,255,.18);border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:600}
+.wrap{padding:0 14px;max-width:640px;margin:0 auto}
+.sec{margin:20px 2px 9px;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--mute);display:flex;align-items:center;gap:8px}
+.sec b{background:var(--acc);color:#fff;border-radius:50%;width:20px;height:20px;display:inline-grid;place-items:center;font-size:11px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.opt{background:var(--card);border:2px solid transparent;border-radius:var(--r);padding:12px;text-align:left;color:var(--ink);font:inherit;cursor:pointer;box-shadow:0 1px 2px rgba(20,27,45,.06);transition:transform .12s,border-color .12s}
+.opt:active{transform:scale(.97)}.opt.on{border-color:var(--acc);box-shadow:0 0 0 4px color-mix(in srgb,var(--acc) 15%,transparent)}
+.opt .t{font-weight:650}.opt .s{color:var(--mute);font-size:12.5px;margin-top:2px}
+.opt .price{font-weight:750;margin-top:6px}.tag{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:1px 6px;margin-left:4px;vertical-align:1px}
+.tag.free{background:#d3f9d8;color:#2b8a3e}.tag.sub{background:#e5dbff;color:#5f3dc4}.tag.pro{background:#fff3bf;color:#a76b00}
+.dz{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sw{height:56px;border-radius:11px;position:relative;overflow:hidden;margin-bottom:6px}.sw i{position:absolute;left:9px;right:30%;height:6px;border-radius:3px;bottom:12px;background:#fff;opacity:.9}.sw i+i{bottom:24px;right:50%;height:9px}
+.card{background:var(--card);border-radius:var(--r);padding:14px;box-shadow:0 1px 2px rgba(20,27,45,.06)}
+label{display:block;font-size:12.5px;color:var(--mute);margin:10px 0 4px;font-weight:600}
+input,textarea,select{width:100%;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:11px 12px;font:inherit;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--acc)}textarea{min-height:84px;resize:vertical}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.hint{font-size:12px;color:var(--mute);margin-top:6px}
+.err{border-color:var(--bad)!important}.sum{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sum .big{font-size:22px;font-weight:800}.muted{color:var(--mute);font-size:13px}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 14px calc(12px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+.btn{width:100%;max-width:640px;margin:0 auto;display:block;border:0;border-radius:14px;padding:15px;font:inherit;font-weight:750;font-size:16px;color:#fff;background:linear-gradient(135deg,var(--acc),var(--acc2));cursor:pointer}
+.btn:disabled{opacity:.5}.toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:9;max-width:90%;text-align:center}
+.done{text-align:center;padding:60px 20px}.done .ic{font-size:64px}.hide{display:none}
+.sk{height:70px;border-radius:var(--r);background:linear-gradient(90deg,var(--card),var(--line),var(--card));background-size:200% 100%;animation:sk 1.2s infinite}.sk+.sk{margin-top:9px}@keyframes sk{to{background-position:-200% 0}}
+details summary{cursor:pointer;font-weight:650;list-style:none}details summary::after{content:" ▾";color:var(--mute)}
+</style>
+</head>
+<body>
+<div class="hero"><h1>📚 StudyBot</h1><p>Buyurtmani bir necha bosishda bering — tayyor fayl shu chatga keladi.</p><div class="bal" id="bal"></div></div>
+<div class="wrap" id="app"><div class="sec">Yuklanmoqda…</div><div class="sk"></div><div class="sk"></div></div>
+<div class="bar hide" id="bar"><button class="btn" id="go" disabled>Buyurtma berish</button></div>
+<script nonce="{{NONCE}}" src="https://telegram.org/js/telegram-web-app.js"></script>
+<script nonce="{{NONCE}}">
+(function () {
+  const TG = window.Telegram && Telegram.WebApp; if (TG) { TG.ready(); TG.expand(); try { TG.setHeaderColor('secondary_bg_color'); } catch (e) {} }
+  const $ = s => document.querySelector(s);
+  const h = (tag, a, ...kids) => { const e = document.createElement(tag); for (const k in (a || {})) { if (k === 'class') e.className = a[k]; else if (k.startsWith('on')) e.addEventListener(k.slice(2), a[k]); else if (k === 'style') Object.assign(e.style, a[k]); else e.setAttribute(k, a[k]); } kids.flat().forEach(c => c != null && c !== '' && e.append(c.nodeType ? c : String(c))); return e; };
+  const money = n => (n || 0).toLocaleString('ru-RU').replace(/,/g, ' ') + " so'm";
+  const toast = (m) => { const t = h('div', { class: 'toast' }, m); document.body.append(t); setTimeout(() => t.remove(), 3200); };
+  const haptic = k => { try { TG.HapticFeedback.impactOccurred(k || 'light'); } catch (e) {} };
+  const api = async (action, extra) => { const r = await fetch('api.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ action, initData: TG ? TG.initData : '' }, extra || {})) }); try { return await r.json(); } catch (e) { return { ok: false, msg: 'Server javob bermadi' }; } };
+  const S = { type: null, vk: null, design: null };
+  let D = null;
+
+  async function boot() {
+    D = await api('init');
+    if (!D.ok) { $('#app').replaceChildren(h('div', { class: 'done' }, h('div', { class: 'ic' }, '🔒'), h('p', {}, D.msg || 'Xatolik'))); return; }
+    if (D.maintenance) { $('#app').replaceChildren(h('div', { class: 'done' }, h('div', { class: 'ic' }, '🛠'), h('p', {}, "Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!"))); return; }
+    $('#bal').replaceChildren(h('span', { class: 'pill' }, '💰 ' + money(D.balance)), D.sub.active ? h('span', { class: 'pill' }, '💎 Obuna: ' + D.sub.credits + ' ta') : '', D.req ? h('span', { class: 'pill' }, '📎 Talablar biriktirilgan') : '');
+    render(); $('#bar').classList.remove('hide');
+  }
+  const type = () => D.types.find(t => t.k === S.type);
+  const vol = () => type() && type().vols.find(v => v.k === S.vk);
+  function price() {
+    const v = vol(); if (!v) return null;
+    const pro = S.type === 'slayd' && S.design && (D.designs.find(d => d.k === S.design) || {}).pro;
+    let p = v.price; if (pro) p = Math.round(p * (100 + D.pro_pct) / 100 / 500) * 500;
+    return { p, free: v.free && !pro, sub: !(v.free && !pro) && D.sub.active && p > 0 && p <= D.sub_max, pro };
+  }
+  function render() {
+    const app = $('#app'); const keep = {}; app.querySelectorAll('[data-k]').forEach(e => keep[e.dataset.k] = e.value);
+    const kids = [];
+    kids.push(h('div', { class: 'sec' }, h('b', {}, '1'), 'Nima kerak?'));
+    kids.push(h('div', { class: 'grid' }, D.types.map(t => h('button', { class: 'opt' + (S.type === t.k ? ' on' : ''), onclick: () => { haptic(); S.type = t.k; S.vk = null; render(); } }, h('div', { class: 't' }, t.menu), h('div', { class: 's' }, 'dan ' + money(Math.min(...t.vols.map(v => v.price))))))));
+    const t = type();
+    if (t) {
+      kids.push(h('div', { class: 'sec' }, h('b', {}, '2'), 'Hajm'));
+      kids.push(h('div', { class: 'grid' }, t.vols.map(v => h('button', { class: 'opt' + (S.vk === v.k ? ' on' : ''), onclick: () => { haptic(); S.vk = v.k; render(); } },
+        h('div', { class: 't' }, v.label), h('div', { class: 'price' }, money(v.price), v.free ? h('span', { class: 'tag free' }, 'BEPUL') : '', v.sub ? h('span', { class: 'tag sub' }, '💎') : '')))));
+      let n = 3;
+      if (t.k === 'slayd') {
+        kids.push(h('div', { class: 'sec' }, h('b', {}, String(n++)), 'Dizayn'));
+        kids.push(h('div', { class: 'dz' }, D.designs.map(d => h('button', { class: 'opt' + (S.design === d.k ? ' on' : ''), onclick: () => { haptic(); S.design = d.k; render(); } },
+          h('div', { class: 'sw', style: { background: d.pro ? 'linear-gradient(135deg,#' + d.bg + ',#' + d.acc + ')' : 'linear-gradient(135deg,#' + d.acc + ',#' + d.bg + ')' } }, h('i'), h('i')),
+          h('div', { class: 's' }, d.label, d.pro ? h('span', { class: 'tag pro' }, 'PRO') : '')))));
+        kids.push(h('div', { class: 'hint' }, "⭐ PRO dizaynlar — 16:9, katta fotosuratlar va og'zaki nutq matni bilan (+" + D.pro_pct + '%)'));
+      }
+      kids.push(h('div', { class: 'sec' }, h('b', {}, String(n++)), t.k === 'amaliyot' ? 'Tashkilot' : (t.k === 'test' ? 'Fan / mavzu' : 'Mavzu')));
+      const st = D.student || {};
+      const inp = (k, ph, v, extra) => h('input', Object.assign({ 'data-k': k, placeholder: ph, value: keep[k] !== undefined ? keep[k] : (v || ''), maxlength: '120' }, extra || {}));
+      kids.push(h('div', { class: 'card' },
+        h('textarea', { 'data-k': 'topic', placeholder: t.k === 'amaliyot' ? "Tashkilot nomi va yo'nalishingiz" : 'Masalan: Sun’iy intellektning ta’limdagi o‘rni', maxlength: '300' }),
+        h('label', {}, 'Til'), h('select', { 'data-k': 'lang' }, [['uz', "O'zbekcha"], ['ru', 'Русский'], ['en', 'English']].map(([k, l]) => { const o = h('option', { value: k }, l); if ((keep.lang || D.lang) === k) o.selected = true; return o; })),
+        h('div', { class: 'hint' }, "📎 O'qituvchi talablari bo'lsa — faylni ilovani yopib, botga yuboring, keyin shu yerda buyurtma bering.")));
+      kids.push(h('div', { class: 'sec' }, h('b', {}, String(n++)), "Titul varag'i"));
+      kids.push(h('div', { class: 'card' },
+        h('div', { class: 'row2' }, h('div', {}, h('label', {}, 'Ism'), inp('first', 'Vali', st.first)), h('div', {}, h('label', {}, 'Familya'), inp('last', 'Aliyev', st.last))),
+        h('div', { class: 'row2' }, h('div', {}, h('label', {}, 'Guruh'), inp('group', 'GGI-1-24', st.group)), h('div', {}, h('label', {}, 'Universitet'), inp('univ', 'TATU', st.univ))),
+        t.kind === 'paper' ? h('details', { style: { marginTop: '12px' } }, h('summary', {}, "Qo'shimcha (ixtiyoriy)"),
+          h('label', {}, 'Kafedra'), inp('kaf', 'Axborot texnologiyalari kafedrasi', st.kaf), h('label', {}, "O'qituvchi / ilmiy rahbar"), inp('teacher', 'Karimov A.B.', st.teacher)) : ''));
+      const pr = price();
+      if (pr) {
+        kids.push(h('div', { class: 'sec' }, 'Jami'));
+        kids.push(h('div', { class: 'card sum' }, h('div', {}, h('div', { class: 'muted' }, t.title + ' · ' + vol().label), h('div', { class: 'muted' }, pr.free ? '🎁 Birinchi buyurtma — bepul' : pr.sub ? "💎 Obunadan yechiladi" : (D.balance >= pr.p ? '💳 Balansdan yechiladi' : "⚠️ Balans yetarli emas — botda /balans orqali to'ldiring"))),
+          h('div', { class: 'big' }, pr.free ? 'Bepul' : (pr.sub ? '💎 1' : money(pr.p)))));
+      }
+    }
+    app.replaceChildren(...kids);
+    const topic = app.querySelector('[data-k=topic]'); if (topic && keep.topic) topic.value = keep.topic;
+    const ok = S.type && S.vk && (S.type !== 'slayd' || S.design);
+    $('#go').disabled = !ok;
+  }
+  $('#go').addEventListener('click', async () => {
+    const val = k => { const e = document.querySelector('[data-k=' + k + ']'); return e ? e.value.trim() : ''; };
+    const topic = val('topic');
+    if (topic.length < 3) { const e = document.querySelector('[data-k=topic]'); e.classList.add('err'); e.focus(); toast('Mavzuni yozing'); return; }
+    const student = {}; ['first', 'last', 'group', 'univ', 'kaf', 'teacher'].forEach(k => student[k] = val(k));
+    $('#go').disabled = true; $('#go').textContent = 'Yuborilmoqda…';
+    const r = await api('order', { type: S.type, vk: S.vk, design: S.design, topic, lang: val('lang'), student });
+    $('#go').textContent = 'Buyurtma berish';
+    if (!r.ok) {
+      $('#go').disabled = false; toast(r.msg || 'Xatolik'); try { TG.HapticFeedback.notificationOccurred('error'); } catch (e) {}
+      if (r.field) { const e = document.querySelector('[data-k=' + r.field + ']'); if (e) { e.classList.add('err'); e.focus(); } }
+      return;
+    }
+    try { TG.HapticFeedback.notificationOccurred('success'); } catch (e) {}
+    $('#bar').classList.add('hide');
+    $('#app').replaceChildren(h('div', { class: 'done' }, h('div', { class: 'ic' }, '🎉'), h('h2', {}, 'Buyurtma #' + r.id + ' qabul qilindi'), h('p', { class: 'muted' }, "Jarayonni bot chatida kuzatishingiz mumkin. Tayyor fayl o'sha yerga keladi."),
+      h('button', { class: 'btn', style: { marginTop: '18px' }, onclick: () => TG ? TG.close() : null }, 'Botga qaytish')));
+  });
+  boot();
+})();
+</script>
+</body>
+</html>
