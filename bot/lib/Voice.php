@@ -216,6 +216,7 @@ class Voice
         $t = preg_replace('/https?:\/\/\S+/u', '', $t) ?? $t;
         $t = preg_replace('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{FE0F}]/u', '', $t) ?? $t;   // emoji o'qilmasin
         if ($lang === 'uz') {
+            $t = UzSpeak::prepare($t);                                                // raqam, sana, foiz → so'z; pauzalar
             $t = preg_replace("/([OoGg])['’`‘ʼ]/u", '$1ʻ', $t) ?? $t;                 // oʻ, gʻ
             $t = preg_replace("/(\p{L})['’`‘](\p{L})/u", '$1ʼ$2', $t) ?? $t;          // tutuq belgisi: maʼno
         }

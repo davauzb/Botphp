@@ -11,6 +11,9 @@
   Ovoz ishlamay qolsa (Microsoft o'zgartirish kiritsa) — «🔄 Yangilash» tugmasi paketni yangilaydi.
   O'rnatilmagan bo'lsa va Gemini kaliti bo'lsa — Gemini ovozi zaxira sifatida ishlaydi (o'zbekchasi sustroq).
 - **🎬 Videotaqdimot** ham endi shu o'zbekcha neyron ovoz bilan o'qiladi (modul o'rnatilgan bo'lsa).
+- **🗣 Tabiiyroq o'qish** — o'zbekcha matn ovozga berishdan oldin tayyorlanadi: raqam, sana, vaqt, foiz, kasr, pul, telefon raqami
+  va qisqartmalar so'z bilan yoziladi («24-noyabr» → «yigirma to'rtinchi noyabr», «78% i» → «yetmish sakkiz foizi»,
+  «4,5» → «to'rt butun o'ndan besh», «12 000 000 so'm» → «o'n ikki million so'm»); sarlavha va ro'yxat qatorlaridan keyin pauza.
 
 # studybot 14-15 — 10 TA YANGI IMKONIYAT
 
