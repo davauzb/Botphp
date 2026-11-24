@@ -18,7 +18,7 @@ require_once __DIR__ . '/HumoAuto.php';
  */
 class Userbot
 {
-    private const PY_FALLBACK = 'https://github.com/astral-sh/python-build-standalone/releases/download/20241016/cpython-3.12.7%2B20241016-x86_64-unknown-linux-gnu-install_only.tar.gz';
+    public const PY_FALLBACK = 'https://github.com/astral-sh/python-build-standalone/releases/download/20241016/cpython-3.12.7%2B20241016-x86_64-unknown-linux-gnu-install_only.tar.gz';
     private const POLL_EVERY = 35;            // soniya (kutilayotgan HUMO so'rovi bo'lsa)
 
     public static function base(): string
@@ -26,7 +26,7 @@ class Userbot
         return rtrim(dirname(DB_PATH), '/') . '/userbot';
     }
 
-    private static function py(): string
+    public static function py(): string
     {
         return self::base() . '/python/bin/python3';
     }
@@ -53,7 +53,7 @@ class Userbot
 
     // ------------------------------------------------------------------ o'rnatish (fonda)
 
-    private static function pythonUrl(): string
+    public static function pythonUrl(): string
     {
         $ch = curl_init('https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest');
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_USERAGENT => 'SlayderAi-installer', CURLOPT_HTTPHEADER => ['Accept: application/vnd.github+json']]);

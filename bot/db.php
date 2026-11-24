@@ -28,6 +28,7 @@ require_once __DIR__ . '/lib/Loyalty.php';
 require_once __DIR__ . '/lib/GroupOrder.php';
 require_once __DIR__ . '/lib/Crossword.php';
 require_once __DIR__ . '/lib/PromoDays.php';
+require_once __DIR__ . '/lib/Voice.php';
 
 /**
  * Har chaqiruvda yangi PDO ulanish qaytaradi.

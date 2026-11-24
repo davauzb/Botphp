@@ -542,6 +542,20 @@ try {
                 return ['ok' => true, 'msg' => "Kalit o'chirildi"];
             });
 
+        case 'voice_status':
+            out(['ok' => true] + Voice::status());
+
+        case 'voice_install':
+            out(Voice::install($admin));
+
+        case 'voice_test':
+            if (!AdminSecurity::rate('vt:' . $admin, 8, 600)) {
+                AdminSecurity::fail('rate', 429, "Juda tez-tez. Birozdan keyin urinib ko'ring");
+            }
+            @set_time_limit(120);
+            $vk = strv($b['voice'] ?? 'madina', 20);
+            out(Voice::test($admin, isset(Voice::VOICES[$vk]) ? $vk : 'madina'));
+
         case 'backups':
             out(['ok' => true] + Maintenance::backupList());
 

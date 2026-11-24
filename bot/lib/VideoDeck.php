@@ -56,7 +56,8 @@ class VideoDeck
 
     public static function enabled(): bool
     {
-        return (bool)Engine::c('VIDEO_ENABLED', false) && self::ffmpeg() !== null && SlidePdf::sofficePath() !== null && self::ttsKey() !== '';
+        return (bool)Engine::c('VIDEO_ENABLED', false) && self::ffmpeg() !== null && SlidePdf::sofficePath() !== null
+            && (self::ttsKey() !== '' || (class_exists('Voice') && Voice::installed()));
     }
 
     /** Diagnostika uchun: nima yetishmayapti. */
@@ -69,8 +70,8 @@ class VideoDeck
         if (!SlidePdf::sofficePath()) {
             $m[] = 'LibreOffice';
         }
-        if (self::ttsKey() === '') {
-            $m[] = 'Gemini kaliti';
+        if (self::ttsKey() === '' && !(class_exists('Voice') && Voice::installed())) {
+            $m[] = "Ovoz moduli (Tizim → Ovoz) yoki Gemini kaliti";
         }
         return $m;
     }
@@ -101,6 +102,20 @@ class VideoDeck
     public static function tts(string $text, string $lang, string $dst): bool
     {
         if (trim($text) === '') {
+            return false;
+        }
+        // 🔊 Edge neyron ovozi o'rnatilgan bo'lsa — u (o'zbekcha talaffuzi ancha tabiiy): MP3 → PCM
+        if (class_exists('Voice') && Voice::installed() && self::ffmpeg()) {
+            $mp3 = $dst . '.mp3';
+            if (Voice::edgeMp3($text, $lang, $mp3)
+                && self::run([(string)self::ffmpeg(), '-y', '-loglevel', 'error', '-i', $mp3, '-f', 's16le', '-ac', '1', '-ar', '24000', $dst], 60)
+                && is_file($dst) && filesize($dst) > 4800) {
+                @unlink($mp3);
+                return true;
+            }
+            @unlink($mp3);
+        }
+        if (self::ttsKey() === '') {
             return false;
         }
         $style = ['uz' => "O'zbek tilida", 'ru' => 'По-русски', 'en' => 'In English'][$lang] ?? '';

@@ -70,6 +70,10 @@ class Settings
         'BACKUP_KEEP' => ['int', 'mode', "🗄 Zaxiralar soni", "Serverda saqlanadigan oxirgi kunlik zaxiralar soni", 2, 60],
         'BACKUP_CHAT_ID' => ['text', 'mode', "🗄 Zaxira kanali ID", "Yopiq kanal/guruh ID si (masalan -1001234567890), bot u yerda admin bo'lishi kerak. Bo'sh — faqat adminga", 0, 20],
         'BACKUP_PASSWORD' => ['text', 'mode', "🔐 Zaxira paroli", "Berilsa — zip AES-256 bilan shifrlanadi. Parolni unutmang!", 0, 64],
+        'TTS_ENABLED' => ['bool', 'feat', '🔊 Matnni ovozga', "Menyuda «🔊 Matnni ovozga»: istalgan matn o'zbek/rus/ingliz ovozida audio bo'lib qaytadi (Tizim → Ovoz moduli)", 0, 1],
+        'TTS_FREE_CHARS' => ['int', 'money', '🔊 Kunlik bepul belgilar', "Har mijozga kuniga shuncha belgi bepul (0 — hammasi pullik)", 0, 100000],
+        'TTS_PRICE_1000' => ['int', 'money', "🔊 Har 1000 belgi narxi, so'm", "Bepul limitdan keyin (0 — cheksiz bepul)", 0, 100000],
+        'TTS_MAX_CHARS' => ['int', 'feat', '🔊 Bir martada eng ko\'p belgi', '200–10 000', 200, 10000],
         'QC_ENABLED' => ['bool', 'feat', '🛡 Sifat nazorati', "Yig'ishdan oldin: ortiqcha AI gaplari, chala gaplar tozalanadi; juda qisqa/takror bo'limlar qayta yoziladi", 0, 1],
         'PDF_BUTTON' => ['bool', 'feat', '📄 PDF tugmasi', "Tayyor fayl ostida «📄 PDF» tugmasi — ish PDF nusxada ham yuboriladi", 0, 1],
         'TRANSLATE_ENABLED' => ['bool', 'feat', '🌐 Tarjima', "Tayyor fayl ostida «Boshqa tilga tarjima» tugmasi (dizayn o'zgarmaydi)", 0, 1],
@@ -140,7 +144,7 @@ class Settings
         $defaults = ['MAINTENANCE_MODE' => false, 'MAINTENANCE_TEXT' => "🛠 Botda texnik ishlar olib borilmoqda. Tez orada qaytamiz!", 'FREE_TRIAL' => true,
             'TOPUP_BONUS_PERCENT' => 0, 'TOPUP_BONUS_MIN_AMOUNT' => 0, 'REFERRAL_BONUS' => 3000, 'MIN_TOPUP_AMOUNT' => 1000, 'PRO_SURCHARGE_PERCENT' => 60,
             'STARS_RATE' => 200, 'VIDEO_ENABLED' => false, 'MINIAPP_ENABLED' => false, 'SUB_ENABLED' => false, 'MARKETING_ENABLED' => false,
-            'STD_MAX_IMAGES' => 10, 'PART_REWRITE_PRICE' => 1000, 'EXPRESS_PRICE' => 3000, 'LOYALTY_EVERY' => 10, 'BACKUP_KEEP' => 7, 'BACKUP_CHAT_ID' => '', 'BACKUP_PASSWORD' => '', 'PROMO_DAYS' => class_exists('PromoDays') ? PromoDays::DEFAULT : '', 'GROUP_DISCOUNT' => 15, 'GROUP_MIN' => 3, 'LOYALTY_MAX_PRICE' => 20000, 'EXPRESS_ENABLED' => true, 'PDF_BUTTON' => true, 'PAY_CARD_NUMBER' => '', 'PAY_CARD_HOLDER' => '', 'PAY_HUMO' => false, 'PAY_CLICK' => false, 'PAY_PAYME' => false, 'STARS_ENABLED' => false, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
+            'STD_MAX_IMAGES' => 10, 'PART_REWRITE_PRICE' => 1000, 'EXPRESS_PRICE' => 3000, 'LOYALTY_EVERY' => 10, 'TTS_FREE_CHARS' => 2000, 'TTS_PRICE_1000' => 500, 'TTS_MAX_CHARS' => 4000, 'BACKUP_KEEP' => 7, 'BACKUP_CHAT_ID' => '', 'BACKUP_PASSWORD' => '', 'PROMO_DAYS' => class_exists('PromoDays') ? PromoDays::DEFAULT : '', 'GROUP_DISCOUNT' => 15, 'GROUP_MIN' => 3, 'LOYALTY_MAX_PRICE' => 20000, 'EXPRESS_ENABLED' => true, 'PDF_BUTTON' => true, 'PAY_CARD_NUMBER' => '', 'PAY_CARD_HOLDER' => '', 'PAY_HUMO' => false, 'PAY_CLICK' => false, 'PAY_PAYME' => false, 'STARS_ENABLED' => false, 'SUB_PRICE' => 49000, 'TRANSLATE_PRICE' => 2000, 'SUB_CREDITS' => 10, 'SUB_DAYS' => 30, 'SUB_MAX_PRICE' => 15000];
         $items = [];
         foreach (self::SCHEMA as $k => [$type, $group, $label, $hint, $min, $max]) {
             $items[] = ['k' => $k, 'type' => $type, 'group' => $group, 'label' => $label, 'hint' => $hint, 'min' => $min, 'max' => $max,

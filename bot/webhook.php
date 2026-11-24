@@ -229,6 +229,7 @@ function mainMenu(): array
                 [['text' => '🎁 Referal'], ['text' => '🎟 Promokod']],
                 [['text' => '⚙️ Profil'], ['text' => '🌐 Til']],
                 array_values(array_filter([
+                    Voice::enabled() ? ['text' => Voice::MENU] : null,
                     Growth::subEnabled() ? ['text' => '💎 Obuna'] : null,
                     ['text' => '💬 Yordam'],
                     MiniApp::enabled() ? ['text' => '📱 Ilova'] : null,
@@ -481,6 +482,11 @@ function handleMessage(array $user, int $chatId, string $text): void
         return;
     }
 
+    if ($text === Voice::MENU || $text === '/ovoz') {       // 🔊 matnni ovozga
+        Voice::start($chatId);
+        return;
+    }
+
     if ($text === '📋 Buyurtmalarim' || $text === '/buyurtmalar') {
         sendOrderList($chatId);
         return;
@@ -594,6 +600,12 @@ function handleMessage(array $user, int $chatId, string $text): void
         setUserState($chatId, 'idle');
         AdminPro::supportIncoming($chatId, $text);
         Telegram::sendMessage($chatId, "✅ Xabaringiz administratorga yetkazildi. Javob shu chatga keladi.", mainMenu());
+        return;
+    }
+
+    // --- 🔊 Ovozga aylantiriladigan matn kutilmoqda ---
+    if ($user['state'] === 'awaiting_tts' && $text !== '' && !str_starts_with($text, '/')) {
+        Voice::onText($chatId, $text);
         return;
     }
 
@@ -917,6 +929,10 @@ function handleCallbackQuery(array $cb): void
         } else {
             PartRewrite::onMode($chatId, (int)$rm[2], (int)($rm[3] ?? 0), (string)($rm[4] ?? ''));
         }
+        return;
+    }
+    if (str_starts_with($data, 'tts:')) {                 // 🔊 ovoz / tezlik tanlash
+        Voice::callback($chatId, $data, (int)($cb['message']['message_id'] ?? 0));
         return;
     }
     if (str_starts_with($data, 'grp:')) {                 // 👥 guruh buyurtmasi

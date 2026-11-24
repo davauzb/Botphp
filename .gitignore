@@ -4,3 +4,5 @@ bot/storage/generated/
 bot/storage/*.lock
 bot/storage/editor/
 bot/storage/backups/
+bot/storage/userbot/
+bot/storage/voice/

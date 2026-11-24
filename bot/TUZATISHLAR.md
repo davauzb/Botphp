@@ -1,3 +1,17 @@
+# studybot 14-16 — 🔊 MATNNI OVOZGA (O'ZBEKCHA NEYRON OVOZ)
+
+- **🔊 Matnni ovozga** — menyuda yangi tugma (yoki /ovoz). Mijoz istalgan matnni yuboradi — bot uni audio qilib qaytaradi.
+  Ovozlar: 👩 Madina, 👨 Sardor (o'zbek), Svetlana, Dmitriy (rus), Jenny, Guy (ingliz); tezlik: sekin / oddiy / tez.
+  Oʻ, gʻ va tutuq belgisi to'g'ri o'qilishi uchun matn avtomatik tayyorlanadi; emoji, havola va belgilar o'qilmaydi.
+  Serverda ffmpeg bo'lsa — Telegram «ovozli xabar» (to'lqinli), bo'lmasa — MP3 audio (chat ichida ijro etiladi).
+- **Narx**: kuniga 2 000 belgi bepul, keyin har 1000 belgi — 500 so'm (balansdan; xato bo'lsa qaytariladi). Adminlarga bepul.
+  Sozlamalar: `TTS_ENABLED`, `TTS_FREE_CHARS`, `TTS_PRICE_1000`, `TTS_MAX_CHARS` (bir martada, default 4 000).
+- **O'rnatish (bir marta)**: admin panel → Tizim → «🔊 Ovoz moduli» → «📥 O'rnatish». Python (userbot bilan umumiy) va
+  edge-tts paketi fonda 1–3 daqiqada o'rnatiladi. «🧪 Sinash» — namunaviy ovoz Telegram'ingizga keladi.
+  Ovoz ishlamay qolsa (Microsoft o'zgartirish kiritsa) — «🔄 Yangilash» tugmasi paketni yangilaydi.
+  O'rnatilmagan bo'lsa va Gemini kaliti bo'lsa — Gemini ovozi zaxira sifatida ishlaydi (o'zbekchasi sustroq).
+- **🎬 Videotaqdimot** ham endi shu o'zbekcha neyron ovoz bilan o'qiladi (modul o'rnatilgan bo'lsa).
+
 # studybot 14-15 — 10 TA YANGI IMKONIYAT
 
 Hammasi Sozlamalar (admin panel) orqali yoqiladi/o'chiriladi; yangi narxlar «Narxlar» bo'limida.

@@ -19,7 +19,7 @@ class AdminPro
         'users', 'user', 'user_meta', 'support_list', 'support_thread', 'support_reply', 'support_close', 'queue'];
     /** Faqat owner (ADMIN_CHAT_ID). */
     public const OWNER_ACTIONS = ['roles_list', 'roles_save', 'roles_delete', 'ai_keys', 'ai_key_add', 'ai_key_toggle', 'ai_key_delete', 'ai_key_test', 'logs_clear', 'agent_payout', 'img_keys', 'img_key_save', 'img_key_delete',
-        'ub_status', 'ub_install', 'ub_code', 'ub_signin', 'ub_password', 'ub_logout', 'ub_toggle', 'ub_test', 'ub_poll', 'backups', 'backup_send'];
+        'ub_status', 'ub_install', 'ub_code', 'ub_signin', 'ub_password', 'ub_logout', 'ub_toggle', 'ub_test', 'ub_poll', 'backups', 'backup_send', 'voice_status', 'voice_install', 'voice_test'];
 
     public static function ensureSchema(PDO $pdo): void
     {

@@ -891,10 +891,32 @@ async function drawSources(box, days) {
 
 /* ------------------------------------------------------------------ tizim: AI kalitlari va xatolar jurnali */
 async function viewSystem(box) {
-  const keys = h('div', {}), logs = h('div', {}), img = h('div', {}), ub = h('div', {}), bk = h('div', {});
-  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '👤 Userbot — HUMO avto-to\'lov'), ub, h('div', { class: 'sec' }, '🗄 Baza zaxiralari'), bk, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
-  if (CFG.role === 'owner') { drawUserbot(ub); drawBackups(bk); drawKeys(keys); drawImgKeys(img); }
+  const keys = h('div', {}), logs = h('div', {}), img = h('div', {}), ub = h('div', {}), bk = h('div', {}), vc = h('div', {});
+  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '👤 Userbot — HUMO avto-to\'lov'), ub, h('div', { class: 'sec' }, '🔊 Ovoz moduli (matnni ovozga)'), vc, h('div', { class: 'sec' }, '🗄 Baza zaxiralari'), bk, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
+  if (CFG.role === 'owner') { drawUserbot(ub); drawVoice(vc); drawBackups(bk); drawKeys(keys); drawImgKeys(img); }
   drawLogs(logs, '', '');
+}
+async function drawVoice(box) {
+  box.replaceChildren(skeleton(1, 70));
+  const r = await api('voice_status');
+  if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
+  const busy = async (btn, label, fn) => { const o = btn.textContent; btn.disabled = true; btn.textContent = label; try { await fn(); } finally { btn.disabled = false; btn.textContent = o; } };
+  const eng = r.engine === 'edge' ? badge('Microsoft neyron ovozi ✓', 'ok') : (r.engine === 'gemini' ? badge('Gemini (zaxira)', 'warn') : badge("dvigatel yo'q", 'bad'));
+  const st = h('div', { class: 'card', style: { padding: '12px 14px' } },
+    h('div', { class: 't1', style: { whiteSpace: 'normal' } }, 'Dvigatel: ', eng, ' ', r.enabled ? badge('menyuda yoqilgan', 'ok') : badge("o'chiq (Sozlamalar → TTS_ENABLED)", '')),
+    h('div', { class: 't2', style: { whiteSpace: 'normal', marginTop: '6px' } },
+      (r.python ? '🐍 Python bor' : "🐍 Python yo'q (o'rnatishda yuklanadi)") + ' · ' + (r.installed ? '🔊 edge-tts ' + (r.version || '') : "🔊 edge-tts o'rnatilmagan") + ' · ' +
+      (r.ffmpeg ? '🎞 ffmpeg bor — ovozli xabar (OGG)' : "🎞 ffmpeg yo'q — MP3 audio bo'lib keladi") + ' · Bugun: ' + fmt(r.today.users) + ' mijoz, ' + fmt(r.today.chars) + ' belgi'));
+  const inst = h('button', { class: 'btn ' + (r.installed ? '' : 'pri'), style: { width: '100%', marginTop: '10px' }, disabled: r.installing,
+    onclick: () => busy(inst, 'Boshlanmoqda…', async () => { const rr = await act('voice_install', {}); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); setTimeout(() => drawVoice(box), 2500); }) },
+    r.installing ? "⏳ O'rnatilmoqda…" : (r.installed ? '🔄 Yangilash (ovoz ishlamay qolsa)' : "📥 O'rnatish (o'zbekcha neyron ovoz)"));
+  const vsel = h('select', { class: 'inp', style: { marginTop: '10px' } }, ...[['madina', "👩 Madina (o'zbek)"], ['sardor', "👨 Sardor (o'zbek)"], ['svetlana', '👩 Svetlana (rus)'], ['jenny', '👩 Jenny (ingliz)']].map(([k, t]) => h('option', { value: k }, t)));
+  const test = h('button', { class: 'btn', style: { width: '100%', marginTop: '8px' }, disabled: !r.engine,
+    onclick: () => busy(test, 'Yaratilmoqda…', async () => { const rr = await api('voice_test', { voice: vsel.value }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); }) }, "🧪 Sinash — Telegram'imga namunaviy ovoz");
+  const kids = [st, inst, vsel, test];
+  if (r.log && (r.installing || !/DONE/.test(r.log))) kids.push(h('pre', { class: 'card', style: { whiteSpace: 'pre-wrap', fontSize: '12px', padding: '10px', marginTop: '10px', maxHeight: '180px', overflow: 'auto' } }, r.log));
+  if (r.installing) setTimeout(() => { if (box.isConnected) drawVoice(box); }, 4000);
+  box.replaceChildren(...kids);
 }
 async function drawBackups(box) {
   box.replaceChildren(skeleton(1, 70));
