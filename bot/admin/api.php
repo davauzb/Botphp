@@ -542,6 +542,21 @@ try {
                 return ['ok' => true, 'msg' => "Kalit o'chirildi"];
             });
 
+        case 'live_status':
+            out(['ok' => true] + LiveVoice::status());
+
+        case 'live_save':
+            out(LiveVoice::saveConfig($admin, strv($b['url'] ?? '', 200), strv($b['token'] ?? '', 120)));
+
+        case 'live_test':
+            if (!AdminSecurity::rate('lt:' . $admin, 6, 600)) {
+                AdminSecurity::fail('rate', 429, "Juda tez-tez. Birozdan keyin urinib ko'ring");
+            }
+            out(LiveVoice::test($admin, strv($b['voice'] ?? '', 24), isset(LiveVoice::STYLES[(string)($b['style'] ?? '')]) ? (string)$b['style'] : 'hikoya'));
+
+        case 'live_voice_delete':
+            out(LiveVoice::deleteVoice($admin, strv($b['key'] ?? '', 24)));
+
         case 'voice_status':
             out(['ok' => true] + Voice::status());
 

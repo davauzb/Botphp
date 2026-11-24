@@ -1,3 +1,16 @@
+# studybot 14-17 — ⭐ JONLI OVOZ (HAQIQIY ODAMDEK O'ZBEKCHA, O'Z OVOZINGIZ BILAN)
+
+- **⭐ Jonli ovoz** — «🔊 Matnni ovozga» menyusida ⭐ ovozlar: Navoiy TTS (Aisha, Apache-2.0) modeli ifodali, his-tuyg'u
+  bilan o'qiydi. Uslublar: 📖 Hikoyachi (ertak/hikoya — iliq, shoshilmasdan), 🙂 Oddiy, 🤗 Mehribon, 😊 Xursand, 🎓 Rasmiy.
+- **Alohida ovoz serveri** (`voice-server/`): hostingda og'ir model ishlamaydi, shuning uchun bepul Oracle Cloud serverida
+  ishlaydi. O'rnatish — bitta buyruq: `sudo bash install.sh` (Python, PyTorch CPU, model ~6 GB, systemd, bepul HTTPS).
+  Batafsil: `voice-server/README.md`. Keyin admin panel → Tizim → «⭐ Jonli ovoz serveri» → manzil + token.
+- **O'z ovozingiz**: botga `/ovoz_qosh` → video (masalan, hikoya aytgan videongiz), audio yoki ovozli xabar → nom → 👨/👩 →
+  rozilikni tasdiqlash. Server videodan ovozni ajratib oladi. Faqat o'z ovozingiz yoki egasi rozi bo'lgan ovoz!
+- Tezlik (GPU'siz): 1 soniya ovozga ~4 soniya — shuning uchun qisqa matnlar (`LIVE_MAX_CHARS`, 500 belgi) va navbat.
+  Natija 2 daqiqagacha kutiladi, kechiksa fon tick'ida yetkaziladi. Server ishlamasa — pul qaytadi, oddiy ovoz taklif qilinadi.
+- Narx: kuniga 300 belgi bepul, keyin har 1000 belgi — 2 000 so'm (`LIVE_FREE_CHARS`, `LIVE_PRICE_1000`, `LIVE_TTS_ENABLED`).
+
 # studybot 14-16 — 🔊 MATNNI OVOZGA (O'ZBEKCHA NEYRON OVOZ)
 
 - **🔊 Matnni ovozga** — menyuda yangi tugma (yoki /ovoz). Mijoz istalgan matnni yuboradi — bot uni audio qilib qaytaradi.

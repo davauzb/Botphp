@@ -55,6 +55,13 @@ class Maintenance
             logError('maint', 'userbot: ' . $e->getMessage());
         }
         try {
+            if (class_exists('LiveVoice') && LiveVoice::pending()) {
+                LiveVoice::poll($until);               // ⭐ jonli ovoz natijalarini yetkazish
+            }
+        } catch (Throwable $e) {
+            logError('maint', 'livevoice: ' . $e->getMessage());
+        }
+        try {
             if (class_exists('PromoDays')) {
                 PromoDays::run();                      // 🎉 aksiya kunlari: bir martalik xabar
             }

@@ -116,6 +116,16 @@ try {
         exit;
     }
 
+    // ⭐ Jonli ovoz namunasi (admin /ovoz_qosh): video, audio yoki ovozli xabar
+    if ($user['state'] === 'awaiting_voice_sample' && AdminSecurity::isAdmin($chatId) && ($text === '' || $text[0] !== '/')) {
+        LiveVoice::sampleFile($chatId, $message);
+        exit;
+    }
+    if ($user['state'] === 'awaiting_voice_name' && AdminSecurity::isAdmin($chatId) && $text !== '' && $text[0] !== '/') {
+        LiveVoice::sampleName($chatId, $text);
+        exit;
+    }
+
     // O'qituvchi talablari: mavzu kutilayotganda fayl, rasm yoki «Talab: ...» matni
     if (str_starts_with((string)$user['state'], 'awaiting_topic:') && Requirements::handle($chatId, $message)) {
         exit;
@@ -479,6 +489,11 @@ function handleMessage(array $user, int $chatId, string $text): void
                 . "<i>Tashkilot haqidagi aniq ma'lumotlarni (manzil, raqamlar) tayyor fayldan o'zingiz to'g'rilab qo'ying.</i>\n\n",
         ][$orderType] ?? '';
         Telegram::sendMessage($chatId, $intro . "📏 Kerakli hajmni tanlang:", volumeKeyboard($orderType, $user));
+        return;
+    }
+
+    if ($text === '/ovoz_qosh' && AdminSecurity::isAdmin($chatId)) {   // ⭐ jonli ovoz namunasi qo'shish
+        LiveVoice::sampleStart($chatId);
         return;
     }
 
@@ -929,6 +944,10 @@ function handleCallbackQuery(array $cb): void
         } else {
             PartRewrite::onMode($chatId, (int)$rm[2], (int)($rm[3] ?? 0), (string)($rm[4] ?? ''));
         }
+        return;
+    }
+    if (str_starts_with($data, 'vs:')) {                  // ⭐ jonli ovoz namunasi (admin)
+        LiveVoice::sampleCallback($chatId, $data);
         return;
     }
     if (str_starts_with($data, 'tts:')) {                 // 🔊 ovoz / tezlik tanlash

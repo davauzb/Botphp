@@ -30,6 +30,7 @@ require_once __DIR__ . '/lib/Crossword.php';
 require_once __DIR__ . '/lib/PromoDays.php';
 require_once __DIR__ . '/lib/UzSpeak.php';
 require_once __DIR__ . '/lib/Voice.php';
+require_once __DIR__ . '/lib/LiveVoice.php';
 
 /**
  * Har chaqiruvda yangi PDO ulanish qaytaradi.

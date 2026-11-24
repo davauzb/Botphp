@@ -891,9 +891,9 @@ async function drawSources(box, days) {
 
 /* ------------------------------------------------------------------ tizim: AI kalitlari va xatolar jurnali */
 async function viewSystem(box) {
-  const keys = h('div', {}), logs = h('div', {}), img = h('div', {}), ub = h('div', {}), bk = h('div', {}), vc = h('div', {});
-  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '👤 Userbot — HUMO avto-to\'lov'), ub, h('div', { class: 'sec' }, '🔊 Ovoz moduli (matnni ovozga)'), vc, h('div', { class: 'sec' }, '🗄 Baza zaxiralari'), bk, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
-  if (CFG.role === 'owner') { drawUserbot(ub); drawVoice(vc); drawBackups(bk); drawKeys(keys); drawImgKeys(img); }
+  const keys = h('div', {}), logs = h('div', {}), img = h('div', {}), ub = h('div', {}), bk = h('div', {}), vc = h('div', {}), lv = h('div', {});
+  box.replaceChildren(h('div', { class: 'wrap' }, CFG.role === 'owner' ? h('div', {}, h('div', { class: 'sec' }, '👤 Userbot — HUMO avto-to\'lov'), ub, h('div', { class: 'sec' }, '🔊 Ovoz moduli (matnni ovozga)'), vc, h('div', { class: 'sec' }, '⭐ Jonli ovoz serveri (Navoiy)'), lv, h('div', { class: 'sec' }, '🗄 Baza zaxiralari'), bk, h('div', { class: 'sec' }, '🔑 AI kalitlari'), keys, h('div', { class: 'sec' }, '🖼 Rasm manbalari'), img) : '', h('div', { class: 'sec' }, '🧯 Xatolar jurnali'), logs));
+  if (CFG.role === 'owner') { drawUserbot(ub); drawVoice(vc); drawLive(lv); drawBackups(bk); drawKeys(keys); drawImgKeys(img); }
   drawLogs(logs, '', '');
 }
 async function drawVoice(box) {
@@ -916,6 +916,34 @@ async function drawVoice(box) {
   const kids = [st, inst, vsel, test];
   if (r.log && (r.installing || !/DONE/.test(r.log))) kids.push(h('pre', { class: 'card', style: { whiteSpace: 'pre-wrap', fontSize: '12px', padding: '10px', marginTop: '10px', maxHeight: '180px', overflow: 'auto' } }, r.log));
   if (r.installing) setTimeout(() => { if (box.isConnected) drawVoice(box); }, 4000);
+  box.replaceChildren(...kids);
+}
+async function drawLive(box) {
+  box.replaceChildren(skeleton(1, 70));
+  const r = await api('live_status');
+  if (!r.ok) { box.replaceChildren(emptyBox(r.msg || 'Xatolik', 'alert')); return; }
+  const busy = async (btn, label, fn) => { const o = btn.textContent; btn.disabled = true; btn.textContent = label; try { await fn(); } finally { btn.disabled = false; btn.textContent = o; } };
+  const url = h('input', { class: 'inp', type: 'text', placeholder: 'https://1-2-3-4.sslip.io', value: r.url || '', maxlength: '200' });
+  const tok = h('input', { class: 'inp', type: 'password', placeholder: r.configured ? "Token saqlangan (o'zgartirish uchun yangisini yozing)" : 'Token (install.sh oxirida chiqadi)', autocomplete: 'off', maxlength: '120' });
+  const save = h('button', { class: 'btn pri', style: { width: '100%', marginTop: '8px' }, onclick: () => busy(save, 'Tekshirilmoqda…', async () => { const rr = await act('live_save', { url: url.value.trim(), token: tok.value.trim() }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); tok.value = ''; drawLive(box); }) }, '💾 Saqlash va tekshirish');
+  const st = !r.configured ? badge('ulanmagan', '') : (r.error ? badge(r.error, 'bad') : (r.ready ? badge('ishlayapti ✓', 'ok') : badge('model yuklanmoqda…', 'warn')));
+  const info = h('div', { class: 'card', style: { padding: '12px 14px' } },
+    h('div', { class: 't1', style: { whiteSpace: 'normal' } }, 'Holat: ', st, ' ', r.configured ? badge('navbat: ' + r.queue, '') : '', ' ', r.enabled ? '' : badge("o'chiq (LIVE_TTS_ENABLED)", '')),
+    h('div', { class: 't2', style: { whiteSpace: 'normal', margin: '6px 0 8px' } }, "Haqiqiy odamdek o'zbekcha ovoz alohida serverda ishlaydi (Oracle Cloud bepul serveri mos). O'rnatish: repodagi voice-server/install.sh → oxirida manzil va token chiqadi. Yangi ovoz qo'shish: botga /ovoz_qosh yozing va video/audio yuboring."),
+    url, h('div', { style: { height: '8px' } }), tok, save);
+  const kids = [info];
+  if (r.voices && r.voices.length) {
+    let style = 'hikoya';
+    const ss = h('div', { class: 'seg sm', style: { flexWrap: 'wrap', margin: '8px 0' } });
+    const drawS = () => ss.replaceChildren(...[['hikoya', '📖 Hikoyachi'], ['oddiy', '🙂 Oddiy'], ['mehribon', '🤗 Mehribon'], ['xursand', '😊 Xursand'], ['jiddiy', '🎓 Rasmiy']].map(([k, t]) => h('button', { class: style === k ? 'on' : '', onclick: () => { style = k; drawS(); } }, t)));
+    drawS();
+    kids.push(h('div', { class: 'card', style: { marginTop: '10px' } }, h('div', { style: { padding: '10px 14px 0' } }, h('b', {}, 'Ovozlar'), ss),
+      r.voices.map(v => h('div', { class: 'row' }, h('div', { class: 'av' }, v.gender === 'm' ? '👨' : (v.gender === 'f' ? '👩' : '🎙')),
+        h('div', { class: 'grow' }, h('div', { class: 't1' }, v.name), h('div', { class: 't2' }, v.key)),
+        h('div', { class: 'right', style: { display: 'flex', flexDirection: 'row', gap: '6px' } },
+          (() => { const b = h('button', { class: 'btn sm', onclick: () => busy(b, '…', async () => { const rr = await api('live_test', { voice: v.key, style }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); }) }, '🧪 Sinash'); return b; })(),
+          h('button', { class: 'btn sm bad', onclick: async () => { const ok = await confirmBox("Ovozni o'chirish", v.name + " serverdan butunlay o'chiriladi.", "O'chirish", 'bad'); if (!ok) return; const rr = await act('live_voice_delete', { key: v.key }); toast(rr.msg || '', rr.ok ? 'ok' : 'bad'); drawLive(box); } }, '✕'))))));
+  }
   box.replaceChildren(...kids);
 }
 async function drawBackups(box) {

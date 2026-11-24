@@ -65,7 +65,7 @@ class Voice
 
     public static function enabled(): bool
     {
-        return (bool)Engine::c('TTS_ENABLED', true) && self::engine() !== '';
+        return (bool)Engine::c('TTS_ENABLED', true) && (self::engine() !== '' || (class_exists('LiveVoice') && LiveVoice::enabled()));
     }
 
     // ------------------------------------------------------------------ o'rnatish (fonda, admin panel orqali)
@@ -209,7 +209,7 @@ class Voice
     }
 
     /** O'zbekcha matnni ovoz uchun tayyorlash: HTML/markdown belgilari olib tashlanadi, oʻ/gʻ va tutuq belgisi to'g'rilanadi. */
-    public static function normalize(string $text, string $lang): string
+    public static function normalize(string $text, string $lang, bool $curly = true): string
     {
         $t = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $t = preg_replace('/[*_#`~|>]+/u', ' ', $t) ?? $t;
@@ -217,8 +217,12 @@ class Voice
         $t = preg_replace('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{FE0F}]/u', '', $t) ?? $t;   // emoji o'qilmasin
         if ($lang === 'uz') {
             $t = UzSpeak::prepare($t);                                                // raqam, sana, foiz → so'z; pauzalar
-            $t = preg_replace("/([OoGg])['’`‘ʼ]/u", '$1ʻ', $t) ?? $t;                 // oʻ, gʻ
-            $t = preg_replace("/(\p{L})['’`‘](\p{L})/u", '$1ʼ$2', $t) ?? $t;          // tutuq belgisi: maʼno
+            if ($curly) {                                                             // Microsoft ovozi uchun; Navoiy oddiy ' bilan o'qitilgan
+                $t = preg_replace("/([OoGg])['’`‘ʼ]/u", '$1ʻ', $t) ?? $t;             // oʻ, gʻ
+                $t = preg_replace("/(\p{L})['’`‘](\p{L})/u", '$1ʼ$2', $t) ?? $t;      // tutuq belgisi: maʼno
+            } else {
+                $t = preg_replace("/[’`‘ʼʻ]/u", "'", $t) ?? $t;
+            }
         }
         $t = preg_replace("/[ \t]+/u", ' ', $t) ?? $t;
         $t = preg_replace("/\n{3,}/u", "\n\n", $t) ?? $t;
@@ -349,14 +353,26 @@ class Voice
     {
         $kv = Engine::kvGet('tts:' . $tg);
         $p = $kv ? (json_decode((string)$kv['v'], true) ?: []) : [];
-        if (!isset(self::VOICES[$p['v'] ?? ''])) {
+        $live = class_exists('LiveVoice') && LiveVoice::enabled() ? array_column(LiveVoice::voices(), 'key') : [];
+        $v = (string)($p['v'] ?? '');
+        $okLive = str_starts_with($v, 'live_') && in_array(substr($v, 5), $live, true);
+        $okStd = isset(self::VOICES[$v]) && self::engine() !== '';
+        if (!$okLive && !$okStd) {
             $lang = I18n::userLang($tg);
-            $p['v'] = $lang === 'ru' ? 'svetlana' : ($lang === 'en' ? 'jenny' : 'madina');
+            $p['v'] = self::engine() !== '' ? ($lang === 'ru' ? 'svetlana' : ($lang === 'en' ? 'jenny' : 'madina')) : ($live ? 'live_' . $live[0] : 'madina');
         }
         if (!isset(self::RATES[$p['r'] ?? ''])) {
             $p['r'] = 'norm';
         }
+        if (!isset(LiveVoice::STYLES[$p['s'] ?? ''])) {
+            $p['s'] = 'hikoya';
+        }
         return $p;
+    }
+
+    private static function isLive(array $p): bool
+    {
+        return str_starts_with((string)$p['v'], 'live_');
     }
 
     private static function usedToday(int $tg): int
@@ -369,19 +385,55 @@ class Voice
     {
         $rows = [];
         $row = [];
-        foreach (self::VOICES as $k => [, $label]) {
-            $row[] = ['text' => ($p['v'] === $k ? '✅ ' : '') . $label, 'callback_data' => 'tts:v:' . $k];
-            if (count($row) === 2) {
+        if (class_exists('LiveVoice') && LiveVoice::enabled()) {       // ⭐ jonli ovozlar — birinchi
+            foreach (LiveVoice::voices() as $lv) {
+                $k = 'live_' . $lv['key'];
+                $row[] = ['text' => ($p['v'] === $k ? '✅ ' : '⭐ ') . LiveVoice::voiceName($lv['key']), 'callback_data' => 'tts:v:' . $k];
+                if (count($row) === 2) {
+                    $rows[] = $row;
+                    $row = [];
+                }
+            }
+            if ($row) {
                 $rows[] = $row;
                 $row = [];
             }
         }
-        $rows[] = array_map(fn($k) => ['text' => ($p['r'] === $k ? '✅ ' : '') . self::RATES[$k][1], 'callback_data' => 'tts:r:' . $k], array_keys(self::RATES));
+        if (self::engine() !== '') {
+            foreach (self::VOICES as $k => [, $label]) {
+                $row[] = ['text' => ($p['v'] === $k ? '✅ ' : '') . $label, 'callback_data' => 'tts:v:' . $k];
+                if (count($row) === 2) {
+                    $rows[] = $row;
+                    $row = [];
+                }
+            }
+        }
+        if (self::isLive($p)) {
+            $st = array_keys(LiveVoice::STYLES);
+            foreach (array_chunk($st, 3) as $chunk) {
+                $rows[] = array_map(fn($k) => ['text' => ($p['s'] === $k ? '✅ ' : '') . LiveVoice::STYLES[$k], 'callback_data' => 'tts:s:' . $k], $chunk);
+            }
+        } else {
+            $rows[] = array_map(fn($k) => ['text' => ($p['r'] === $k ? '✅ ' : '') . self::RATES[$k][1], 'callback_data' => 'tts:r:' . $k], array_keys(self::RATES));
+        }
         return ['inline_keyboard' => $rows];
     }
 
     private static function promptText(int $tg, array $p): string
     {
+        if (self::isLive($p)) {
+            $free = LiveVoice::freeChars();
+            $left = max(0, $free - LiveVoice::usedToday($tg));
+            $price = LiveVoice::price1000();
+            $lim = AdminSecurity::isAdmin($tg) ? "👑 Siz uchun bepul" : ($free > 0 ? "🎁 Bugun bepul: <b>" . number_format($left, 0, '', ' ') . "</b> belgi" : '')
+                . ($price > 0 ? ($free > 0 ? ', keyin' : '💳') . ' har 1000 belgi — ' . number_format($price, 0, '', ' ') . " so'm" : '');
+            return "🔊 <b>Matnni ovozga aylantirish</b>\n\n"
+                . "⭐ <b>Jonli ovoz</b> — haqiqiy odamdek, his-tuyg'u bilan o'qiydi. Ertak, hikoya, tabrik va qisqa nutqlar uchun ajoyib.\n\n"
+                . "🎙 Ovoz: <b>" . LiveVoice::voiceName(substr($p['v'], 5)) . "</b> · Uslub: <b>" . LiveVoice::STYLES[$p['s']] . "</b>\n"
+                . "📏 Bir martada " . LiveVoice::maxChars() . " belgigacha · ⏱ tayyorlash ~1–2 daqiqa\n"
+                . ($lim !== '' ? $lim . "\n" : '')
+                . "\n✍️ Matnni yozing yoki nusxalab yuboring 👇";
+        }
         $free = self::freeChars();
         $left = max(0, $free - self::usedToday($tg));
         $price = self::price1000();
@@ -411,15 +463,27 @@ class Voice
     {
         $p = self::prefs($tg);
         $pp = explode(':', $data);
-        if (($pp[1] ?? '') === 'v' && isset(self::VOICES[$pp[2] ?? ''])) {
+        if (($pp[1] ?? '') === 'v' && (isset(self::VOICES[$pp[2] ?? '']) || str_starts_with((string)($pp[2] ?? ''), 'live_'))) {
             $p['v'] = $pp[2];
+        } elseif (($pp[1] ?? '') === 's' && isset(LiveVoice::STYLES[$pp[2] ?? ''])) {
+            $p['s'] = $pp[2];
+        } elseif (($pp[1] ?? '') === 'fallback') {           // jonli ovoz ishlamadi — oddiy ovozda
+            $kv = Engine::kvGet('ttsfb:' . $tg);
+            if ($kv && self::engine() !== '') {
+                db()->prepare('DELETE FROM engine_kv WHERE k = ?')->execute(['ttsfb:' . $tg]);
+                $lang = I18n::userLang($tg);
+                Engine::kvSet('tts:' . $tg, json_encode(['v' => $lang === 'ru' ? 'svetlana' : 'madina', 'r' => $p['r'], 's' => $p['s']]));
+                self::onText($tg, (string)$kv['v']);
+            }
+            return;
         } elseif (($pp[1] ?? '') === 'r' && isset(self::RATES[$pp[2] ?? ''])) {
             $p['r'] = $pp[2];
         } elseif (($pp[1] ?? '') === 'menu') {
             self::start($tg);
             return;
         }
-        Engine::kvSet('tts:' . $tg, json_encode(['v' => $p['v'], 'r' => $p['r']]));
+        Engine::kvSet('tts:' . $tg, json_encode(['v' => $p['v'], 'r' => $p['r'], 's' => $p['s']]));
+        $p = self::prefs($tg);                              // tekshirilgan qiymatlar
         setUserState($tg, 'awaiting_tts');
         if ($msgId > 0) {
             Telegram::call('editMessageText', ['chat_id' => $tg, 'message_id' => $msgId, 'text' => self::promptText($tg, $p), 'parse_mode' => 'HTML',
@@ -432,6 +496,15 @@ class Voice
         $len = mb_strlen(trim($text));
         if ($len < 2) {
             Telegram::sendMessage($tg, "✍️ Ovozga aylantirish uchun matn yuboring.");
+            return;
+        }
+        $p = self::prefs($tg);
+        if (self::isLive($p)) {                             // ⭐ jonli ovoz serveri orqali
+            LiveVoice::order($tg, $text, substr($p['v'], 5), $p['s']);
+            return;
+        }
+        if (self::engine() === '') {
+            Telegram::sendMessage($tg, "🔊 Oddiy ovoz hozir ishlamayapti — «⭐ Jonli ovoz» ni tanlang.", ['inline_keyboard' => [[['text' => '🎙 Ovoz tanlash', 'callback_data' => 'tts:menu']]]]);
             return;
         }
         if ($len > self::maxChars()) {
