@@ -305,9 +305,9 @@ class LiveVoice
         setUserState($tg, 'awaiting_voice_sample');
         Telegram::sendMessage($tg, "🎙 <b>Yangi jonli ovoz qo'shish</b>\n\n"
             . "Ovoz namunasini yuboring: <b>video, audio yoki ovozli xabar</b> (20 MB gacha).\n"
-            . "• 10–25 soniya <b>toza nutq</b>: bitta odam gapirsin, musiqa va shovqin bo'lmasin;\n"
-            . "• ertak/hikoya ohangida gapirilgan bo'lsa — natija ham shunday iliq chiqadi;\n"
-            . "• boshidagi 25 soniya olinadi.\n\n"
+            . "• uzun video ham bo'ladi — server undan <b>eng toza ~11 soniyalik</b> nutq qismini o'zi tanlaydi;\n"
+            . "• bitta odam gapirsin, fon musiqasi va shovqin qancha kam bo'lsa — ovoz shuncha o'xshash chiqadi;\n"
+            . "• ertak/hikoya ohangida gapirilgan bo'lsa — natija ham shunday iliq chiqadi.\n\n"
             . "⚠️ Faqat <b>o'zingizning</b> yoki egasi <b>rozilik bergan</b> ovozni qo'shing.",
             ['inline_keyboard' => [[['text' => '✖️ Bekor qilish', 'callback_data' => 'vs:no']]]]);
     }

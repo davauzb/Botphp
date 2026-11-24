@@ -4,7 +4,8 @@ Bot uchun alohida server: matnni **Navoiy TTS** modeli (Aisha, Apache-2.0, CosyV
 ifodali o'zbekcha nutqqa aylantiradi. Hosting (PHP) og'ir modelni ko'tarmaydi, shuning uchun model shu serverda ishlaydi,
 bot esa unga HTTPS orqali so'rov yuboradi.
 
-- Bir nechta ovoz: har biri 10–25 soniyalik toza namuna (botda `/ovoz_qosh` → video, audio yoki ovozli xabar).
+- Bir nechta ovoz: botda `/ovoz_qosh` → video, audio yoki ovozli xabar. Server yozuvdan eng toza ~11 soniyalik nutq qismini o'zi tanlaydi
+  (uzunroq namuna modelni ~2 barobar sekinlashtiradi, shuning uchun 11 soniya — sifat va tezlik muvozanati).
 - Uslublar: 📖 Hikoyachi, 🙂 Oddiy, 🤗 Mehribon, 😊 Xursand, 🎓 Rasmiy.
 - Tezlik (GPU'siz, 4 yadro): **1 soniya ovozga ~4 soniya**. Masalan, 130 belgilik ertak gapi (~10 s ovoz) ~40 soniyada tayyor.
   Shuning uchun bot jonli ovozni qisqa matnlar uchun beradi (Sozlamalar → `LIVE_MAX_CHARS`, standart 500).
@@ -55,7 +56,8 @@ Model birinchi marta ~1 daqiqada yuklanadi. Tekshirish: `curl -s https://1-2-3-4
 
 ## 4. O'z ovozingizni qo'shish (masalan, hikoya aytgan videongizdan)
 
-1. Videodan **10–25 soniyalik toza qismni** tanlang (telefonda qirqib oling): faqat sizning ovozingiz, musiqasiz, shovqinsiz.
+1. Videoni qirqish shart emas: server undan **eng toza ~11 soniyalik** nutq qismini avtomatik tanlaydi
+   (pauzalari eng chuqur, ya'ni fon musiqasi/shovqin eng kam joy). Faqat sizning ovozingiz bo'lsin.
    Ertak/hikoya ohangida gapirilgan bo'lsa — natija ham shunday iliq chiqadi.
 2. Botga `/ovoz_qosh` yozing → videoni (yoki audio/ovozli xabarni) yuboring → nom bering → 👨/👩 → «✅ Ha, rozilik bor».
 3. Server videodan ovozni ajratadi, shovqin darajasini tekislaydi va ovoz darhol mijozlarga ko'rinadi.

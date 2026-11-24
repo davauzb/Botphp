@@ -88,6 +88,46 @@ def save_meta(meta):
     os.replace(tmp, p)
 
 
+def best_window(wav_path, win):
+    """16 kHz mono WAV ichidan eng toza oynani topadi: (boshlanish, uzunlik) soniyada."""
+    import array
+    import math
+    import wave
+    with wave.open(wav_path, "rb") as w:
+        n = w.getnframes()
+        data = array.array("h", w.readframes(n))
+    total = n / 16000.0
+    if total <= win + 1:
+        return (0.3 if total > win else 0.0), min(win, total)
+    step = 1600                                  # 0.1 s
+    lv = []
+    for i in range(0, len(data) - step, step):
+        s = 0
+        for x in data[i:i + step]:
+            s += x * x
+        lv.append(10 * math.log10(s / step + 1e-9))
+    per = int(win * 10)
+    gmed = sorted(lv)[len(lv) // 2]               # butun yozuvdagi odatiy nutq darajasi
+    best = (-1e9, 5)
+    for st in range(5, len(lv) - per - 15, 5):    # 0.5 s qadam; boshidagi 0.5 s va oxirgi 1.5 s (yakun/musiqa) tashlanadi
+        w = lv[st:st + per]
+        speech = sum(1 for x in w if x > gmed - 6) / len(w)
+        if speech < 0.6:                          # oyna asosan nutq bo'lsin (jimlik yoki pasayib borayotgan yakun emas)
+            continue
+        longest_gap = cur = 0
+        for x in w:
+            cur = cur + 1 if x < gmed - 15 else 0
+            longest_gap = max(longest_gap, cur)
+        if longest_gap > 15:                      # 1.5 s dan uzun jimlik — yozuv uzilgan joy
+            continue
+        seg = sorted(w)
+        floor, med = seg[len(seg) // 10], seg[len(seg) // 2]
+        score = (med - floor) - abs(med - gmed) * 0.5      # pauzalar chuqur (fon kam) va ovoz balandligi odatiy
+        if score > best[0]:
+            best = (score, st)
+    return best[1] / 10.0, win
+
+
 def add_voice(key, name, gender, raw: bytes):
     """Istalgan audio/video -> 16 kHz mono WAV, 3–25 soniya, shovqin darajasi tekislangan."""
     if not re.fullmatch(r"[a-z0-9_]{2,24}", key or ""):
@@ -98,23 +138,31 @@ def add_voice(key, name, gender, raw: bytes):
     dst = os.path.join(VOICES_DIR, key + ".wav")
     with open(src, "wb") as f:
         f.write(raw)
+    full = src + ".full.wav"
     try:
-        # boshidagi 0.5 s tashlanadi, 25 s gacha olinadi, jimlik qirqiladi, ovoz balandligi tekislanadi
-        cmd = ["ffmpeg", "-y", "-loglevel", "error", "-ss", "0.5", "-i", src, "-t", "25", "-vn", "-ac", "1", "-ar", "16000",
-               "-af", "silenceremove=start_periods=1:start_threshold=-45dB,loudnorm=I=-18:TP=-2", dst + ".tmp.wav"]
-        r = subprocess.run(cmd, capture_output=True, timeout=120)
-        if r.returncode != 0 or not os.path.isfile(dst + ".tmp.wav"):
+        # 1) butun yozuv (10 daqiqagacha) → 16 kHz mono
+        r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-t", "600", "-vn", "-ac", "1", "-ar", "16000", full],
+                           capture_output=True, timeout=300)
+        if r.returncode != 0 or not os.path.isfile(full):
             return "ovozni ajratib bo'lmadi: " + r.stderr.decode("utf-8", "ignore")[-200:]
-        secs = os.path.getsize(dst + ".tmp.wav") / 32000.0
-        if secs < 3:
-            os.remove(dst + ".tmp.wav")
-            return "namuna juda qisqa (kamida 5–10 soniya toza nutq kerak)"
+        total = os.path.getsize(full) / 32000.0
+        if total < 4:
+            return "namuna juda qisqa (kamida 8–10 soniya toza nutq kerak)"
+        # 2) eng toza ~11 soniyalik oyna: nutq va pauzalar orasidagi farq eng katta joy (fon musiqasi/shovqin eng kam).
+        #    Uzun namuna modelni sekinlashtiradi (20 s ≈ 2× sekin), 10–12 s — sifat va tezlik muvozanati.
+        start, win = best_window(full, 11.0)
+        r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "%.2f" % start, "-t", "%.2f" % win, "-i", full,
+                            "-af", "loudnorm=I=-18:TP=-2", "-ar", "16000", dst + ".tmp.wav"], capture_output=True, timeout=120)
+        if r.returncode != 0 or not os.path.isfile(dst + ".tmp.wav"):
+            return "namunani qirqib bo'lmadi: " + r.stderr.decode("utf-8", "ignore")[-200:]
         os.replace(dst + ".tmp.wav", dst)
+        log("ovoz qo'shildi", key, "%.1f s dan %.1f s (jami %.0f s)" % (start, win, total))
     finally:
-        try:
-            os.remove(src)
-        except OSError:
-            pass
+        for f in (src, full):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
     try:
         with open(os.path.join(VOICES_DIR, "voices.json"), encoding="utf-8") as f:
             meta = json.load(f)
