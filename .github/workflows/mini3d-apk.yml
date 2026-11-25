@@ -1,0 +1,59 @@
+# Mini 3D Muharrir: har bir o'zgarishdan keyin APK ni avtomatik yig'adi.
+# Tayyor APK: GitHub → Actions → oxirgi ishga tushirish → "Artifacts" → Mini3D-apk
+name: Mini3D APK
+
+on:
+  push:
+    paths: ['mini3d/**', '.github/workflows/mini3d-apk.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Veb qismni yig'ish
+        working-directory: mini3d/web
+        run: |
+          npm install
+          npm run build
+
+      # Ixtiyoriy: doimiy imzo kaliti (ilovani o'chirmasdan yangilash uchun).
+      # Repo Settings → Secrets: MINI3D_KEYSTORE_BASE64, MINI3D_KEYSTORE_PASSWORD
+      - name: Imzo kaliti
+        env:
+          KS: ${{ secrets.MINI3D_KEYSTORE_BASE64 }}
+        if: env.KS != ''
+        run: |
+          echo "$KS" | base64 -d > "$RUNNER_TEMP/mini3d.jks"
+          echo "MINI3D_KEYSTORE=$RUNNER_TEMP/mini3d.jks" >> "$GITHUB_ENV"
+
+      - name: Debug kalit (doimiy kalit berilmagan bo'lsa)
+        run: |
+          mkdir -p ~/.android
+          [ -f ~/.android/debug.keystore ] || keytool -genkeypair -keystore ~/.android/debug.keystore \
+            -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
+            -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: APK ni yig'ish
+        working-directory: mini3d/android
+        env:
+          MINI3D_KEYSTORE_PASSWORD: ${{ secrets.MINI3D_KEYSTORE_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mini3D-apk
+          path: mini3d/android/app/build/outputs/apk/release/*.apk

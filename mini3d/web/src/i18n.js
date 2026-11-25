@@ -1,0 +1,181 @@
+// ============================================================
+//  TARJIMALAR. Yangi til qo'shish: languages ga {id,label} va
+//  dict ga shu id bilan obyekt qo'shing. Topilmagan kalitlar
+//  o'zbekcha matndan olinadi.
+// ============================================================
+export const languages = [
+  { id: 'uz', label: 'Oʻzbekcha' },
+  { id: 'en', label: 'English' },
+  { id: 'ru', label: 'Русский' },
+];
+
+const uz = {
+  ok: 'OK', cancel: 'Bekor qilish', close: 'Yopish', confirm: 'Tasdiqlang', delete: 'Oʻchirish', apply: 'Qoʻllash', done: 'Bajarildi',
+  loading: 'Yuklanmoqda…', duplicate: 'Nusxa olish', focus: 'Koʻrsatish (fokus)', undo: 'Orqaga', redo: 'Oldinga', undone: 'Bekor qilindi', redone: 'Qaytarildi',
+  welcome: 'Xush kelibsiz! Obyektni tanlash uchun ustiga bosing, qoʻshish uchun “+” tugmasini bosing.',
+
+  'add.title': 'Qoʻshish', 'add.basic': 'Asosiy shakllar', 'add.extra': 'Qoʻshimcha shakllar', 'add.shapes': 'Maxsus shakllar', 'add.lights': 'Yorugʻlik manbalari', 'add.other': 'Boshqa',
+
+  'prim.box': 'Kub', 'prim.sphere': 'Shar', 'prim.cylinder': 'Silindr', 'prim.cone': 'Konus', 'prim.torus': 'Tor (halqa)', 'prim.plane': 'Tekislik', 'prim.capsule': 'Kapsula', 'prim.pyramid': 'Piramida',
+  'prim.ico': 'Ikosaedr', 'prim.dodeca': 'Dodekaedr', 'prim.octa': 'Oktaedr', 'prim.tetra': 'Tetraedr', 'prim.knot': 'Tugun', 'prim.circle': 'Doira', 'prim.ring': 'Halqa (yassi)', 'prim.tube': 'Quvur',
+  'prim.star': 'Yulduz', 'prim.heart': 'Yurak', 'prim.arch': 'Ark', 'prim.stairs': 'Zina', 'prim.spring': 'Prujina', 'prim.gear': 'Tishli gʻildirak', 'prim.text': '3D matn',
+
+  'p.width': 'Eni', 'p.height': 'Balandligi', 'p.depth': 'Qalinligi', 'p.length': 'Uzunligi', 'p.segments': 'Boʻlaklar', 'p.radius': 'Radius', 'p.wseg': 'Gorizontal boʻlaklar', 'p.hseg': 'Vertikal boʻlaklar',
+  'p.rtop': 'Yuqori radius', 'p.rbottom': 'Pastki radius', 'p.rseg': 'Aylana boʻlaklari', 'p.open': 'Ochiq uchlar', 'p.tube': 'Quvur qalinligi', 'p.tseg': 'Uzunlik boʻlaklari', 'p.arc': 'Yoy (gradus)',
+  'p.capseg': 'Uch boʻlaklari', 'p.base': 'Asos radiusi', 'p.sides': 'Tomonlar soni', 'p.detail': 'Tafsilot', 'p.p': 'P (oʻralish)', 'p.q': 'Q (oʻralish)', 'p.rin': 'Ichki radius', 'p.rout': 'Tashqi radius',
+  'p.points': 'Uchlar soni', 'p.bevel': 'Qirra yumshoqligi', 'p.size': 'Oʻlcham', 'p.thick': 'Devor qalinligi', 'p.steps': 'Pogʻonalar', 'p.stepH': 'Pogʻona balandligi', 'p.stepD': 'Pogʻona chuqurligi',
+  'p.turns': 'Oʻramlar', 'p.teeth': 'Tishlar soni', 'p.toothD': 'Tish chuqurligi', 'p.hole': 'Teshik radiusi', 'p.text': 'Matn', 'p.quality': 'Sifat',
+
+  'light.PointLight': 'Nuqtali chiroq', 'light.SpotLight': 'Projektor', 'light.DirectionalLight': 'Quyosh', 'light.HemisphereLight': 'Osmon nuri', 'light.AmbientLight': 'Umumiy nur',
+  'light.intensity': 'Kuchi', 'light.distance': 'Masofa (0 = cheksiz)', 'light.decay': 'Soʻnish', 'light.angle': 'Burchak', 'light.penumbra': 'Chet yumshoqligi', 'light.castShadow': 'Soya tashlaydi', 'light.groundColor': 'Yer rangi',
+
+  'obj.group': 'Guruh', 'obj.mesh': 'Obyekt', 'obj.model': 'Import qilingan model', 'obj.visible': 'Koʻrinadi', 'obj.locked': 'Qulflangan', 'obj.castShadow': 'Soya tashlaydi', 'obj.receiveShadow': 'Soya qabul qiladi',
+  'obj.parent': 'Ota obyekt', 'obj.root': 'Sahna',
+
+  'props.empty': 'Obyekt tanlanmagan. Sahnadagi obyekt ustiga bosing yoki yangisini qoʻshing.', 'props.transform': 'Joylashuv', 'props.position': 'Pozitsiya', 'props.rotation': 'Aylanish (°)', 'props.scale': 'Masshtab',
+  'props.uniform': 'Bir xil', 'props.geometry': 'Shakl', 'props.material': 'Material', 'props.light': 'Yorugʻlik', 'props.object': 'Obyekt', 'props.info': 'Maʼlumot',
+  'info.size': 'Oʻlchami', 'info.vertsTris': 'Uchlar / uchburchaklar',
+
+  'mat.type': 'Turi', 'mat.standard': 'Standart (PBR)', 'mat.physical': 'Fizik (shisha, lak)', 'mat.matte': 'Xira', 'mat.toon': 'Multfilm', 'mat.basic': 'Yoritilmagan', 'mat.normal': 'Normal (rangli)',
+  'mat.color': 'Rang', 'mat.metalness': 'Metallik', 'mat.roughness': 'Gʻadir-budurlik', 'mat.opacity': 'Shaffof emaslik', 'mat.emissive': 'Nur sochish rangi', 'mat.emissiveIntensity': 'Nur sochish kuchi',
+  'mat.wireframe': 'Karkas (sim)', 'mat.flat': 'Tekis yuzalar', 'mat.doubleSide': 'Ikki tomonlama', 'mat.texture': 'Tekstura (rasm)', 'mat.addTexture': 'Rasm tanlash', 'mat.changeTexture': 'Rasmni almashtirish',
+  'mat.removeTexture': 'Teksturani olib tashlash', 'mat.repeat': 'Takrorlanish', 'mat.clearcoat': 'Lak qatlami', 'mat.transmission': 'Oʻtkazuvchanlik (shisha)', 'mat.ior': 'Sinish koeffitsienti', 'mat.sheen': 'Mato yaltirashi',
+
+  'preset.plastic': 'Plastik', 'preset.rubber': 'Rezina', 'preset.gold': 'Oltin', 'preset.silver': 'Kumush', 'preset.copper': 'Mis', 'preset.chrome': 'Xrom', 'preset.glass': 'Shisha', 'preset.wood': 'Yogʻoch',
+  'preset.stone': 'Tosh', 'preset.neon': 'Neon', 'preset.clay': 'Loy', 'preset.jade': 'Nefrit',
+
+  'panel.props': 'Xususiyatlar', 'panel.scene': 'Sahna', 'panel.settings': 'Sozlamalar', 'panel.expand': 'Kattalashtirish',
+  'stats.objects': 'obyekt', 'stats.lights': 'chiroq', 'stats.tris': 'uchburchak', 'outliner.empty': 'Sahna boʻsh. “+” tugmasi orqali obyekt qoʻshing.',
+
+  'mode.select': 'Tanlash', 'mode.move': 'Siljitish (W)', 'mode.rotate': 'Aylantirish (E)', 'mode.scale': 'Oʻlchamini oʻzgartirish (R)', 'mode.snap': 'Toʻrga yopishish',
+  'mode.snapOn': 'Yopishish yoqildi', 'mode.snapOff': 'Yopishish oʻchirildi', 'mode.space': 'Koordinatalar tizimi', 'mode.world': 'Dunyo koordinatalari', 'mode.local': 'Lokal koordinatalar',
+
+  'set.scene': 'Sahna', 'set.background': 'Fon rangi', 'set.grid': 'Toʻr', 'set.axes': 'Oʻqlar', 'set.shadows': 'Soyalar', 'set.ground': 'Yerdagi soya', 'set.fog': 'Tuman',
+  'set.lighting': 'Yoritish', 'set.env': 'Atrof-muhit aksi', 'set.envIntensity': 'Aks kuchi', 'set.studio': 'Studiya yorugʻligi', 'set.studioIntensity': 'Studiya kuchi', 'set.exposure': 'Yorqinlik',
+  'set.snapping': 'Yopishish qadamlari', 'set.snapMove': 'Siljitish qadami', 'set.snapRotate': 'Aylantirish qadami (°)', 'set.snapScale': 'Masshtab qadami',
+  'set.app': 'Ilova', 'set.quality': 'Grafika sifati', 'set.autosave': 'Avtomatik saqlash', 'set.language': 'Til',
+  'q.auto': 'Avtomatik', 'q.low': 'Past (tez)', 'q.medium': 'Oʻrta', 'q.high': 'Yuqori',
+
+  'file.title': 'Fayl', 'file.new': 'Yangi loyiha', 'file.newSub': 'Boʻsh sahnadan boshlash', 'file.save': 'Saqlash', 'file.saveSub': 'Loyihani qurilmada saqlash', 'file.saveAs': 'Boshqa nom bilan saqlash',
+  'file.projects': 'Mening loyihalarim', 'file.projectsSub': 'Saqlangan loyihalarni ochish', 'file.import': 'Import (model ochish)', 'file.export': 'Eksport (3D fayl)', 'file.screenshot': 'Rasmga olish',
+  'file.screenshotSub': 'Sahnani PNG rasm qilib saqlash', 'file.exportProject': 'Loyihani faylga chiqarish', 'file.exportProjectSub': '.m3d.json — boshqa qurilmada ochish uchun', 'file.help': 'Yordam', 'file.about': 'Ilova haqida',
+  'file.newConfirm': 'Joriy sahna tozalanadi. Davom etasizmi?', 'file.newDone': 'Yangi loyiha yaratildi', 'file.projectName': 'Loyiha nomi', 'file.untitled': 'Nomsiz loyiha', 'file.saved': 'Saqlandi',
+  'file.noProjects': 'Hali saqlangan loyiha yoʻq.', 'file.deleteConfirm': 'Loyihani oʻchirasizmi', 'file.opened': 'Ochildi', 'file.imported': 'Import qilindi', 'file.exporting': 'Eksport qilinmoqda…', 'file.savedTo': 'Saqlandi:',
+  'export.glb': 'Eng qulay format: rang va materiallar bilan bitta fayl', 'export.gltf': 'Matnli glTF (JSON)', 'export.obj': 'Koʻp dasturlar ochadi (materialsiz)', 'export.stl': '3D printer uchun', 'export.ply': 'Nuqtalar va rang maʼlumoti',
+  'export.onlySelected': 'Faqat tanlangan obyekt',
+
+  'tool.title': 'Vositalar', 'tool.for': 'Tanlangan', 'tool.boolean': 'Boolean (kesish/qoʻshish)', 'tool.array': 'Massiv (koʻpaytirish)', 'tool.mirror': 'Koʻzgu', 'tool.ground': 'Yerga qoʻyish', 'tool.center': 'Markazga',
+  'tool.reset': 'Aylanish va oʻlchamni tiklash', 'tool.merge': 'Bitta obyektga birlashtirish', 'tool.smooth': 'Silliq yuzalar', 'tool.flat': 'Qirrali yuzalar', 'tool.bake': 'Shaklni muzlatish', 'tool.up': 'Roʻyxatda yuqoriga', 'tool.down': 'Roʻyxatda pastga',
+  'bool.union': 'Qoʻshish', 'bool.subtract': 'Ayirish (kesish)', 'bool.intersect': 'Kesishma', 'bool.operation': 'Amal', 'bool.with': 'Ikkinchi obyekt', 'bool.keep': 'Ikkinchisini saqlash (yashirib)',
+  'bool.hint': 'Tanlangan obyektdan ikkinchi obyekt ayiriladi, qoʻshiladi yoki umumiy qismi olinadi.', 'bool.needTwo': 'Buning uchun sahnada kamida ikkita obyekt boʻlishi kerak', 'bool.working': 'Hisoblanmoqda…',
+  'array.count': 'Soni', 'array.mode': 'Usul', 'array.line': 'Toʻgʻri chiziq', 'array.circle': 'Aylana', 'array.radius': 'Radius', 'array.axis': 'Oʻq',
+  'mirror.copy': 'Nusxa yaratish', 'mirror.x': 'X boʻyicha', 'mirror.y': 'Y boʻyicha', 'mirror.z': 'Z boʻyicha',
+
+  'view.title': 'Koʻrinish', 'view.persp': 'Perspektiva', 'view.top': 'Yuqoridan', 'view.bottom': 'Pastdan', 'view.front': 'Oldindan', 'view.back': 'Orqadan', 'view.right': 'Oʻngdan', 'view.left': 'Chapdan',
+  'view.all': 'Hammasini koʻrsatish', 'view.autorotate': 'Avtomatik aylanish (namoyish)',
+
+  'err.webgl': '3D grafikani ishga tushirib boʻlmadi (WebGL).', 'err.save': 'Saqlashda xatolik', 'err.open': 'Loyihani ochib boʻlmadi', 'err.import': 'Faylni ochib boʻlmadi', 'err.export': 'Eksportda xatolik',
+  'err.image': 'Rasmni yuklab boʻlmadi', 'err.parent': 'Bu obyektni bunga biriktirib boʻlmaydi', 'err.selectFirst': 'Avval obyekt tanlang', 'err.tool': 'Vositani qoʻllab boʻlmadi', 'err.boolean': 'Boolean amali bajarilmadi (yopiq shakllar kerak)',
+
+  'about.text': 'Telefonda 3D modellar yaratish uchun yengil muharrir: shakllar, materiallar, yorugʻlik, boolean amallar, import/eksport (GLB, OBJ, STL). Kodi ochiq va oson kengaytiriladi.',
+  'help.1': '<b>Kamera:</b> bir barmoq — aylantirish, ikki barmoq — yaqinlashtirish va surish.',
+  'help.2': '<b>Tanlash:</b> obyekt ustiga bosing. Boʻsh joyga bosilsa tanlov bekor boʻladi.',
+  'help.3': '<b>Oʻzgartirish:</b> chapdagi tugmalar: siljitish, aylantirish, oʻlcham. Rangli strelkalarni torting.',
+  'help.4': '<b>Aniq qiymatlar:</b> pastdagi “Xususiyatlar” panelida raqamlarni kiriting.',
+  'help.5': '<b>Magnit</b> tugmasi obyektni toʻr qadamlariga yopishtiradi.',
+  'help.6': '<b>Vositalar</b> (sehrli tayoqcha): boolean, massiv, koʻzgu, birlashtirish va boshqalar.',
+  'help.7': '<b>Saqlash:</b> Fayl → Saqlash. Ish avtomatik ham saqlanadi. Eksport fayllari “Download/Mini3D” papkasiga tushadi.',
+  'help.8': '<b>Klaviatura:</b> W/E/R — rejimlar, F — fokus, Del — oʻchirish, Ctrl+Z/Y — orqaga/oldinga, Ctrl+D — nusxa.',
+};
+
+const en = {
+  ok: 'OK', cancel: 'Cancel', close: 'Close', confirm: 'Confirm', delete: 'Delete', apply: 'Apply', done: 'Done',
+  loading: 'Loading…', duplicate: 'Duplicate', focus: 'Focus', undo: 'Undo', redo: 'Redo', undone: 'Undone', redone: 'Redone',
+  welcome: 'Welcome! Tap an object to select it, tap “+” to add new ones.',
+  'add.title': 'Add', 'add.basic': 'Basic shapes', 'add.extra': 'More shapes', 'add.shapes': 'Special shapes', 'add.lights': 'Lights', 'add.other': 'Other',
+  'prim.box': 'Cube', 'prim.sphere': 'Sphere', 'prim.cylinder': 'Cylinder', 'prim.cone': 'Cone', 'prim.torus': 'Torus', 'prim.plane': 'Plane', 'prim.capsule': 'Capsule', 'prim.pyramid': 'Pyramid',
+  'prim.ico': 'Icosahedron', 'prim.dodeca': 'Dodecahedron', 'prim.octa': 'Octahedron', 'prim.tetra': 'Tetrahedron', 'prim.knot': 'Torus knot', 'prim.circle': 'Disc', 'prim.ring': 'Flat ring', 'prim.tube': 'Pipe',
+  'prim.star': 'Star', 'prim.heart': 'Heart', 'prim.arch': 'Arch', 'prim.stairs': 'Stairs', 'prim.spring': 'Spring', 'prim.gear': 'Gear', 'prim.text': '3D text',
+  'p.width': 'Width', 'p.height': 'Height', 'p.depth': 'Depth', 'p.length': 'Length', 'p.segments': 'Segments', 'p.radius': 'Radius', 'p.wseg': 'Width segments', 'p.hseg': 'Height segments',
+  'p.rtop': 'Top radius', 'p.rbottom': 'Bottom radius', 'p.rseg': 'Radial segments', 'p.open': 'Open ended', 'p.tube': 'Tube radius', 'p.tseg': 'Tubular segments', 'p.arc': 'Arc (deg)',
+  'p.capseg': 'Cap segments', 'p.base': 'Base radius', 'p.sides': 'Sides', 'p.detail': 'Detail', 'p.p': 'P (winds)', 'p.q': 'Q (winds)', 'p.rin': 'Inner radius', 'p.rout': 'Outer radius',
+  'p.points': 'Points', 'p.bevel': 'Bevel', 'p.size': 'Size', 'p.thick': 'Thickness', 'p.steps': 'Steps', 'p.stepH': 'Step height', 'p.stepD': 'Step depth',
+  'p.turns': 'Turns', 'p.teeth': 'Teeth', 'p.toothD': 'Tooth depth', 'p.hole': 'Hole radius', 'p.text': 'Text', 'p.quality': 'Quality',
+  'light.PointLight': 'Point light', 'light.SpotLight': 'Spot light', 'light.DirectionalLight': 'Sun', 'light.HemisphereLight': 'Sky light', 'light.AmbientLight': 'Ambient light',
+  'light.intensity': 'Intensity', 'light.distance': 'Distance (0 = infinite)', 'light.decay': 'Decay', 'light.angle': 'Angle', 'light.penumbra': 'Penumbra', 'light.castShadow': 'Cast shadow', 'light.groundColor': 'Ground color',
+  'obj.group': 'Group', 'obj.mesh': 'Object', 'obj.model': 'Imported model', 'obj.visible': 'Visible', 'obj.locked': 'Locked', 'obj.castShadow': 'Cast shadow', 'obj.receiveShadow': 'Receive shadow', 'obj.parent': 'Parent', 'obj.root': 'Scene',
+  'props.empty': 'Nothing selected. Tap an object in the scene or add a new one.', 'props.transform': 'Transform', 'props.position': 'Position', 'props.rotation': 'Rotation (°)', 'props.scale': 'Scale',
+  'props.uniform': 'Uniform', 'props.geometry': 'Shape', 'props.material': 'Material', 'props.light': 'Light', 'props.object': 'Object', 'props.info': 'Info', 'info.size': 'Size', 'info.vertsTris': 'Vertices / triangles',
+  'mat.type': 'Type', 'mat.standard': 'Standard (PBR)', 'mat.physical': 'Physical (glass, coat)', 'mat.matte': 'Matte', 'mat.toon': 'Toon', 'mat.basic': 'Unlit', 'mat.normal': 'Normal',
+  'mat.color': 'Color', 'mat.metalness': 'Metalness', 'mat.roughness': 'Roughness', 'mat.opacity': 'Opacity', 'mat.emissive': 'Emissive color', 'mat.emissiveIntensity': 'Emissive intensity',
+  'mat.wireframe': 'Wireframe', 'mat.flat': 'Flat shading', 'mat.doubleSide': 'Double sided', 'mat.texture': 'Texture', 'mat.addTexture': 'Pick image', 'mat.changeTexture': 'Change image', 'mat.removeTexture': 'Remove texture',
+  'mat.repeat': 'Repeat', 'mat.clearcoat': 'Clearcoat', 'mat.transmission': 'Transmission', 'mat.ior': 'IOR', 'mat.sheen': 'Sheen',
+  'preset.plastic': 'Plastic', 'preset.rubber': 'Rubber', 'preset.gold': 'Gold', 'preset.silver': 'Silver', 'preset.copper': 'Copper', 'preset.chrome': 'Chrome', 'preset.glass': 'Glass', 'preset.wood': 'Wood',
+  'preset.stone': 'Stone', 'preset.neon': 'Neon', 'preset.clay': 'Clay', 'preset.jade': 'Jade',
+  'panel.props': 'Properties', 'panel.scene': 'Scene', 'panel.settings': 'Settings', 'panel.expand': 'Expand',
+  'stats.objects': 'objects', 'stats.lights': 'lights', 'stats.tris': 'triangles', 'outliner.empty': 'Scene is empty. Add objects with “+”.',
+  'mode.select': 'Select', 'mode.move': 'Move (W)', 'mode.rotate': 'Rotate (E)', 'mode.scale': 'Scale (R)', 'mode.snap': 'Snap', 'mode.snapOn': 'Snapping on', 'mode.snapOff': 'Snapping off',
+  'mode.space': 'Coordinate space', 'mode.world': 'World space', 'mode.local': 'Local space',
+  'set.scene': 'Scene', 'set.background': 'Background', 'set.grid': 'Grid', 'set.axes': 'Axes', 'set.shadows': 'Shadows', 'set.ground': 'Ground shadow', 'set.fog': 'Fog',
+  'set.lighting': 'Lighting', 'set.env': 'Environment reflections', 'set.envIntensity': 'Reflection strength', 'set.studio': 'Studio lights', 'set.studioIntensity': 'Studio strength', 'set.exposure': 'Exposure',
+  'set.snapping': 'Snap steps', 'set.snapMove': 'Move step', 'set.snapRotate': 'Rotate step (°)', 'set.snapScale': 'Scale step', 'set.app': 'App', 'set.quality': 'Graphics quality', 'set.autosave': 'Autosave', 'set.language': 'Language',
+  'q.auto': 'Auto', 'q.low': 'Low (fast)', 'q.medium': 'Medium', 'q.high': 'High',
+  'file.title': 'File', 'file.new': 'New project', 'file.newSub': 'Start with an empty scene', 'file.save': 'Save', 'file.saveSub': 'Save project on device', 'file.saveAs': 'Save as…',
+  'file.projects': 'My projects', 'file.projectsSub': 'Open saved projects', 'file.import': 'Import model', 'file.export': 'Export 3D file', 'file.screenshot': 'Screenshot', 'file.screenshotSub': 'Save the scene as PNG',
+  'file.exportProject': 'Export project file', 'file.exportProjectSub': '.m3d.json — open on another device', 'file.help': 'Help', 'file.about': 'About',
+  'file.newConfirm': 'The current scene will be cleared. Continue?', 'file.newDone': 'New project created', 'file.projectName': 'Project name', 'file.untitled': 'Untitled', 'file.saved': 'Saved',
+  'file.noProjects': 'No saved projects yet.', 'file.deleteConfirm': 'Delete project', 'file.opened': 'Opened', 'file.imported': 'Imported', 'file.exporting': 'Exporting…', 'file.savedTo': 'Saved:',
+  'export.glb': 'Best choice: one file with colors and materials', 'export.gltf': 'Text glTF (JSON)', 'export.obj': 'Widely supported (no materials)', 'export.stl': 'For 3D printing', 'export.ply': 'Points and colors', 'export.onlySelected': 'Selected object only',
+  'tool.title': 'Tools', 'tool.for': 'Selected', 'tool.boolean': 'Boolean', 'tool.array': 'Array', 'tool.mirror': 'Mirror', 'tool.ground': 'Drop to ground', 'tool.center': 'Center',
+  'tool.reset': 'Reset rotation & scale', 'tool.merge': 'Merge into one mesh', 'tool.smooth': 'Smooth shading', 'tool.flat': 'Flat normals', 'tool.bake': 'Bake shape', 'tool.up': 'Move up in list', 'tool.down': 'Move down in list',
+  'bool.union': 'Union', 'bool.subtract': 'Subtract', 'bool.intersect': 'Intersect', 'bool.operation': 'Operation', 'bool.with': 'Second object', 'bool.keep': 'Keep second (hidden)',
+  'bool.hint': 'Combines the selected object with a second one.', 'bool.needTwo': 'You need at least two objects', 'bool.working': 'Computing…',
+  'array.count': 'Count', 'array.mode': 'Mode', 'array.line': 'Line', 'array.circle': 'Circle', 'array.radius': 'Radius', 'array.axis': 'Axis',
+  'mirror.copy': 'Create copy', 'mirror.x': 'Along X', 'mirror.y': 'Along Y', 'mirror.z': 'Along Z',
+  'view.title': 'View', 'view.persp': 'Perspective', 'view.top': 'Top', 'view.bottom': 'Bottom', 'view.front': 'Front', 'view.back': 'Back', 'view.right': 'Right', 'view.left': 'Left', 'view.all': 'Frame all', 'view.autorotate': 'Auto-rotate (showcase)',
+  'err.webgl': 'Could not start 3D graphics (WebGL).', 'err.save': 'Save failed', 'err.open': 'Could not open project', 'err.import': 'Could not open file', 'err.export': 'Export failed',
+  'err.image': 'Could not load image', 'err.parent': 'Cannot parent to that object', 'err.selectFirst': 'Select an object first', 'err.tool': 'Tool failed', 'err.boolean': 'Boolean failed (closed shapes needed)',
+  'about.text': 'A lightweight editor for creating 3D models on your phone: shapes, materials, lights, booleans, import/export (GLB, OBJ, STL). Open and easy to extend.',
+  'help.1': '<b>Camera:</b> one finger rotates, two fingers zoom and pan.', 'help.2': '<b>Select:</b> tap an object. Tap empty space to deselect.',
+  'help.3': '<b>Transform:</b> left buttons switch move / rotate / scale. Drag the colored handles.', 'help.4': '<b>Exact values:</b> type numbers in the Properties panel.',
+  'help.5': '<b>Magnet</b> snaps to grid steps.', 'help.6': '<b>Tools</b> (magic wand): boolean, array, mirror, merge and more.',
+  'help.7': '<b>Saving:</b> File → Save. Work is also autosaved. Exports go to “Download/Mini3D”.', 'help.8': '<b>Keyboard:</b> W/E/R modes, F focus, Del delete, Ctrl+Z/Y undo/redo, Ctrl+D duplicate.',
+};
+
+const ru = {
+  ok: 'OK', cancel: 'Отмена', close: 'Закрыть', confirm: 'Подтвердите', delete: 'Удалить', apply: 'Применить', done: 'Готово',
+  loading: 'Загрузка…', duplicate: 'Дублировать', focus: 'Фокус', undo: 'Отменить', redo: 'Повторить', undone: 'Отменено', redone: 'Повторено',
+  welcome: 'Добро пожаловать! Нажмите на объект, чтобы выбрать его, «+» — чтобы добавить.',
+  'add.title': 'Добавить', 'add.basic': 'Основные фигуры', 'add.extra': 'Другие фигуры', 'add.shapes': 'Особые фигуры', 'add.lights': 'Освещение', 'add.other': 'Прочее',
+  'prim.box': 'Куб', 'prim.sphere': 'Сфера', 'prim.cylinder': 'Цилиндр', 'prim.cone': 'Конус', 'prim.torus': 'Тор', 'prim.plane': 'Плоскость', 'prim.capsule': 'Капсула', 'prim.pyramid': 'Пирамида',
+  'prim.ico': 'Икосаэдр', 'prim.dodeca': 'Додекаэдр', 'prim.octa': 'Октаэдр', 'prim.tetra': 'Тетраэдр', 'prim.knot': 'Узел', 'prim.circle': 'Диск', 'prim.ring': 'Плоское кольцо', 'prim.tube': 'Труба',
+  'prim.star': 'Звезда', 'prim.heart': 'Сердце', 'prim.arch': 'Арка', 'prim.stairs': 'Лестница', 'prim.spring': 'Пружина', 'prim.gear': 'Шестерня', 'prim.text': '3D текст',
+  'p.width': 'Ширина', 'p.height': 'Высота', 'p.depth': 'Глубина', 'p.length': 'Длина', 'p.segments': 'Сегменты', 'p.radius': 'Радиус', 'p.text': 'Текст', 'p.size': 'Размер',
+  'light.PointLight': 'Точечный свет', 'light.SpotLight': 'Прожектор', 'light.DirectionalLight': 'Солнце', 'light.HemisphereLight': 'Небесный свет', 'light.AmbientLight': 'Рассеянный свет',
+  'light.intensity': 'Яркость', 'light.castShadow': 'Отбрасывает тень',
+  'obj.group': 'Группа', 'obj.mesh': 'Объект', 'obj.model': 'Импортированная модель', 'obj.visible': 'Видимый', 'obj.locked': 'Заблокирован', 'obj.parent': 'Родитель', 'obj.root': 'Сцена',
+  'props.empty': 'Ничего не выбрано. Нажмите на объект или добавьте новый.', 'props.transform': 'Трансформация', 'props.position': 'Позиция', 'props.rotation': 'Поворот (°)', 'props.scale': 'Масштаб',
+  'props.geometry': 'Форма', 'props.material': 'Материал', 'props.light': 'Свет', 'props.object': 'Объект', 'props.info': 'Информация',
+  'mat.type': 'Тип', 'mat.color': 'Цвет', 'mat.metalness': 'Металличность', 'mat.roughness': 'Шероховатость', 'mat.opacity': 'Непрозрачность', 'mat.texture': 'Текстура',
+  'panel.props': 'Свойства', 'panel.scene': 'Сцена', 'panel.settings': 'Настройки',
+  'mode.select': 'Выбор', 'mode.move': 'Перемещение (W)', 'mode.rotate': 'Поворот (E)', 'mode.scale': 'Масштаб (R)', 'mode.snap': 'Привязка',
+  'set.scene': 'Сцена', 'set.background': 'Фон', 'set.grid': 'Сетка', 'set.shadows': 'Тени', 'set.language': 'Язык', 'set.quality': 'Качество графики', 'set.autosave': 'Автосохранение',
+  'file.title': 'Файл', 'file.new': 'Новый проект', 'file.save': 'Сохранить', 'file.saveAs': 'Сохранить как…', 'file.projects': 'Мои проекты', 'file.import': 'Импорт модели', 'file.export': 'Экспорт 3D файла',
+  'file.screenshot': 'Скриншот', 'file.help': 'Помощь', 'file.about': 'О приложении', 'file.untitled': 'Без названия', 'file.saved': 'Сохранено', 'file.savedTo': 'Сохранено:',
+  'tool.title': 'Инструменты', 'tool.boolean': 'Булевы операции', 'tool.array': 'Массив', 'tool.mirror': 'Зеркало', 'tool.ground': 'На землю',
+  'bool.union': 'Объединение', 'bool.subtract': 'Вычитание', 'bool.intersect': 'Пересечение',
+  'view.title': 'Вид', 'view.top': 'Сверху', 'view.front': 'Спереди', 'view.right': 'Справа', 'view.all': 'Показать всё',
+};
+
+const dict = { uz, en, ru };
+let lang = 'uz';
+
+export function setLang(l) {
+  lang = dict[l] ? l : 'uz';
+}
+export function getLang() {
+  return lang;
+}
+export function t(key) {
+  return dict[lang]?.[key] ?? (lang !== 'uz' ? en[key] : undefined) ?? uz[key] ?? key;
+}

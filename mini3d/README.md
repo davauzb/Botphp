@@ -1,0 +1,121 @@
+# Mini 3D Muharrir (Android)
+
+Telefonda 3D model yaratish uchun yengil muharrir. Ilova to'liq oflayn ishlaydi.
+3D qism [three.js](https://threejs.org) asosida, Android qismi esa WebView.
+
+**Tayyor APK:** [`release/Mini3D-v1.0.apk`](release/Mini3D-v1.0.apk) (Android 7.0 va undan yuqori)
+
+## Imkoniyatlar
+
+| Bo'lim | Nimalar bor |
+|---|---|
+| **Shakllar (23 ta)** | Kub, shar, silindr, konus, tor, tekislik, kapsula, piramida, ikosaedr, dodekaedr, oktaedr, tetraedr, tugun, doira, yassi halqa, quvur, yulduz, yurak, ark, zina, prujina, tishli g'ildirak, 3D matn. Har birining parametrlari (o'lcham, bo'laklar soni va h.k.) keyin ham o'zgartiriladi |
+| **Yorug'lik** | Nuqtali chiroq, projektor, quyosh, osmon nuri, umumiy nur. Rang, kuch, soya |
+| **Tahrirlash** | Siljitish / aylantirish / o'lcham gizmosi, aniq raqamli qiymatlar, to'rga yopishish, dunyo/lokal koordinatalar, ierarxiya (guruhlar, ota obyekt), yashirish, qulflash |
+| **Materiallar** | 6 xil tur (PBR, shisha/lak, xira, multfilm, yoritilmagan, normal), 12 ta tayyor andoza (oltin, kumush, shisha, neon...), rang, metallik, g'adir-budurlik, shaffoflik, nur sochish, karkas, rasmdan tekstura |
+| **Vositalar** | Boolean (qo'shish / ayirish / kesishma), massiv (chiziq yoki aylana bo'ylab), ko'zgu, yerga qo'yish, birlashtirish, silliq/qirrali yuzalar, shaklni muzlatish |
+| **Fayllar** | Loyihalarni saqlash/ochish (rasmli ro'yxat bilan), avtomatik saqlash, **import:** GLB, glTF, OBJ, STL, PLY; **eksport:** GLB, glTF, OBJ, STL (3D printer uchun), PLY, PNG rasm, loyiha fayli (.m3d.json) |
+| **Boshqalar** | Cheksiz orqaga/oldinga (undo/redo), kamera ko'rinishlari (yuqori, old, yon...), namoyish uchun avtomatik aylanish, sahna sozlamalari (fon, to'r, soyalar, tuman, yorqinlik), grafika sifati, 3 til (o'zbek, ingliz, rus), planshet va klaviatura qo'llab-quvvatlanadi |
+
+Eksport qilingan fayllar telefonning **Download/Mini3D** papkasiga tushadi.
+
+## Loyiha tuzilishi
+
+```
+mini3d/
+├── web/                     ← muharrirning o'zi (JavaScript)
+│   ├── public/              index.html, style.css (dizayn)
+│   ├── src/
+│   │   ├── main.js          kirish nuqtasi
+│   │   ├── editor.js        3D yadro: sahna, kamera, tanlash, saqlash
+│   │   ├── primitives.js    SHAKLLAR reestri
+│   │   ├── materials.js     material turlari va andozalar
+│   │   ├── tools.js         modellash vositalari
+│   │   ├── io.js            import / eksport
+│   │   ├── history.js       undo / redo
+│   │   ├── storage.js       loyihalarni saqlash (IndexedDB)
+│   │   ├── i18n.js          tarjimalar
+│   │   ├── icons.js         belgilar
+│   │   └── ui/              interfeys (panellar, menyular)
+│   └── build.mjs            yig'ish skripti
+├── android/                 ← Android ilova (Java, WebView)
+└── release/                 ← tayyor APK
+```
+
+## Yig'ish (build)
+
+Kerak: Node.js 18+, JDK 17+, Android SDK (platform 35).
+
+```bash
+cd mini3d/web
+npm install
+npm run build          # veb qismni android/app/src/main/assets ga yozadi
+
+cd ../android
+./gradlew assembleRelease
+# APK: android/app/build/outputs/apk/release/app-release.apk
+```
+
+Brauzerda sinash (telefonsiz): `cd mini3d/web && npm run dev`, so'ng http://localhost:8000 ni oching.
+
+**GitHub Actions:** `mini3d/` papkasidagi har bir o'zgarishdan keyin APK avtomatik yig'iladi
+(Actions → *Mini3D APK* → Artifacts).
+
+> **Imzo kaliti haqida.** Ilovani o'chirmasdan yangilash uchun har safar bir xil kalit bilan imzolash kerak.
+> O'z kalitingizni yarating (`keytool -genkeypair -keystore mini3d.jks -alias mini3d ...`),
+> keyin `MINI3D_KEYSTORE`, `MINI3D_KEYSTORE_PASSWORD` muhit o'zgaruvchilarini bering
+> (GitHub'da: `MINI3D_KEYSTORE_BASE64` va `MINI3D_KEYSTORE_PASSWORD` secret'lari).
+> Kalit faylini repoga qo'shmang.
+
+## Qanday kengaytirish mumkin
+
+Ilova qismlarga ajratilgan, yangi imkoniyat qo'shish uchun odatda bitta faylni tahrirlash kifoya.
+
+### Yangi shakl qo'shish (`src/primitives.js`)
+
+```js
+registerPrimitive({
+  id: 'tabletop',               // noyob nom
+  label: 'prim.tabletop',       // tarjima kaliti (i18n.js ga qo'shing)
+  icon: 'cube',                 // icons.js dagi belgi
+  category: 'shape',            // 'basic' | 'extra' | 'shape'
+  params: [                     // panelda avtomatik paydo bo'ladi
+    n('width', 'p.width', 1.2, 0.1, 10),
+    n('height', 'p.height', 0.8, 0.1, 10),
+  ],
+  build: (p) => toPlain(new THREE.BoxGeometry(p.width, 0.05, p.width).translate(0, p.height, 0)),
+});
+```
+
+"Qo'shish" menyusi, xususiyatlar paneli, saqlash va undo hammasi avtomatik ishlaydi.
+
+### Yangi vosita qo'shish (`src/tools.js`)
+
+```js
+registerTool({
+  label: 'Tasodifiy rang',
+  icon: 'palette',
+  run(editor, obj) {
+    obj.traverse((o) => o.material?.color?.setHSL(Math.random(), 0.7, 0.55));
+    editor.commit('random-color');  // undo tarixiga yozish
+  },
+});
+```
+
+Vosita "Vositalar" (sehrli tayoqcha) menyusida paydo bo'ladi.
+
+### Boshqalar
+
+- **Material andozasi:** `materials.js` → `materialPresets` ro'yxatiga element qo'shing.
+- **Yangi til:** `i18n.js` → `languages` va yangi lug'at obyekti.
+- **Dizayn/ranglar:** `public/style.css` boshidagi `:root` o'zgaruvchilari.
+- **Yangi eksport formati:** `io.js` → `exportFormats` va `exportModel()`.
+
+### Keyingi qadamlar uchun g'oyalar
+
+- Bir nechta obyektni birdaniga tanlash
+- Uchlar/qirralar darajasida tahrirlash (vertex/edge editing)
+- Animatsiya (keyframe) va video yozish
+- Modifikatorlar: subdivision, bevel, deform
+- Tayyor modellar kutubxonasi (mebel, daraxt va h.k.)
+- AR rejimida ko'rish (ARCore)

@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'uz.mini3d.editor'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'uz.mini3d.editor'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    // Imzolash: agar MINI3D_KEYSTORE muhit o'zgaruvchisi berilsa, o'sha kalit ishlatiladi
+    // (ilovani yangilashda bir xil kalit kerak). Aks holda debug kalit ishlatiladi.
+    signingConfigs {
+        release {
+            def ks = System.getenv('MINI3D_KEYSTORE')
+            if (ks != null && file(ks).exists()) {
+                storeFile file(ks)
+                storePassword System.getenv('MINI3D_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('MINI3D_KEY_ALIAS') ?: 'mini3d'
+                keyPassword System.getenv('MINI3D_KEY_PASSWORD') ?: System.getenv('MINI3D_KEYSTORE_PASSWORD')
+            } else {
+                def dbg = signingConfigs.debug
+                storeFile dbg.storeFile
+                storePassword dbg.storePassword
+                keyAlias dbg.keyAlias
+                keyPassword dbg.keyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // .json/.js fayllar siqilmasin (WebView tezroq o'qiydi)
+    androidResources {
+        noCompress 'js', 'css', 'html'
+    }
+}
