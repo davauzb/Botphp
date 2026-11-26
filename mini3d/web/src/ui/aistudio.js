@@ -7,6 +7,7 @@ import { analyzeImage, makePlan, applyPlan } from '../ai/director.js';
 import { cloudProviders, canvasToPng } from '../ai/cloud3d.js';
 import { isModelCached, MODELS } from '../ai/runtime.js';
 import { recordVideo } from './timeline.js';
+import { parseDescription, buildCreature } from '../ai/textgen.js';
 import { icon } from '../icons.js';
 import { t } from '../i18n.js';
 
@@ -132,13 +133,86 @@ export function openAIStudio(editor, app) {
     } catch (e) {
       console.error(e);
       progress.classList.remove('show');
-      result.append(h('div.ai-error', '⚠️ ' + (e.message || t('err.tool'))));
+      const msg = String(e.message || t('err.tool'));
+      result.append(h('div.ai-error', '⚠️ ' + (msg.startsWith('quota:') ? t('ai.quota') : msg)));
     } finally {
       startBtn.disabled = false;
     }
   });
 
-  const body = h('div.ai-studio', h('p.hint', t('ai.intro')), preview, h('div.menu-label', t('ai.mode')), modeList, opts, startBtn, progress, result);
+  // ---------- Matndan yaratish ----------
+  const ta = h('textarea.input.ai-text', { rows: 3, placeholder: t('tg.placeholder') });
+  const examples = ['tg.ex1', 'tg.ex2', 'tg.ex3', 'tg.ex4', 'tg.ex5'].map((k) => h('button.chip', { type: 'button', on: { click: () => ((ta.value = t(k)), preview2()) } }, t(k)));
+  const understoodEl = h('div.ai-understood');
+  const preview2 = () => {
+    const { understood } = parseDescription(ta.value);
+    understoodEl.innerHTML = '';
+    if (!ta.value.trim()) return;
+    understoodEl.append(...understood.map(([k, v, w]) => h('span.chip.on', k + ': ' + v + (w && w !== '—' ? ` («${w}»)` : ''))));
+  };
+  ta.addEventListener('input', preview2);
+  const genBtn = h('button.btn.primary.ai-start', { type: 'button' }, h('span', { html: icon('magic', 18) }), t('tg.create'));
+  const result2 = h('div.ai-result');
+  genBtn.addEventListener('click', async () => {
+    if (!ta.value.trim()) return toast(t('tg.empty'), 'error');
+    if (editor.content.children.length && app.dirty && !(await confirmDialog(t('ai.newSceneConfirm')))) return;
+    const { spec, understood } = parseDescription(ta.value);
+    app.busy(true, t('tg.building'));
+    await new Promise((r) => setTimeout(r, 50));
+    try {
+      editor.animator.stop();
+      editor.clear();
+      const root = buildCreature(editor, spec);
+      editor.syncLightProxies();
+      editor.emit('sceneGraphChanged');
+      editor.history.reset();
+      // Kamerani butun maxluqqa moslash (old-chap tomondan, 3/4 ko'rinish)
+      root.updateMatrixWorld(true);
+      const bb = new THREE.Box3();
+      root.traverse((o) => o.isMesh && o.visible && bb.expandByObject(o));
+      const c = bb.getCenter(new THREE.Vector3()), r = bb.getSize(new THREE.Vector3()).length() * 0.5;
+      editor.orbit.target.copy(c);
+      editor.camera.position.copy(c).add(new THREE.Vector3(-0.7, 0.32, 0.64).normalize().multiplyScalar(r * 2.3));
+      editor.orbit.update();
+      app.projectId = null;
+      app.projectName = root.name;
+      app.updateTitle();
+      app.markSaved();
+      app.showTimeline(true);
+      editor.animator.play();
+      result2.innerHTML = '';
+      result2.append(
+        h('div.ai-title', t('tg.understood')),
+        h('ul.ai-steps', ...understood.map(([k, v]) => h('li', k + ': ' + v))),
+        h('p.hint', t('tg.editHint')),
+        h(
+          'div.dialog-actions',
+          h('button.btn', { type: 'button', on: { click: () => sheet.close() } }, t('ai.view')),
+          h('button.btn.primary', { type: 'button', on: { click: () => (sheet.close(), recordVideo(editor.animator, editor, app)) } }, h('span', { html: icon('record', 18) }), t('anim.record'))
+        )
+      );
+    } catch (e) {
+      console.error(e);
+      result2.innerHTML = '';
+      result2.append(h('div.ai-error', '⚠️ ' + (e.message || t('err.tool'))));
+    } finally {
+      app.busy(false);
+    }
+  });
+  const textPane = h('div.ai-pane', h('p.hint', t('tg.intro')), ta, h('div.ai-chips', ...examples), understoodEl, genBtn, result2);
+  const imagePane = h('div.ai-pane', h('p.hint', t('ai.intro')), preview, h('div.menu-label', t('ai.mode')), modeList, opts, startBtn, progress, result);
+  const tabImg = h('button.panel-tab.active', { type: 'button' }, '🖼 ' + t('tg.fromImage'));
+  const tabTxt = h('button.panel-tab', { type: 'button' }, '✍️ ' + t('tg.fromText'));
+  const showPane = (txt) => {
+    tabTxt.classList.toggle('active', txt);
+    tabImg.classList.toggle('active', !txt);
+    textPane.style.display = txt ? '' : 'none';
+    imagePane.style.display = txt ? 'none' : '';
+  };
+  tabImg.addEventListener('click', () => showPane(false));
+  tabTxt.addEventListener('click', () => showPane(true));
+  showPane(false);
+  const body = h('div.ai-studio', h('div.panel-tabs.ai-tabs', tabImg, tabTxt), imagePane, textPane);
   const sheet = openSheet('✨ ' + t('ai.title'), body, { wide: true });
   renderModes();
   renderOpts();

@@ -322,3 +322,9 @@ body.sculpting .toolstrip .icon-btn[data-mode] { opacity: .55; }
 .tut-steps { padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
 .tut-steps li { line-height: 1.45; }
 .tut-btn { margin-top: 6px; display: flex; height: 36px; }
+.ai-tabs { padding: 0 0 4px; }
+.ai-pane { display: flex; flex-direction: column; gap: 10px; }
+.ai-text { height: auto; min-height: 76px; padding: 10px; resize: vertical; line-height: 1.4; }
+.ai-chips, .ai-understood { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-chips .chip { padding: 6px 10px; font-size: 12px; }
+.ai-understood .chip { font-size: 11px; }

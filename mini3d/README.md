@@ -3,7 +3,17 @@
 Telefonda 3D model yaratish uchun yengil muharrir. Ilova to'liq oflayn ishlaydi.
 3D qism [three.js](https://threejs.org) asosida, Android qismi esa WebView.
 
-**Tayyor APK:** [`release/Mini3D-v3.1.apk`](release/Mini3D-v3.1.apk) (Android 7.0 va undan yuqori)
+**Tayyor APK:** [`release/Mini3D-v3.2.apk`](release/Mini3D-v3.2.apk) (Android 7.0 va undan yuqori)
+
+## v3.2 — matndan maxluq va bepul bulut 3D (kalitsiz)
+
+**✍️ Matndan (AI Studiya → Matndan):** "olovli feniks, oltin shoxli, qizil tangachali" → bir necha soniyada to'liq 3D maxluq.
+- O'zbek, rus, ingliz so'zlarini tushunadi: tur (ajdar, feniks, uzun ajdar, qush, hayvon, jangchi), stixiya (olov, muz, chaqmoq, tabiat, sehr, qorong'ulik, suv), ranglar (tana, qorin, bezak), qanot, shox soni, zirh, o'lcham
+- Tushunilgan har bir so'zni ko'rsatadi; internetsiz, kalitsiz, bir zumda
+- Generator: skelet → organik tana → tangacha → patli qanotlar → shox/tirnoq/zirh → effektlar → harakat
+- Kichik til modeli (Qwen2.5-0.5B, 512 MB) ham sinab ko'rildi: o'zbek tilini yomon tushundi va telefonda 1–2 daqiqa ishlaydi — shuning uchun tezkor qoidaviy tahlilchi tanlandi
+
+**☁️ Bepul bulut 3D (kalitsiz):** TRELLIS (Microsoft) va Hunyuan3D-2 (Tencent) — Gradio navbat protokoli (session_hash, start_session) orqali. HuggingFace'ning bepul GPU limiti bor; limit tugasa bepul token kiritish mumkin.
 
 ## v3.1 — qo'lda professional ish uchun vositalar (AI'siz)
 

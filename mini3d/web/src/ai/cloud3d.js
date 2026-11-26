@@ -88,70 +88,102 @@ const json = (res) => {
 };
 
 // ---------------- Gradio (HuggingFace Space) ----------------
+/**
+ * Gradio Space bilan "brauzer kabi" ishlaydi:
+ *  1) /config — komponentlar va funksiyalar (Gradio 4 va 5)
+ *  2) sahifa ochilganda ishlaydigan funksiyalar (masalan, start_session)
+ *  3) rasm yuklash → navbatga qo'shilish (session_hash bilan) → natija (SSE)
+ */
 async function gradio(space, png, { token, onProgress }) {
   const base = `https://${space.replace('/', '-').toLowerCase().replace(/[^a-z0-9-]/g, '-')}.hf.space`;
   const auth = token ? { Authorization: `Bearer ${token}` } : {};
   onProgress?.(0.05, 'cloud-connect');
-  const info = json(await http({ url: `${base}/gradio_api/info`, headers: auth, timeout: 60000 }));
-  const eps = Object.entries(info.named_endpoints || {});
-  const score = ([name, ep]) => {
-    const hasImage = ep.parameters.some((p) => /image/i.test(p.component || '') && !/mv_/i.test(p.parameter_name || ''));
-    const has3d = ep.returns.some((r) => /model3d|file/i.test(r.component || ''));
-    if (!hasImage || !has3d) return -1;
-    let s = 1;
-    if (/all|textur/i.test(name)) s += 3;
-    if (/shape|generat|image_to_3d|i23d/i.test(name)) s += 2;
-    return s;
-  };
-  const pick = eps.map((e) => [e, score(e)]).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1])[0]?.[0];
-  if (!pick) throw new Error('Space API topilmadi');
-  const [epName, ep] = pick;
+  const cfgRes = await http({ url: `${base}/config`, headers: auth, timeout: 60000 });
+  if (cfgRes.status >= 400) throw new Error('Server javob bermadi (' + cfgRes.status + ') — Space uxlab yotgan boʻlishi mumkin, 1 daqiqadan keyin qayta urinib koʻring');
+  const cfg = json(cfgRes);
+  const prefix = cfg.api_prefix || (String(cfg.version || '').startsWith('4') ? '' : '/gradio_api');
+  const comps = new Map(cfg.components.map((c) => [c.id, c]));
+  const deps = cfg.dependencies.map((d, i) => ({ ...d, fn_index: d.id ?? i }));
+  const type = (id) => (comps.get(id)?.type || '').toLowerCase();
 
-  // Rasmni yuklash
+  // Asosiy funksiyani tanlash: rasm kiradi, 3D chiqadi
+  const score = (d) => {
+    const ins = d.inputs.map(type), outs = d.outputs.map(type);
+    if (!ins.includes('image') || !outs.some((t) => /model3d|file|downloadbutton/.test(t))) return -1;
+    let sc = 1;
+    if (/all|textur|extract_glb/i.test(d.api_name || '')) sc += 3;
+    if (/shape|generat|image_to_3d/i.test(d.api_name || '')) sc += 2;
+    if (outs.some((t) => /model3d/.test(t))) sc += 1;
+    return sc;
+  };
+  const main = deps.map((d) => [d, score(d)]).filter(([, sc]) => sc > 0).sort((x, y) => y[1] - x[1])[0]?.[0];
+  if (!main) throw new Error('Space API topilmadi');
+
+  const session = 'm3d' + Math.random().toString(36).slice(2, 12);
+  const runFn = async (dep, data, onStage) => {
+    const join = json(await http({
+      method: 'POST', url: `${base}${prefix}/queue/join`, headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data, event_data: null, fn_index: dep.fn_index, trigger_id: null, session_hash: session }), timeout: 60000,
+    }));
+    if (!join.event_id) throw new Error(join.detail || 'Navbatga qoʻshilmadi');
+    onStage?.();
+    const sse = await http({ url: `${base}${prefix}/queue/data?session_hash=${session}`, headers: auth, timeout: 900000 });
+    const msgs = sse.text.split('\n').filter((l) => l.startsWith('data:')).map((l) => {
+      try { return JSON.parse(l.slice(5)); } catch { return null; }
+    }).filter(Boolean);
+    const done = msgs.find((m) => m.msg === 'process_completed' && m.event_id === join.event_id);
+    if (!done) throw new Error('Server natija bermadi');
+    if (!done.success) {
+      const err = done.output?.error || done.title || 'xato';
+      if (/quota/i.test(err)) throw new Error('quota:' + err);
+      throw new Error(err);
+    }
+    return done.output?.data || [];
+  };
+
+  // Sahifa ochilganda ishlaydigan funksiyalar (sessiya papkasi va h.k.)
+  for (const d of deps) {
+    if ((d.targets || []).some((t) => t[1] === 'load') && !d.inputs.length && d.backend_fn !== false) {
+      try { await runFn(d, []); } catch (e) { console.warn('load fn', e); }
+    }
+  }
+
   onProgress?.(0.1, 'cloud-upload');
   const mp = multipart('files', 'input.png', 'image/png', png);
-  const up = json(await http({ method: 'POST', url: `${base}/gradio_api/upload`, headers: { ...auth, 'Content-Type': mp.contentType }, body: mp.body, timeout: 120000 }));
+  const up = json(await http({ method: 'POST', url: `${base}${prefix}/upload`, headers: { ...auth, 'Content-Type': mp.contentType }, body: mp.body, timeout: 120000 }));
   const path = Array.isArray(up) ? up[0] : up?.files?.[0];
-  const imageArg = { path, meta: { _type: 'gradio.FileData' }, orig_name: 'input.png' };
+  const imageArg = { path, url: `${base}${prefix}/file=${path}`, meta: { _type: 'gradio.FileData' }, orig_name: 'input.png', mime_type: 'image/png' };
   let imageUsed = false;
-  const data = ep.parameters.map((p) => {
-    if (!imageUsed && /image/i.test(p.component || '') && !/mv_/i.test(p.parameter_name || '')) {
+  const data = main.inputs.map((id) => {
+    const c = comps.get(id) || {};
+    const t = (c.type || '').toLowerCase();
+    const label = (c.props?.label || '').toLowerCase();
+    if (t === 'image' && !imageUsed && !/front|back|left|right|mv/.test(label)) {
       imageUsed = true;
       return imageArg;
     }
-    if (/rembg|remove.?bg/i.test(p.parameter_name || p.label || '')) return true;
-    return p.parameter_has_default ? p.parameter_default : null;
+    if (t === 'state') return null;
+    if (t === 'gallery') return [];
+    if (t === 'checkbox' && /rembg|background/.test(label)) return true;
+    const v = c.props?.value;
+    return v === undefined ? null : v;
   });
 
   onProgress?.(0.15, 'cloud-queue');
-  const call = json(await http({ method: 'POST', url: `${base}/gradio_api/call${epName}`, headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ data }), timeout: 60000 }));
-  const eventId = call.event_id;
-  if (!eventId) throw new Error('Navbatga qo\'shilmadi');
-  // Natija kelguncha (SSE) — server ulanishni ochiq ushlab turadi
-  onProgress?.(0.2, 'cloud-generating');
-  const sse = await http({ url: `${base}/gradio_api/call${epName}/${eventId}`, headers: auth, timeout: 900000 });
-  const events = sse.text.split(/\n\n/).map((blk) => {
-    const ev = /event:\s*(\w+)/.exec(blk)?.[1];
-    const d = /data:\s*([\s\S]*)/.exec(blk)?.[1];
-    return { ev, d };
-  });
-  const err = events.find((e) => e.ev === 'error');
-  const done = events.reverse().find((e) => e.ev === 'complete');
-  if (!done) throw new Error(err?.d && err.d !== 'null' ? err.d : 'GPU navbati band yoki limit tugadi — keyinroq urinib ko\'ring');
-  const out = JSON.parse(done.d);
+  const out = await runFn(main, data, () => onProgress?.(0.2, 'cloud-generating'));
   const files = [];
   const walk = (v) => {
     if (!v) return;
     if (Array.isArray(v)) return v.forEach(walk);
     if (typeof v === 'object') {
-      const u = v.url || (v.path ? `${base}/gradio_api/file=${v.path}` : null);
-      if (u && /\.(glb|gltf|obj|ply|stl)(\?|$)/i.test(v.path || v.url || '')) files.push(u);
-      Object.values(v).forEach((x) => typeof x === 'object' && walk(x));
+      const p = v.path || v.url || '';
+      if (/\.(glb|gltf|obj|ply|stl)(\?|$)/i.test(p)) files.push(v.url || `${base}${prefix}/file=${v.path}`);
+      Object.values(v).forEach((x) => x && typeof x === 'object' && walk(x));
     }
   };
   walk(out);
   if (!files.length) throw new Error('3D fayl qaytmadi');
-  const url = files[files.length - 1]; // odatda oxirgisi — teksturali model
+  const url = files[files.length - 1];
   onProgress?.(0.9, 'cloud-download');
   const res = await http({ url, headers: auth, as: 'bytes', timeout: 300000 });
   const ext = (/\.(glb|gltf|obj|ply|stl)/i.exec(url)?.[1] || 'glb').toLowerCase();
@@ -208,8 +240,8 @@ async function tripo(png, { key, onProgress }) {
 }
 
 export const cloudProviders = [
-  { id: 'hunyuan-turbo', label: 'Hunyuan3D-2 mini Turbo', free: true, run: (png, o) => gradio('tencent/Hunyuan3D-2mini-Turbo', png, o) },
-  { id: 'hunyuan', label: 'Hunyuan3D-2', free: true, run: (png, o) => gradio('tencent/Hunyuan3D-2', png, o) },
+  { id: 'trellis', label: 'TRELLIS (Microsoft)', free: true, run: (png, o) => gradio('trellis-community/TRELLIS', png, o) },
+  { id: 'hunyuan', label: 'Hunyuan3D-2 (Tencent)', free: true, run: (png, o) => gradio('tencent/Hunyuan3D-2', png, o) },
   { id: 'meshy', label: 'Meshy', free: false, keyName: 'meshyKey', run: (png, o) => meshy(png, o) },
   { id: 'tripo', label: 'Tripo3D', free: false, keyName: 'tripoKey', run: (png, o) => tripo(png, o) },
 ];
