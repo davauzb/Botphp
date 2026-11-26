@@ -6,7 +6,8 @@
 // ============================================================
 import * as THREE from 'three';
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
-import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { LoopSubdivision } from 'three-subdivide';
 import { deepClone, disposeObject } from './editor.js';
 import { t } from './i18n.js';
 
@@ -197,4 +198,95 @@ export function smoothNormals(editor, mesh, smooth) {
   }
   editor.emit('objectChanged', mesh, 'geometry');
   editor.commit('normals');
+}
+
+// ---------- Silliqlash (Subdivision) ----------
+/**
+ * Loop subdivision: burchakli shakllarni yumaloq, silliq qiladi.
+ * levels: 1-3, smooth=false bo'lsa faqat bo'laklarga bo'linadi (shakl o'zgarmaydi).
+ * Guruh tanlansa — ichidagi barcha meshlarga qo'llanadi.
+ */
+export function subdivideOp(editor, obj, { levels = 1, smooth = true, crease = 60 } = {}) {
+  const meshes = [];
+  obj.traverse((o) => o.isMesh && !o.userData.sculpt && meshes.push(o));
+  if (obj.isMesh && obj.userData.sculpt) meshes.push(obj);
+  let total = 0;
+  for (const m of meshes) {
+    const g = m.geometry;
+    total += ((g.index ? g.index.count : g.attributes.position.count) / 3) * Math.pow(4, levels);
+  }
+  if (total > 800000) throw new Error('too-many');
+  for (const m of meshes) {
+    const old = m.geometry;
+    const src = old.clone();
+    for (const k of Object.keys(src.attributes)) if (!['position', 'normal', 'uv'].includes(k)) src.deleteAttribute(k);
+    src.clearGroups();
+    let g = LoopSubdivision.modify(src, levels, { split: true, uvSmooth: false, preserveEdges: false, flatOnly: !smooth, maxTriangles: 400000 });
+    src.dispose();
+    if (m.userData.sculpt) {
+      g.deleteAttribute('uv');
+      g.deleteAttribute('normal');
+      g = mergeVertices(g, 1e-6);
+      g.computeVertexNormals();
+    } else {
+      g.deleteAttribute('normal');
+      g = toCreasedNormals(g, (crease * Math.PI) / 180);
+    }
+    g.computeBoundingBox();
+    g.computeBoundingSphere();
+    m.geometry = g;
+    old.dispose();
+    if (m.userData.params) {
+      m.userData = { ...m.userData, prim: 'custom' };
+      delete m.userData.params;
+    }
+    if (Array.isArray(m.material)) m.material = m.material[0];
+    editor.emit('objectChanged', m, 'geometry');
+  }
+  editor.emit('sceneGraphChanged');
+  editor.commit('subdivide');
+  return meshes.length;
+}
+
+// ---------- Markaz nuqtasi (pivot) ----------
+/**
+ * Obyektning aylanish markazini ko'chiradi (obyekt joyidan qimirlamaydi).
+ * mode: 'center' | 'bottom' | 'top' | 'world' (dunyo markazi 0,0,0)
+ */
+export function setPivot(editor, obj, mode = 'center') {
+  obj.updateWorldMatrix(true, true);
+  let P;
+  if (mode === 'world') P = new THREE.Vector3();
+  else {
+    const box = new THREE.Box3().setFromObject(obj);
+    if (box.isEmpty()) return;
+    P = box.getCenter(new THREE.Vector3());
+    if (mode === 'bottom') P.y = box.min.y;
+    if (mode === 'top') P.y = box.max.y;
+  }
+  const localP = obj.worldToLocal(P.clone());
+  if (obj.isMesh) {
+    if (obj.userData.params) {
+      obj.userData = { ...obj.userData, prim: 'custom' };
+      delete obj.userData.params;
+    }
+    obj.geometry.translate(-localP.x, -localP.y, -localP.z);
+    obj.geometry.boundsTree && obj.geometry.computeBoundsTree?.();
+  }
+  for (const c of obj.children) c.position.sub(localP);
+  const parentP = obj.parent.worldToLocal(P.clone());
+  obj.position.copy(parentP);
+  // kalit kadrlardagi pozitsiyalarni ham moslaymiz
+  if (obj.userData.keys) {
+    const off = new THREE.Vector3();
+    for (const k of obj.userData.keys) {
+      const q = new THREE.Quaternion().fromArray(k.q);
+      const s = new THREE.Vector3().fromArray(k.s);
+      off.copy(localP).multiply(s).applyQuaternion(q);
+      k.p = new THREE.Vector3().fromArray(k.p).add(off).toArray();
+    }
+  }
+  editor.emit('objectChanged', obj, 'geometry');
+  editor.emit('objectChanged', obj, 'transform');
+  editor.commit('pivot');
 }

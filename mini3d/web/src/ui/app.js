@@ -6,6 +6,11 @@ import { createSettings } from './settings.js';
 import { createMenus } from './menus.js';
 import { saveSettings, projects } from '../storage.js';
 import { dropToGround } from '../tools.js';
+import { Sculptor } from '../sculpt.js';
+import { EffectSystem } from '../effects.js';
+import { Animator } from '../animation.js';
+import { createSculptBar } from './sculptbar.js';
+import { createTimeline } from './timeline.js';
 import { icon } from '../icons.js';
 import { t } from '../i18n.js';
 
@@ -23,11 +28,18 @@ export function createApp(root, editorFactory, settings) {
   const panelBody = h('div.panel-body');
   const panel = h('aside.panel', h('div.panel-handle', h('div.grabber'), panelTabs), panelBody);
   const busyEl = h('div.busy', h('div.spinner'), h('div.busy-text'));
-  const workspace = h('main.workspace', h('div.viewport-wrap', viewport, toolstrip, selbar, fab), panel);
+  const vpWrap = h('div.viewport-wrap', viewport, toolstrip, selbar, fab);
+  const workspace = h('main.workspace', vpWrap, panel);
   root.append(topbar, workspace, busyEl);
 
   const editor = editorFactory(viewport);
+  const sculptor = (editor.sculptor = new Sculptor(editor));
+  const effectSystem = (editor.effects = new EffectSystem(editor));
+  const animator = (editor.animator = new Animator(editor));
   const app = {
+    animator,
+    sculptor,
+    effectSystem,
     editor,
     projectId: null,
     projectName: '',
@@ -45,15 +57,20 @@ export function createApp(root, editorFactory, settings) {
     },
     openAddMenu: () => menus.openAddMenu(),
     setPanel,
+    enterSculpt,
+    showTimeline,
+    subdivideDialog: (o) => menus.subdivideDialog(o),
   };
   const menus = createMenus(editor, app);
 
+  let animBtn;
   topbar.append(
     iconBtn('menu', t('file.title'), () => menus.openFileMenu()),
     title,
     h('div.spacer'),
     undoBtn,
     redoBtn,
+    (animBtn = iconBtn('film', t('anim.title'), () => showTimeline(!timelineOn))),
     iconBtn('views', t('view.title'), () => menus.openViewsMenu()),
     iconBtn('wand', t('tool.title'), () => menus.openToolsMenu())
   );
@@ -84,15 +101,53 @@ export function createApp(root, editorFactory, settings) {
     syncTools();
     toast(settings.space === 'world' ? t('mode.world') : t('mode.local'));
   }, 'tool');
-  toolstrip.append(...modeBtns, h('div.ts-sep'), snapBtn, spaceBtn);
+  const sculptBtn = iconBtn('brush', t('sculpt.title'), () => (sculptor.active ? sculptor.exit() : enterSculpt(editor.selected)), 'tool');
+  toolstrip.append(...modeBtns, sculptBtn, h('div.ts-sep'), snapBtn, spaceBtn);
 
   function syncTools() {
     modeBtns.forEach((b) => b.classList.toggle('active', b.dataset.mode === editor.mode));
+    sculptBtn.classList.toggle('active', editor.mode === 'sculpt');
     snapBtn.classList.toggle('active', !!settings.snap);
     spaceBtn.innerHTML = icon(settings.space === 'world' ? 'globe' : 'local');
     spaceBtn.classList.toggle('active', settings.space === 'local');
   }
-  editor.on('modeChanged', syncTools);
+  editor.on('modeChanged', (mode) => {
+    if (mode !== 'sculpt' && sculptor.active) sculptor.exit();
+    syncTools();
+  });
+
+  // ---------- Sculpt ----------
+  function enterSculpt(obj) {
+    if (animator.playing) animator.pause();
+    if (!obj || !obj.isMesh) {
+      // tanlanmagan bo'lsa — yangi "loy shar" yaratamiz
+      if (obj && !obj.isMesh) return toast(t('sculpt.needMesh'), 'error');
+      obj = editor.createPrimitive('clayBall');
+      obj.material.color.set('#c9a27e');
+      obj.material.roughness = 0.6;
+      editor.addObject(obj, { label: 'add' });
+      editor.focus(obj);
+    }
+    sculptor.enter(obj);
+    setPanel(activeTab, 'min');
+  }
+  editor.on('selectionChanged', (obj) => {
+    if (sculptor.active && obj !== sculptor.mesh && !editor.history.busy) sculptor.exit();
+  });
+  const sculptBar = createSculptBar(editor, sculptor, settings, () => saveSettings(settings));
+
+  // ---------- Animatsiya vaqt chizig'i ----------
+  const timeline = createTimeline(editor, animator, app);
+  let timelineOn = false;
+  function showTimeline(on) {
+    timelineOn = on;
+    timeline.el.classList.toggle('show', on);
+    workspace.classList.toggle('timeline-on', on);
+    animBtn?.classList.toggle('active', on);
+    if (!on && animator.playing) animator.pause();
+    timeline.syncMarks();
+    timeline.syncTime();
+  }
   syncTools();
 
   // ---------- Tanlangan obyekt uchun tezkor amallar ----------
@@ -106,6 +161,8 @@ export function createApp(root, editorFactory, settings) {
   );
   editor.on('selectionChanged', (obj) => selbar.classList.toggle('show', !!obj));
   fab.addEventListener('click', () => menus.openAddMenu());
+
+  vpWrap.append(sculptBar.el, timeline.el);
 
   // ---------- Panel (xususiyatlar / sahna / sozlamalar) ----------
   const props = createProperties(editor, app);
@@ -144,11 +201,22 @@ export function createApp(root, editorFactory, settings) {
   setPanel('props', 'min');
 
   // ---------- Undo / Redo ----------
+  // Undo/redo paytida sculpt rejimi saqlanib qoladi
+  async function keepSculpt(fn) {
+    if (animator.playing) animator.pause();
+    const id = sculptor.active ? sculptor.mesh.uuid : null;
+    const r = await fn();
+    if (id) {
+      const m = editor.content.getObjectByProperty('uuid', id);
+      if (m && m.isMesh) sculptor.enter(m);
+    }
+    return r;
+  }
   async function undo() {
-    if (await editor.history.undo()) toast(t('undone'));
+    if (await keepSculpt(() => editor.history.undo())) toast(t('undone'));
   }
   async function redo() {
-    if (await editor.history.redo()) toast(t('redone'));
+    if (await keepSculpt(() => editor.history.redo())) toast(t('redone'));
   }
   const syncHistory = () => {
     undoBtn.disabled = !editor.history.canUndo;
@@ -168,7 +236,7 @@ export function createApp(root, editorFactory, settings) {
   });
   async function autosave() {
     try {
-      await projects.save({ id: '__autosave', name: app.projectName, projectId: app.projectId, data: editor.serializeProject() });
+      await projects.save({ id: '__autosave', name: app.projectName, projectId: app.projectId, data: editor.serializeProject({ compact: true }) });
     } catch (e) {
       console.warn('autosave failed', e);
     }
@@ -206,13 +274,25 @@ export function createApp(root, editorFactory, settings) {
     else if (k === 'r') editor.setMode('scale');
     else if (k === 'f') editor.focus();
     else if (k === 'delete' || k === 'backspace') editor.selected && editor.removeObject(editor.selected);
-    else if (k === 'escape') editor.select(null);
+    else if (k === 'escape') sculptor.active ? sculptor.exit() : editor.select(null);
+    else if (k === ' ' && timelineOn) (e.preventDefault(), animator.toggle());
+    else if (k === 'b') sculptor.active ? sculptor.exit() : enterSculpt(editor.selected);
+    else if (k === 'k' && editor.selected) animator.addKey(editor.selected);
     else if (k === 'a' && e.shiftKey) menus.openAddMenu();
   });
 
   // ---------- Android "Orqaga" tugmasi ----------
   window.__onBack = () => {
     if (closeTopSheet()) return true;
+    if (animator.recording) return true;
+    if (sculptor.active) {
+      sculptor.exit();
+      return true;
+    }
+    if (animator.playing) {
+      animator.pause();
+      return true;
+    }
     if (panelState !== 'min' && window.matchMedia('(max-width: 819px)').matches) {
       setPanel(activeTab, 'min');
       return true;

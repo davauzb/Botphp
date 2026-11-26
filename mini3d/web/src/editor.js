@@ -9,6 +9,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Emitter } from './events.js';
 import { History } from './history.js';
 import { buildGeometry, primitives, defaultParams } from './primitives.js';
@@ -28,6 +32,31 @@ THREE.Source.prototype.toJSON = function (meta) {
   return out;
 };
 
+// ------------------------------------------------------------
+// Ixcham suratlar (undo uchun): geometriya massivlari JSON massivga
+// aylantirilmaydi, balki o'zgarmagan bo'lsa bir xil nusxa qayta ishlatiladi.
+// Bu katta (sculpt qilingan) modellarda xotira va tezlikni keskin yaxshilaydi.
+// ------------------------------------------------------------
+let compactMode = false;
+const _attrToJSON = THREE.BufferAttribute.prototype.toJSON;
+THREE.BufferAttribute.prototype.toJSON = function () {
+  if (!compactMode) return _attrToJSON.call(this);
+  const c = this._snapCache;
+  if (c && c.version === this.version && c.count === this.count) return c.json;
+  const json = { itemSize: this.itemSize, type: this.array.constructor.name, array: this.array.slice(), normalized: this.normalized };
+  this._snapCache = { version: this.version, count: this.count, json };
+  return json;
+};
+export function withCompact(fn) {
+  const prev = compactMode;
+  compactMode = true;
+  try {
+    return fn();
+  } finally {
+    compactMode = prev;
+  }
+}
+
 export const defaultSceneSettings = {
   background: '#1e232b',
   grid: true,
@@ -40,6 +69,11 @@ export const defaultSceneSettings = {
   ground: true,
   fog: false,
   exposure: 1,
+  bloom: false,
+  bloomStrength: 0.7,
+  bloomRadius: 0.35,
+  bloomThreshold: 1.0,
+  anim: { duration: 4, fps: 30, loop: true },
 };
 
 const LIGHT_TYPES = ['PointLight', 'SpotLight', 'DirectionalLight', 'HemisphereLight', 'AmbientLight'];
@@ -153,6 +187,21 @@ export class Editor extends Emitter {
     });
     this.transform.addEventListener('change', () => this.requestRender());
 
+    // ---- Post-processing (Bloom — nur taralishi) ----
+    this.composer = new EffectComposer(r);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.4, 0.75);
+    this.composer.addPass(this.bloomPass);
+    this.composer.addPass(new OutputPass());
+
+    // Har kadrda chaqiriladigan funksiyalar (effektlar, animatsiya, sculpt):
+    // fn(dt, time) => true qaytarsa, kadr qayta chiziladi.
+    this.updaters = new Set();
+    // Kursor hodisalarini ushlab qoluvchi (masalan, sculpt rejimi)
+    this.pointerInterceptor = null;
+    // Tanlanadigan "proksi"lar (yorug'lik va effektlar uchun belgi)
+    this.proxyTypes = [];
+
     this.history = new History(this);
     this.raycaster = new THREE.Raycaster();
     this._initPointer();
@@ -164,10 +213,22 @@ export class Editor extends Emitter {
     this.resize();
     this.history.reset();
 
+    this.clock = new THREE.Clock();
+    this.time = 0;
     const loop = () => {
       requestAnimationFrame(loop);
+      const dt = Math.min(this.clock.getDelta(), 0.1);
+      this.time += dt;
+      let dirty = false;
+      for (const fn of this.updaters) {
+        try {
+          if (fn(dt, this.time)) dirty = true;
+        } catch (e) {
+          console.error(e);
+        }
+      }
       const moved = this.orbit.update();
-      if (moved || this._needsRender || this.orbit.autoRotate) this.render();
+      if (moved || dirty || this._needsRender || this.orbit.autoRotate) this.render();
     };
     loop();
   }
@@ -199,16 +260,22 @@ export class Editor extends Emitter {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
+    const pr = this.renderer.getPixelRatio();
+    this.composer.setPixelRatio(pr);
+    this.composer.setSize(w, h);
+    // Bloom yarim o'lchamda — telefonlarda tezroq
+    this.bloomPass.resolution.set(Math.max(1, (w * pr) / 2), Math.max(1, (h * pr) / 2));
     this.requestRender();
   }
   render() {
     this._needsRender = false;
+    this.selectionBox.visible = !!this.selected && this.mode !== 'sculpt';
     if (this.selected) {
       const proxy = this._proxyFor(this.selected);
       this.selectionBox.setFromObject(proxy || this.selected);
     }
     for (const p of this.lightProxies.children) {
-      const L = p.userData.light;
+      const L = p.userData.light || p.userData.target;
       L.updateWorldMatrix(true, false);
       p.position.setFromMatrixPosition(L.matrixWorld);
       p.visible = this._visibleChain(L);
@@ -221,7 +288,9 @@ export class Editor extends Emitter {
         p.userData.line.visible = p.visible;
       }
     }
-    this.renderer.render(this.scene, this.camera);
+    this.emit('beforeRender');
+    if (this.sceneSettings.bloom) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
   }
 
   // ===================== Sahna sozlamalari =====================
@@ -240,14 +309,21 @@ export class Editor extends Emitter {
     this.studio.visible = !!s.studio;
     this.studioHemi.intensity = 0.6 * s.studioIntensity;
     this.studioKey.intensity = 1.6 * s.studioIntensity;
+    const shadowsChanged = this.renderer.shadowMap.enabled !== !!s.shadows;
     this.renderer.shadowMap.enabled = !!s.shadows;
+    this.bloomPass.strength = s.bloomStrength ?? 0.7;
+    this.bloomPass.radius = s.bloomRadius ?? 0.4;
+    this.bloomPass.threshold = s.bloomThreshold ?? 1.0;
+    if (!s.anim) s.anim = { ...defaultSceneSettings.anim };
     this.ground.visible = !!s.ground && !!s.shadows;
     this.renderer.toneMappingExposure = s.exposure;
     this.scene.fog = s.fog ? new THREE.Fog(s.background, 8, 60) : null;
-    // shadowMap yoqilganda materiallarni qayta kompilyatsiya qilish kerak
-    this.scene.traverse((o) => {
-      if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true));
-    });
+    // shadowMap yoqilganda/o'chirilganda materiallarni qayta kompilyatsiya qilish kerak
+    if (shadowsChanged) {
+      this.scene.traverse((o) => {
+        if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true));
+      });
+    }
     this.emit('sceneSettingsChanged');
     this.requestRender();
   }
@@ -257,18 +333,39 @@ export class Editor extends Emitter {
     const el = this.renderer.domElement;
     const active = new Map();
     let down = null;
+    el.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (this.pointerInterceptor && this.pointerInterceptor.down(e, active.size)) {
+          e.stopImmediatePropagation();
+          this._intercepting = e.pointerId;
+          el.setPointerCapture?.(e.pointerId);
+        }
+      },
+      { capture: true }
+    );
+    el.addEventListener('pointermove', (e) => {
+      if (this._intercepting === e.pointerId) this.pointerInterceptor?.move(e);
+    });
     el.addEventListener('pointerdown', (e) => {
       active.set(e.pointerId, true);
+      if (this._intercepting === e.pointerId) return (down = null);
       if (active.size > 1) down = null;
       else down = { x: e.clientX, y: e.clientY, t: performance.now(), gizmo: this.transform.dragging };
     });
     const up = (e) => {
+      if (this._intercepting === e.pointerId) {
+        this._intercepting = null;
+        active.delete(e.pointerId);
+        this.pointerInterceptor?.up(e);
+        return (down = null);
+      }
       const wasMulti = active.size > 1;
       active.delete(e.pointerId);
       if (!down || wasMulti || e.type === 'pointercancel') return (down = null);
       const d = Math.hypot(e.clientX - down.x, e.clientY - down.y);
       const dt = performance.now() - down.t;
-      if (!down.gizmo && d < 8 && dt < 500) this.pickAt(e.clientX, e.clientY);
+      if (!down.gizmo && d < 8 && dt < 500 && this.mode !== 'sculpt') this.pickAt(e.clientX, e.clientY);
       down = null;
     };
     el.addEventListener('pointerup', up);
@@ -291,7 +388,7 @@ export class Editor extends Emitter {
     for (const h of hits) {
       if (!this._visibleChain(h.object)) continue;
       if (h.object.isLine || h.object.isPoints) continue;
-      let obj = h.object.userData.light || this.selectableFor(h.object);
+      let obj = h.object.userData.light || h.object.userData.target || this.selectableFor(h.object);
       if (!obj || this.isLocked(obj)) continue;
       this.select(obj);
       return obj;
@@ -323,7 +420,7 @@ export class Editor extends Emitter {
 
   _attachGizmo() {
     const obj = this.selected;
-    if (!obj || this.mode === 'select' || this.isLocked(obj) || obj.isHemisphereLight || obj.isAmbientLight) {
+    if (!obj || this.mode === 'select' || this.mode === 'sculpt' || this.isLocked(obj) || obj.isHemisphereLight || obj.isAmbientLight) {
       this.transform.detach();
     } else {
       this.transform.attach(obj);
@@ -495,6 +592,13 @@ export class Editor extends Emitter {
       }
     }
     this.content.traverse((o) => {
+      for (const pt of this.proxyTypes) {
+        if (!pt.match(o)) continue;
+        const proxy = pt.create(o);
+        proxy.userData.target = o;
+        proxy.renderOrder = 3;
+        this.lightProxies.add(proxy);
+      }
       if (!o.isLight) return;
       const proxy = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.16, 0),
@@ -515,8 +619,8 @@ export class Editor extends Emitter {
   }
 
   _proxyFor(obj) {
-    if (!obj?.isLight) return null;
-    return this.lightProxies.children.find((p) => p.userData.light === obj) || null;
+    if (!obj) return null;
+    return this.lightProxies.children.find((p) => p.userData.light === obj || p.userData.target === obj) || null;
   }
 
   // ===================== Kamera =====================
@@ -569,22 +673,39 @@ export class Editor extends Emitter {
    * Sahna surati. Parametrli shakllarning geometriyasi saqlanmaydi —
    * yuklashda parametrlardan qayta quriladi (fayl va xotira ancha kichik).
    */
-  snapshot() {
-    const json = this.content.toJSON();
+  snapshot({ compact = true } = {}) {
+    // toJSON obyekt matritsasini saqlaydi — avval yangilab olamiz
+    this.content.updateMatrixWorld(true);
+    const json = compact ? withCompact(() => this.content.toJSON()) : this.content.toJSON();
     const stub = new Set();
     const walk = (o) => {
       if (o.geometry && o.userData?.params && primitives.has(o.userData.prim)) stub.add(o.geometry);
       (o.children || []).forEach(walk);
     };
+    const noNormals = new Set();
+    const walk2 = (o) => {
+      if (o.geometry && o.userData?.sculpt) noNormals.add(o.geometry);
+      (o.children || []).forEach(walk2);
+    };
     walk(json.object);
+    walk2(json.object);
     if (json.geometries) {
-      json.geometries = json.geometries.map((g) => (stub.has(g.uuid) ? { uuid: g.uuid, type: 'BufferGeometry', data: { attributes: {} } } : g));
+      json.geometries = json.geometries.map((g) => {
+        if (stub.has(g.uuid)) return { uuid: g.uuid, type: 'BufferGeometry', data: { attributes: {} } };
+        // Sculpt modellarining normallari saqlanmaydi — yuklashda qayta hisoblanadi
+        if (noNormals.has(g.uuid) && g.data?.attributes?.normal) {
+          const { normal, ...attributes } = g.data.attributes;
+          return { ...g, data: { ...g.data, attributes } };
+        }
+        return g;
+      });
     }
-    return { scene: { ...this.sceneSettings }, content: json };
+    return { scene: JSON.parse(JSON.stringify(this.sceneSettings)), content: json };
   }
 
   _rebuildPrimitives(root) {
     root.traverse((o) => {
+      if (o.isMesh && o.geometry?.attributes.position && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
       if (o.isMesh && o.userData.params && primitives.has(o.userData.prim) && !o.geometry.attributes.position) {
         o.geometry.dispose();
         o.geometry = buildGeometry(o.userData.prim, o.userData.params);
@@ -614,14 +735,16 @@ export class Editor extends Emitter {
     this.requestRender();
   }
 
-  serializeProject() {
+  /** compact=true: IndexedDB uchun (tez); false: faylga yozish uchun (oddiy JSON) */
+  serializeProject({ compact = false } = {}) {
     return {
       format: 'mini3d-project',
-      version: 1,
-      ...this.snapshot(),
+      version: 2,
+      ...this.snapshot({ compact }),
       camera: { position: this.camera.position.toArray(), target: this.orbit.target.toArray() },
     };
   }
+
 
   async loadProject(data) {
     if (!data || data.format !== 'mini3d-project') throw new Error('bad project');
@@ -658,8 +781,8 @@ export class Editor extends Emitter {
     this.requestRender();
   }
 
-  /** Ekran rasmi (PNG, dataURL). Yordamchi chiziqlar va gizmo yashiriladi. */
-  screenshot(scale = 2) {
+  /** Yordamchi chiziqlar, gizmo va belgilarni vaqtincha yashiradi (rasm/video uchun). */
+  hideHelpers() {
     const hidden = [];
     for (const c of this.helpers.children) {
       if (c !== this.ground && c.visible) {
@@ -668,15 +791,30 @@ export class Editor extends Emitter {
       }
     }
     const gizmo = this.transform.getHelper();
-    const gizmoVis = gizmo.visible;
-    gizmo.visible = false;
+    if (gizmo.visible) {
+      gizmo.visible = false;
+      hidden.push(gizmo);
+    }
+    this.emit('helpersHidden', true);
+    return () => {
+      hidden.forEach((c) => (c.visible = true));
+      this.emit('helpersHidden', false);
+      this.requestRender();
+    };
+  }
+
+  /** Ekran rasmi (PNG, dataURL). Yordamchi chiziqlar va gizmo yashiriladi. */
+  screenshot(scale = 2) {
+    const restore = this.hideHelpers();
     const prevRatio = this.renderer.getPixelRatio();
     this.renderer.setPixelRatio(Math.min(prevRatio * scale, 4));
-    this.renderer.render(this.scene, this.camera);
+    this.resize();
+    this._needsRender = false;
+    if (this.sceneSettings.bloom) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
     const url = this.renderer.domElement.toDataURL('image/png');
     this.renderer.setPixelRatio(prevRatio);
-    hidden.forEach((c) => (c.visible = true));
-    gizmo.visible = gizmoVis;
+    restore();
     this.resize();
     this.render();
     return url;

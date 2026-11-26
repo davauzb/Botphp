@@ -3,7 +3,10 @@ import * as THREE from 'three';
 import { h, openSheet, gridButtons, listButton, toast, confirmDialog, promptDialog, row, numberInput, select, toggle } from './dom.js';
 import { primitives } from '../primitives.js';
 import { exportFormats, exportModel, saveFile, importFile, importAccept, pickFile, dataURLToArrayBuffer, isAndroid } from '../io.js';
-import { booleanOp, arrayOp, mirrorOp, dropToGround, centerOrigin, resetTransform, mergeIntoMesh, bakeGeometry, smoothNormals, tools } from '../tools.js';
+import { booleanOp, arrayOp, mirrorOp, dropToGround, centerOrigin, resetTransform, mergeIntoMesh, bakeGeometry, smoothNormals, tools, subdivideOp, setPivot } from '../tools.js';
+import { effects } from '../effects.js';
+import { recordVideo } from './timeline.js';
+import { samples } from '../samples.js';
 import { projects } from '../storage.js';
 import { icon } from '../icons.js';
 import { t } from '../i18n.js';
@@ -27,6 +30,34 @@ export function createMenus(editor, app) {
       gridButtons(byCat('extra')),
       h('div.menu-label', t('add.shapes')),
       gridButtons(byCat('shape')),
+      h('div.menu-label', t('add.sculpt')),
+      gridButtons(
+        byCat('sculpt').map((b, k) => ({
+          ...b,
+          onClick: add(() => {
+            const id = ['clayBall', 'clayBlock', 'clayCapsule'][k];
+            const m = editor.createPrimitive(id);
+            m.material.color.set('#c9a27e');
+            m.material.roughness = 0.6;
+            editor.addObject(m);
+            app.enterSculpt(m);
+          }),
+        }))
+      ),
+      h('div.menu-label', t('add.effects')),
+      gridButtons(
+        [...effects.values()].map((fx) => ({
+          icon: fx.icon,
+          label: t(fx.label),
+          onClick: add(() => {
+            editor.addObject(editor.effects.create(fx.id));
+            if (!editor.sceneSettings.bloom && fx.blending !== 'normal') {
+              editor.setSceneSetting('bloom', true, false);
+              toast(t('fx.bloomOn'));
+            }
+          }),
+        }))
+      ),
       h('div.menu-label', t('add.lights')),
       gridButtons(
         [
@@ -62,6 +93,8 @@ export function createMenus(editor, app) {
       listButton('upload', t('file.import'), 'GLB, glTF, OBJ, STL, PLY, .m3d', go(importDialog)),
       listButton('download', t('file.export'), 'GLB, glTF, OBJ, STL, PLY', go(exportDialog)),
       listButton('camera', t('file.screenshot'), t('file.screenshotSub'), go(screenshot)),
+      listButton('record', t('anim.record'), t('anim.recordSub'), go(() => recordVideo(editor.animator, editor, app))),
+      listButton('sample', t('file.samples'), t('file.samplesSub'), go(openSamples)),
       listButton('share', t('file.exportProject'), t('file.exportProjectSub'), go(exportProject)),
       h('div.menu-sep'),
       listButton('help', t('file.help'), null, go(openHelp)),
@@ -108,7 +141,7 @@ export function createMenus(editor, app) {
     }
     const id = asNew || !app.projectId ? 'p' + Date.now().toString(36) : app.projectId;
     try {
-      await projects.save({ id, name, thumb: await makeThumb(), data: editor.serializeProject() });
+      await projects.save({ id, name, thumb: await makeThumb(), data: editor.serializeProject({ compact: true }) });
       app.projectId = id;
       app.projectName = name;
       app.updateTitle();
@@ -257,6 +290,9 @@ export function createMenus(editor, app) {
     };
     const isMesh = obj?.isMesh;
     const items = [
+      { icon: 'brush', label: t('sculpt.title'), onClick: go((o) => app.enterSculpt(o)), disabled: !isMesh },
+      { icon: 'subdivide', label: t('tool.subdivide'), onClick: go(subdivideDialog), disabled: !(isMesh || obj?.isGroup) },
+      { icon: 'pivot', label: t('tool.pivot'), onClick: go(pivotDialog) },
       { icon: 'boolean', label: t('tool.boolean'), onClick: go(booleanDialog), disabled: !isMesh },
       { icon: 'array', label: t('tool.array'), onClick: go(arrayDialog) },
       { icon: 'mirror', label: t('tool.mirror'), onClick: go(mirrorDialog) },
@@ -394,6 +430,108 @@ export function createMenus(editor, app) {
     const s = openSheet(t('tool.mirror'), body);
   }
 
+  function subdivideDialog(obj) {
+    let levels = 1, smooth = true, crease = 60;
+    const body = h(
+      'div.dialog',
+      h('p.hint', t('subdiv.hint')),
+      row(t('subdiv.levels'), select([1, 2, 3].map((v) => ({ value: String(v), label: String(v) })), '1', (v) => (levels = +v))),
+      row(t('subdiv.smooth'), toggle(true, (v) => (smooth = v))),
+      row(t('subdiv.crease'), numberInput(crease, { step: 5, min: 0, max: 180, decimals: 0, onInput: (v) => (crease = v) })),
+      h(
+        'div.dialog-actions',
+        h('button.btn', { type: 'button', on: { click: () => s.close() } }, t('cancel')),
+        h(
+          'button.btn.primary',
+          {
+            type: 'button',
+            on: {
+              click: () => {
+                s.close();
+                app.busy(true, t('bool.working'));
+                setTimeout(() => {
+                  try {
+                    subdivideOp(editor, obj, { levels, smooth, crease });
+                    toast(t('done'), 'ok');
+                  } catch (e) {
+                    console.error(e);
+                    toast(e.message === 'too-many' ? t('sculpt.tooMany') : t('err.tool'), 'error');
+                  } finally {
+                    app.busy(false);
+                  }
+                }, 30);
+              },
+            },
+          },
+          t('apply')
+        )
+      )
+    );
+    const s = openSheet(t('tool.subdivide'), body);
+  }
+
+  function pivotDialog(obj) {
+    const go = (mode) => () => {
+      s.close();
+      setPivot(editor, obj, mode);
+      toast(t('done'), 'ok');
+    };
+    const body = h(
+      'div',
+      h('p.hint', t('pivot.hint')),
+      gridButtons([
+        { icon: 'center', label: t('pivot.center'), onClick: go('center') },
+        { icon: 'down', label: t('pivot.bottom'), onClick: go('bottom') },
+        { icon: 'up', label: t('pivot.top'), onClick: go('top') },
+        { icon: 'globe', label: t('pivot.world'), onClick: go('world') },
+      ])
+    );
+    const s = openSheet(t('tool.pivot'), body);
+  }
+
+  function openSamples() {
+    const body = h(
+      'div.projects',
+      ...samples.map((sm) =>
+        h(
+          'div.project-card',
+          h(
+            'button.project-open',
+            {
+              type: 'button',
+              on: {
+                click: async () => {
+                  s.close();
+                  if (editor.content.children.length && app.dirty && !(await confirmDialog(t('file.newConfirm'), { danger: true }))) return;
+                  app.busy(true, t('loading'));
+                  try {
+                    await editor.loadProject(await sm.build(editor));
+                    app.projectId = null;
+                    app.projectName = t(sm.label);
+                    app.updateTitle();
+                    app.markSaved();
+                    app.showTimeline(true);
+                    editor.animator.play();
+                    toast(t('sample.playing'));
+                  } catch (e) {
+                    console.error(e);
+                    toast(t('err.open'), 'error');
+                  } finally {
+                    app.busy(false);
+                  }
+                },
+              },
+            },
+            h('div.project-thumb', h('span', { html: icon(sm.icon, 40) })),
+            h('div.project-name', t(sm.label)),
+            h('div.project-date', t(sm.desc))
+          )
+        )
+      )
+    );
+    const s = openSheet(t('file.samples'), body, { wide: true });
+  }
+
   // =============== KO'RINISHLAR ===============
   function openViewsMenu() {
     const v = (name) => () => {
@@ -420,7 +558,7 @@ export function createMenus(editor, app) {
 
   // =============== YORDAM ===============
   function openHelp() {
-    const items = ['help.1', 'help.2', 'help.3', 'help.4', 'help.5', 'help.6', 'help.7', 'help.8'];
+    const items = ['help.1', 'help.2', 'help.3', 'help.4', 'help.5', 'help.6', 'help.9', 'help.10', 'help.7', 'help.8'];
     openSheet(t('file.help'), h('div.help', ...items.map((k) => h('p', { html: t(k) }))));
   }
 
@@ -437,7 +575,7 @@ export function createMenus(editor, app) {
     );
   }
 
-  return { openAddMenu, openFileMenu, openToolsMenu, openViewsMenu, saveProject, importDialog, screenshot, openProject };
+  return { openAddMenu, openFileMenu, openToolsMenu, openViewsMenu, saveProject, importDialog, screenshot, openProject, subdivideDialog };
 }
 
 function safeName(s) {

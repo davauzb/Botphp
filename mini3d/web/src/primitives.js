@@ -130,6 +130,30 @@ registerPrimitive({
   },
 });
 
+// ---------- Sculpt (haykaltaroshlik) uchun asoslar ----------
+const sculptBase = (geo) => {
+  geo.deleteAttribute('uv');
+  geo.deleteAttribute('normal');
+  const g = mergeVertices(geo, 1e-5);
+  g.computeVertexNormals();
+  return g;
+};
+registerPrimitive({
+  id: 'clayBall', label: 'prim.clayBall', icon: 'sphere', category: 'sculpt',
+  params: [n('radius', 'p.radius', 0.7, 0.05, 100), i('detail', 'p.detail', 28, 4, 60)],
+  build: (p) => sculptBase(new THREE.IcosahedronGeometry(p.radius, p.detail)),
+});
+registerPrimitive({
+  id: 'clayBlock', label: 'prim.clayBlock', icon: 'cube', category: 'sculpt',
+  params: [n('width', 'p.width', 1, 0.05, 100), n('height', 'p.height', 1, 0.05, 100), n('depth', 'p.depth', 1, 0.05, 100), i('segments', 'p.segments', 24, 2, 64)],
+  build: (p) => sculptBase(new THREE.BoxGeometry(p.width, p.height, p.depth, p.segments, p.segments, p.segments)),
+});
+registerPrimitive({
+  id: 'clayCapsule', label: 'prim.clayCapsule', icon: 'capsule', category: 'sculpt',
+  params: [n('radius', 'p.radius', 0.4, 0.05, 100), n('length', 'p.length', 1, 0, 100), i('detail', 'p.detail', 24, 4, 64)],
+  build: (p) => sculptBase(new THREE.CapsuleGeometry(p.radius, p.length, Math.max(4, p.detail >> 1), p.detail * 2)),
+});
+
 // ---------- Qo'shimcha shakllar ----------
 registerPrimitive({
   id: 'icosahedron', label: 'prim.ico', icon: 'ico', category: 'extra',

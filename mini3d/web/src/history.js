@@ -5,9 +5,10 @@
 //  ravishda undo/redo ni qo'llab-quvvatlaydi.
 // ============================================================
 export class History {
-  constructor(editor, limit = 40) {
+  constructor(editor, limit = 60, budgetMB = 80) {
     this.editor = editor;
     this.limit = limit;
+    this.budget = budgetMB * 1024 * 1024;
     this.undoStack = [];
     this.redoStack = [];
     this.current = null; // hozirgi holat surati
@@ -31,7 +32,36 @@ export class History {
     }
     this.current = snap;
     this.redoStack = [];
+    this._trim();
     this.editor.emit('historyChanged');
+  }
+
+  /**
+   * Xotira chegarasi: suratlardagi (takrorlanmas) massivlar hajmi budjetdan
+   * oshsa, eng eski qadamlar o'chiriladi. Katta sculpt modellarida muhim.
+   */
+  _trim() {
+    const bytes = () => {
+      const seen = new Set();
+      let total = 0;
+      const count = (snap) => {
+        for (const g of snap.content.geometries || []) {
+          const attrs = g.data?.attributes || {};
+          const arrs = Object.values(attrs).map((a) => a.array);
+          if (g.data?.index) arrs.push(g.data.index.array);
+          for (const a of arrs) {
+            if (!a || seen.has(a)) continue;
+            seen.add(a);
+            total += a.byteLength ?? a.length * 8;
+          }
+        }
+      };
+      if (this.current) count(this.current);
+      this.undoStack.forEach((i) => count(i.snap));
+      this.redoStack.forEach((i) => count(i.snap));
+      return total;
+    };
+    while (this.undoStack.length > 1 && bytes() > this.budget) this.undoStack.shift();
   }
 
   get canUndo() {

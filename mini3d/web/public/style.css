@@ -246,3 +246,47 @@ p.hint { display: block; margin: 0; }
 #splash.hide { opacity: 0; pointer-events: none; }
 .fatal { padding: 30px; text-align: center; }
 .fatal pre { white-space: pre-wrap; color: var(--muted); }
+
+/* ============================================================
+   v2: Sculpt paneli, animatsiya vaqt chizig'i
+   ============================================================ */
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-row .btn { flex: 1; min-width: 130px; }
+
+.sculptbar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: none; flex-direction: column; gap: 4px;
+  padding: 6px 8px 8px; background: rgba(20, 23, 28, .94); border-top: 1px solid var(--line); backdrop-filter: blur(8px); }
+.sculptbar.show { display: flex; }
+.sb-brushes { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+.sb-brushes::-webkit-scrollbar { display: none; }
+.sb-brush { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 62px; padding: 6px 4px; border-radius: 10px;
+  border: 1px solid transparent; background: var(--bg); color: var(--text); cursor: pointer; }
+.sb-brush.active { border-color: var(--accent); background: rgba(77, 163, 255, .16); color: var(--accent); }
+.sb-label { font-size: 11px; white-space: nowrap; }
+.sb-row { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.sb-range { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.sb-rl { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.sb-val { width: 30px; text-align: right; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sb-tog { width: 40px; height: 40px; }
+.sb-info { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.sb-done { height: 38px; padding: 0 14px; }
+body.sculpting .selbar, body.sculpting .fab { display: none; }
+body.sculpting .toolstrip .icon-btn[data-mode] { opacity: .55; }
+
+.timeline { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: none; align-items: center; gap: 2px; padding: 4px 6px;
+  background: rgba(20, 23, 28, .94); border-top: 1px solid var(--line); backdrop-filter: blur(8px); }
+.timeline.show { display: flex; }
+.timeline .icon-btn { width: 38px; height: 40px; }
+.tl-play { background: var(--accent) !important; color: #fff !important; border-radius: 50% !important; width: 40px !important; }
+.tl-track { position: relative; flex: 1; min-width: 60px; height: 40px; display: flex; align-items: center; }
+.tl-slider { width: 100%; accent-color: var(--accent); margin: 0; position: relative; z-index: 1; height: 28px; }
+.tl-marks { position: absolute; left: 8px; right: 8px; top: 4px; height: 8px; pointer-events: none; }
+.tl-mark { position: absolute; top: 0; width: 8px; height: 8px; margin-left: -4px; background: #ffc233; transform: rotate(45deg); border-radius: 1px; }
+.tl-time { font-size: 12px; color: var(--muted); width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+.tl-key { color: #ffc233 !important; }
+.workspace.timeline-on .selbar { bottom: 60px; }
+.workspace.timeline-on .fab { bottom: 62px; }
+.workspace.timeline-on .selbar.show ~ .fab { bottom: 122px; }
+.workspace.timeline-on .sculptbar { bottom: 49px; }
+@media (max-width: 480px) {
+  .timeline .icon-btn:nth-of-type(2), .timeline .icon-btn:nth-of-type(3) { display: none; }
+}

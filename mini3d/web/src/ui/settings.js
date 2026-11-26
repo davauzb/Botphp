@@ -48,6 +48,14 @@ export function createSettings(editor, ui) {
         row(t('set.exposure'), slider(s.exposure, { min: 0.1, max: 3, step: 0.05, onInput: (v) => editor.setSceneSetting('exposure', v, false), onChange: set('exposure') }))
       ),
       section(
+        t('set.effects'),
+        row(t('set.bloom'), toggle(s.bloom, set('bloom'))),
+        row(t('set.bloomStrength'), slider(s.bloomStrength ?? 0.8, { min: 0, max: 3, step: 0.05, onInput: (v) => editor.setSceneSetting('bloomStrength', v, false), onChange: set('bloomStrength') })),
+        row(t('set.bloomRadius'), slider(s.bloomRadius ?? 0.4, { min: 0, max: 1, step: 0.02, onInput: (v) => editor.setSceneSetting('bloomRadius', v, false), onChange: set('bloomRadius') })),
+        row(t('set.bloomThreshold'), slider(s.bloomThreshold ?? 1.0, { min: 0, max: 3, step: 0.05, onInput: (v) => editor.setSceneSetting('bloomThreshold', v, false), onChange: set('bloomThreshold') })),
+        row(t('set.particles'), toggle(editor.effects?.enabled ?? true, (v) => editor.effects && ((editor.effects.enabled = v), editor.requestRender())))
+      ),
+      section(
         t('set.snapping'),
         row(t('set.snapMove'), numberInput(app.snapMove, { step: 0.05, min: 0.001, onChange: setApp('snapMove', () => editor.applySnap()) })),
         row(t('set.snapRotate'), numberInput(app.snapRotate, { step: 1, min: 1, max: 180, decimals: 1, onChange: setApp('snapRotate', () => editor.applySnap()) })),

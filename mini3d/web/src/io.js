@@ -72,6 +72,7 @@ function exportRoot(editor, onlySelected) {
     for (const c of from.children) {
       if (!c.visible) continue;
       const copy = c.clone(false);
+      copy.uuid = c.uuid; // animatsiya treklari uuid orqali topiladi
       to.add(copy);
       addVisible(c, copy);
     }
@@ -80,6 +81,7 @@ function exportRoot(editor, onlySelected) {
   else {
     src.updateWorldMatrix(true, false);
     const copy = src.clone(false);
+    copy.uuid = src.uuid;
     src.matrixWorld.decompose(copy.position, copy.quaternion, copy.scale);
     root.add(copy);
     addVisible(src, copy);
@@ -101,7 +103,8 @@ export async function exportModel(editor, format, { onlySelected = false } = {})
   switch (format) {
     case 'glb':
     case 'gltf': {
-      const res = await new GLTFExporter().parseAsync(root, { binary: format === 'glb', onlyVisible: true });
+      const clip = editor.animator?.bakeClip('Mini3D');
+      const res = await new GLTFExporter().parseAsync(root, { binary: format === 'glb', onlyVisible: true, animations: clip ? [clip] : [] });
       return format === 'glb' ? res : JSON.stringify(res);
     }
     case 'obj':

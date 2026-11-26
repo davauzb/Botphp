@@ -3,7 +3,22 @@
 Telefonda 3D model yaratish uchun yengil muharrir. Ilova to'liq oflayn ishlaydi.
 3D qism [three.js](https://threejs.org) asosida, Android qismi esa WebView.
 
-**Tayyor APK:** [`release/Mini3D-v1.0.apk`](release/Mini3D-v1.0.apk) (Android 7.0 va undan yuqori)
+**Tayyor APK:** [`release/Mini3D-v2.0.apk`](release/Mini3D-v2.0.apk) (Android 7.0 va undan yuqori)
+
+## v2.0 da yangi
+
+| Imkoniyat | Tavsif |
+|---|---|
+| **Haykaltaroshlik (Sculpt)** | 8 ta cho'tka: chizish, loy, shishirish, silliqlash, tortish, tekislash, siqish, chuqur chiziq. Radius/kuch, teskari rejim, X simmetriya, "detal qo'shish" (×4), loy shar/blok/kapsula. Bir barmoq — shakllantirish, ikki barmoq — kamera. 600 ming uchburchakkacha |
+| **Silliqlash (Subdivision)** | Burchakli shakllarni 1–3 daraja yumaloqlash, qirralarni saqlash burchagi bilan |
+| **Effektlar** | Olov, uchqun, tutun, sehr, qor, energiya — har birining rang/zichlik/tezlik/o'lchami sozlanadi; guruhga qo'shilsa obyekt bilan birga harakatlanadi |
+| **Nur taratish (Bloom)** | Yonib turgan materiallar va olov atrofida haqiqiy nur |
+| **Animatsiya** | Vaqt chizig'i, kalit kadrlar (silliq interpolyatsiya), tayyor harakatlar: qanot qoqish, chayqalish, suzish, aylanish, nafas, titrash |
+| **Video** | Animatsiyani MP4/WebM videoga yozish (Telegram, Instagram uchun) |
+| **GLB animatsiya bilan** | Eksport qilingan GLB da animatsiya ham bo'ladi |
+| **Aylanish markazi (pivot)** | Qanot yelkadan, eshik ilmoqdan aylanishi uchun |
+| **Namunalar** | Olov feniks-ajdar, gulxan, sehrli kristall — darhol ochib ko'rish mumkin |
+| **Tezlik** | Undo xotirasi ixcham (o'zgarmagan ma'lumotlar qayta ishlatiladi), BVH bilan tez nur kesishuvi |
 
 ## Imkoniyatlar
 
@@ -30,7 +45,11 @@ mini3d/
 │   │   ├── editor.js        3D yadro: sahna, kamera, tanlash, saqlash
 │   │   ├── primitives.js    SHAKLLAR reestri
 │   │   ├── materials.js     material turlari va andozalar
-│   │   ├── tools.js         modellash vositalari
+│   │   ├── tools.js         modellash vositalari (boolean, subdivision, pivot...)
+│   │   ├── sculpt.js        haykaltaroshlik cho'tkalari
+│   │   ├── effects.js       zarracha effektlari (olov, tutun...)
+│   │   ├── animation.js     kalit kadrlar, tayyor harakatlar, video
+│   │   ├── samples.js       namuna sahnalar
 │   │   ├── io.js            import / eksport
 │   │   ├── history.js       undo / redo
 │   │   ├── storage.js       loyihalarni saqlash (IndexedDB)
@@ -104,6 +123,26 @@ registerTool({
 
 Vosita "Vositalar" (sehrli tayoqcha) menyusida paydo bo'ladi.
 
+### Yangi sculpt cho'tkasi (`src/sculpt.js`)
+
+`brushes` ro'yxatiga `{ id, label, icon }` qo'shing va `_dab()` ichidagi `switch` ga shu `id` uchun
+uchni qanday siljitish formulasini yozing (`dx, dy, dz`).
+
+### Yangi effekt (`src/effects.js`)
+
+```js
+registerEffect({
+  id: 'bubbles', label: 'Pufakchalar', icon: 'sphere', blending: 'normal',
+  params: [...common({ rate: 20, life: 4, size: 0.2, speed: 0.5, radius: 1, c0: '#fff', c1: '#9ad', c2: '#58a' })],
+  spawn(p, P, rnd) { p.x = (rnd() - 0.5) * P.radius; p.vy = P.speed; p.size = P.size; },
+  update(p, dt, P, t) { p.vx = Math.sin(t * 2 + p.seed * 9) * 0.2; p.curSize = p.size; },
+});
+```
+
+### Yangi tayyor harakat (`src/animation.js`)
+
+`motions` obyektiga tur qo'shing va `applyMotion()` ga uning formulasini yozing.
+
 ### Boshqalar
 
 - **Material andozasi:** `materials.js` → `materialPresets` ro'yxatiga element qo'shing.
@@ -113,9 +152,9 @@ Vosita "Vositalar" (sehrli tayoqcha) menyusida paydo bo'ladi.
 
 ### Keyingi qadamlar uchun g'oyalar
 
+- Suyaklar (skeleton/rig) va teri bog'lash — personajni pozaga keltirish
+- Sculpt uchun: niqob (mask), alfa-cho'tkalar, dinamik topologiya, voxel remesh
+- Rang bilan bo'yash (vertex paint / texture paint)
 - Bir nechta obyektni birdaniga tanlash
-- Uchlar/qirralar darajasida tahrirlash (vertex/edge editing)
-- Animatsiya (keyframe) va video yozish
-- Modifikatorlar: subdivision, bevel, deform
-- Tayyor modellar kutubxonasi (mebel, daraxt va h.k.)
+- Tayyor modellar kutubxonasi
 - AR rejimida ko'rish (ARCore)

@@ -7,6 +7,8 @@ import { imageFileToTexture, pickFile } from '../io.js';
 import { isDescendant } from '../editor.js';
 import { icon } from '../icons.js';
 import { t } from '../i18n.js';
+import { effects, effectDefaults } from '../effects.js';
+import { motions } from '../animation.js';
 
 const R2D = THREE.MathUtils.RAD2DEG;
 const D2R = THREE.MathUtils.DEG2RAD;
@@ -25,6 +27,9 @@ export function createProperties(editor, ui) {
     if (obj.isMesh && obj.userData.prim && primitives.has(obj.userData.prim)) el.append(geometrySection(obj));
     if (obj.isMesh && obj.material) el.append(materialSection(obj));
     if (obj.isLight) el.append(lightSection(obj));
+    if (obj.userData.effect && effects.has(obj.userData.effect.type)) el.append(effectSection(obj));
+    if (obj.isMesh) el.append(sculptSection(obj));
+    el.append(animSection(obj));
     el.append(objectSection(obj));
     if (!obj.isLight) el.append(infoSection(obj));
   };
@@ -41,7 +46,7 @@ export function createProperties(editor, ui) {
 
   // ---------- Sarlavha (nom) ----------
   function header(obj) {
-    const typeLabel = obj.userData.prim && primitives.has(obj.userData.prim) ? t(primitives.get(obj.userData.prim).label) : obj.isLight ? t('light.' + obj.type) : obj.userData.imported ? t('obj.model') : obj.isGroup ? t('obj.group') : t('obj.mesh');
+    const typeLabel = obj.userData.prim && primitives.has(obj.userData.prim) ? t(primitives.get(obj.userData.prim).label) : obj.isLight ? t('light.' + obj.type) : obj.userData.effect && effects.has(obj.userData.effect.type) ? t('props.effect') + ' · ' + t(effects.get(obj.userData.effect.type).label) : obj.userData.imported ? t('obj.model') : obj.isGroup ? t('obj.group') : t('obj.mesh');
     const name = textInput(obj.name, {
       onInput: (v) => {
         obj.name = v;
@@ -357,6 +362,79 @@ export function createProperties(editor, ui) {
     }
     if (L.shadow) items.push(row(t('light.castShadow'), toggle(L.castShadow, (v) => ((L.castShadow = v), ch(true)))));
     return section(t('props.light'), ...items);
+  }
+
+  // ---------- Effekt parametrlari ----------
+  function effectSection(obj) {
+    const fx = obj.userData.effect;
+    const def = effects.get(fx.type);
+    fx.params = { ...effectDefaults(fx.type), ...(fx.params || {}) };
+    const P = fx.params;
+    const rows = def.params.map((p) => {
+      let ctrl;
+      if (p.type === 'color') {
+        ctrl = colorInput(P[p.key], { onInput: (v) => (P[p.key] = v), onChange: () => editor.commit('effect') });
+      } else {
+        ctrl = slider(P[p.key], {
+          min: p.min,
+          max: p.max,
+          step: p.step,
+          onInput: (v) => (P[p.key] = v),
+          onChange: () => editor.commit('effect'),
+        });
+      }
+      return row(t(p.label), ctrl);
+    });
+    return section(t('props.effect') + ' · ' + t(def.label), ...rows);
+  }
+
+  // ---------- Sculpt ----------
+  function sculptSection(obj) {
+    const tris = Math.round(((obj.geometry.index ? obj.geometry.index.count : obj.geometry.attributes.position?.count || 0) / 3));
+    return section(
+      t('props.sculpt'),
+      h('p.hint', t('sculpt.about')),
+      h(
+        'div.btn-row',
+        h('button.btn.primary', { type: 'button', on: { click: () => ui.enterSculpt(obj) } }, h('span', { html: icon('brush', 18) }), t('sculpt.start')),
+        h('button.btn', { type: 'button', on: { click: () => ui.subdivideDialog(obj) } }, h('span', { html: icon('subdivide', 18) }), t('tool.subdivide'))
+      ),
+      h('div.hint', tris.toLocaleString() + ' ' + t('stats.tris'))
+    );
+  }
+
+  // ---------- Animatsiya ----------
+  function animSection(obj) {
+    const items = [];
+    const m = obj.userData.motion;
+    items.push(
+      row(
+        t('anim.motion'),
+        select([{ value: '', label: '— ' + t('anim.none') + ' —' }, ...Object.entries(motions).map(([id, d]) => ({ value: id, label: t(d.label) }))], m?.type || '', (v) => {
+          ui.animator.setMotion(obj, v || null);
+          rerender();
+        })
+      )
+    );
+    if (m?.type) {
+      const mm = obj.userData.motion;
+      const unit = motions[mm.type].unit;
+      items.push(row(t('anim.axis'), select(['x', 'y', 'z'].map((a) => ({ value: a, label: a.toUpperCase() })), mm.axis, (v) => ((mm.axis = v), editor.commit('motion')))));
+      const maxAmt = unit === '°' ? 180 : unit === '×' ? 1 : unit === 'm' ? 3 : 1;
+      if (mm.type !== 'spin') items.push(row(t('anim.amount') + (unit && unit !== '×' ? ` (${unit})` : ''), slider(mm.amount, { min: 0, max: maxAmt, step: maxAmt / 200, onInput: (v) => (mm.amount = v), onChange: () => editor.commit('motion') })));
+      items.push(row(t('anim.speed'), slider(mm.speed, { min: 0, max: mm.type === 'shake' ? 20 : 4, step: 0.05, onInput: (v) => (mm.speed = v), onChange: () => editor.commit('motion') })));
+      items.push(row(t('anim.phase'), slider(mm.phase || 0, { min: 0, max: 360, step: 5, onInput: (v) => (mm.phase = v), onChange: () => editor.commit('motion') })));
+      items.push(h('p.hint', t('anim.motionHint')));
+    }
+    const nk = obj.userData.keys?.length || 0;
+    items.push(
+      h(
+        'div.btn-row',
+        h('button.btn', { type: 'button', on: { click: () => (ui.showTimeline(true), ui.animator.addKey(obj), rerender()) } }, h('span', { html: icon('keyAdd', 18) }), t('anim.addKey')),
+        nk ? h('button.btn', { type: 'button', on: { click: () => (ui.animator.clearKeys(obj), rerender()) } }, h('span', { html: icon('trash', 18) }), t('anim.clearKeys') + ` (${nk})`) : null
+      )
+    );
+    return section(t('props.anim'), ...items);
   }
 
   // ---------- Obyekt sozlamalari ----------
