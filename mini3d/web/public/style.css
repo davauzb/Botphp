@@ -312,3 +312,13 @@ body.sculpting .toolstrip .icon-btn[data-mode] { opacity: .55; }
 .ai-steps { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 .ai-sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin: 0 2px; vertical-align: -2px; border: 1px solid rgba(255,255,255,.2); }
 .ai-error { color: var(--danger); font-size: 13px; white-space: pre-wrap; }
+
+/* ============ Bo'yash/niqob, dars ============ */
+.sb-paint, .sb-mask { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.sb-paint::-webkit-scrollbar { display: none; }
+.sb-paint .swatch { flex: none; width: 26px; height: 26px; }
+.sb-paint .color { flex: none; width: 44px; }
+.sb-small { height: 34px; padding: 0 10px; font-size: 12px; flex: none; }
+.tut-steps { padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+.tut-steps li { line-height: 1.45; }
+.tut-btn { margin-top: 6px; display: flex; height: 36px; }

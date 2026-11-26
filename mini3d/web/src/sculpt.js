@@ -28,7 +28,20 @@ export const brushes = [
   { id: 'flatten', label: 'sculpt.flatten', icon: 'bFlatten' },
   { id: 'pinch', label: 'sculpt.pinch', icon: 'bPinch' },
   { id: 'crease', label: 'sculpt.crease', icon: 'bCrease' },
+  { id: 'paint', label: 'sculpt.paint', icon: 'palette' },
+  { id: 'mask', label: 'sculpt.mask', icon: 'lock' },
 ];
+
+// Niqob ko'rinishi: ko'k-qora qatlam (mask attributi bo'yicha)
+const maskMaterial = new THREE.ShaderMaterial({
+  vertexShader: `attribute float mask; varying float vM;
+    void main(){ vM = mask; gl_Position = projectionMatrix * modelViewMatrix * vec4(position + normal * 0.0005, 1.0); }`,
+  fragmentShader: `varying float vM; void main(){ if (vM < 0.01) discard; gl_FragColor = vec4(0.05, 0.12, 0.35, vM * 0.65); }`,
+  transparent: true,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -2,
+});
 
 export const MAX_TRIS = 600000;
 
@@ -47,7 +60,16 @@ export class Sculptor {
     this.strength = 0.5;
     this.invert = false;
     this.symmetry = true;
+    this.paintColor = '#d01a1a';
     this.stroke = null;
+    this.overlay = new THREE.Mesh(new THREE.BufferGeometry(), maskMaterial);
+    this.overlay.matrixAutoUpdate = false;
+    this.overlay.visible = false;
+    this.overlay.renderOrder = 4;
+    editor.helpers.add(this.overlay);
+    editor.on('beforeRender', () => {
+      if (this.mesh && this.overlay.visible) this.overlay.matrix.copy(this.mesh.matrixWorld);
+    });
     this.raycaster = new THREE.Raycaster();
     this.raycaster.firstHitOnly = true;
 
@@ -108,6 +130,7 @@ export class Sculptor {
     this.mesh = null;
     this.topo = null;
     this.cursor.visible = false;
+    this.overlay.visible = false;
     E.pointerInterceptor = null;
     if (E.mode === 'sculpt') E.setMode('translate');
     E.emit('sculptChanged', false);
@@ -119,6 +142,68 @@ export class Sculptor {
     g.computeBoundsTree({ maxLeafTris: 10 });
     this.mesh.raycast = acceleratedRaycast;
     this.topo = buildTopology(g);
+    const n = g.attributes.position.count;
+    if (!g.attributes.mask || g.attributes.mask.count !== n) g.setAttribute('mask', new THREE.BufferAttribute(new Float32Array(n), 1));
+    this.overlay.geometry = g;
+    this._updateMaskVisible();
+  }
+
+  _updateMaskVisible() {
+    const m = this.mesh?.geometry.attributes.mask?.array;
+    let any = false;
+    if (m) for (let i = 0; i < m.length; i += 7) if (m[i] > 0.01) { any = true; break; }
+    this.overlay.visible = any || this.brush === 'mask';
+  }
+
+  /** Vertex ranglar bo'lmasa — material rangidan yaratamiz */
+  ensureColors() {
+    const g = this.mesh.geometry;
+    const mat = this.mesh.material;
+    if (!g.attributes.color) {
+      const n = g.attributes.position.count;
+      const c = mat.color ? mat.color.clone() : new THREE.Color(1, 1, 1);
+      const arr = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    }
+    if (!mat.vertexColors) {
+      mat.vertexColors = true;
+      mat.color?.set('#ffffff');
+      mat.needsUpdate = true;
+    }
+  }
+
+  fillColor(hex) {
+    if (!this.mesh) return;
+    this.ensureColors();
+    const c = new THREE.Color(hex);
+    const g = this.mesh.geometry, col = g.attributes.color.array, m = g.attributes.mask.array;
+    for (let i = 0; i < m.length; i++) {
+      const k = 1 - m[i];
+      col[i * 3] += (c.r - col[i * 3]) * k;
+      col[i * 3 + 1] += (c.g - col[i * 3 + 1]) * k;
+      col[i * 3 + 2] += (c.b - col[i * 3 + 2]) * k;
+    }
+    g.attributes.color.needsUpdate = true;
+    this.editor.commit('paint');
+  }
+
+  invertMask() {
+    if (!this.mesh) return;
+    const m = this.mesh.geometry.attributes.mask;
+    for (let i = 0; i < m.array.length; i++) m.array[i] = 1 - m.array[i];
+    m.needsUpdate = true;
+    this._updateMaskVisible();
+    this.editor.commit('mask');
+  }
+
+  clearMask() {
+    if (!this.mesh) return;
+    const m = this.mesh.geometry.attributes.mask;
+    m.array.fill(0);
+    m.needsUpdate = true;
+    this._updateMaskVisible();
+    this.editor.commit('mask');
   }
 
   triangleCount() {
@@ -283,6 +368,7 @@ export class Sculptor {
     const r2 = radius * radius;
     const sym = this.symmetry;
     const cx = center.x, cy = center.y, cz = center.z;
+    const maskArr = this.brush === 'mask' ? null : this.mesh.geometry.attributes.mask?.array;
     const idx = this._idxBuf && this._idxBuf.length >= n ? this._idxBuf : (this._idxBuf = new Uint32Array(n));
     const w = this._wBuf && this._wBuf.length >= n ? this._wBuf : (this._wBuf = new Float32Array(n));
     const side = this._sideBuf && this._sideBuf.length >= n ? this._sideBuf : (this._sideBuf = new Int8Array(n));
@@ -303,8 +389,11 @@ export class Sculptor {
       }
       if (d2 < r2) {
         const t = 1 - d2 / r2;
+        let wt = t * t * (3 - 2 * t); // silliq so'nish
+        if (maskArr) wt *= 1 - maskArr[i];
+        if (wt <= 0) continue;
         idx[count] = i;
-        w[count] = t * t * (3 - 2 * t); // silliq so'nish
+        w[count] = wt;
         side[count] = sd;
         count++;
       }
@@ -342,6 +431,31 @@ export class Sculptor {
     avgP.multiplyScalar(1 / Math.max(wsum, 1e-9));
 
     const b = this.brush;
+    if (b === 'paint' || b === 'mask') {
+      if (b === 'paint') {
+        this.ensureColors();
+        const col = g.attributes.color.array;
+        const pc = _c.set(0, 0, 0);
+        const c = new THREE.Color(this.paintColor);
+        for (let j = 0; j < count; j++) {
+          const i3 = idx[j] * 3, a = Math.min(1, w[j] * (0.15 + this.strength * 0.85));
+          col[i3] += (c.r - col[i3]) * a;
+          col[i3 + 1] += (c.g - col[i3 + 1]) * a;
+          col[i3 + 2] += (c.b - col[i3 + 2]) * a;
+        }
+        void pc;
+        g.attributes.color.needsUpdate = true;
+      } else {
+        const m = g.attributes.mask.array;
+        const sgn = this.invert ? -1 : 1;
+        for (let j = 0; j < count; j++) m[idx[j]] = Math.max(0, Math.min(1, m[idx[j]] + sgn * w[j] * (0.3 + this.strength)));
+        g.attributes.mask.needsUpdate = true;
+        this.overlay.visible = true;
+      }
+      if (this.stroke) this.stroke.touched = true;
+      this.editor.requestRender();
+      return;
+    }
     if (b === 'smooth') {
       this._smooth(idx, w, count, Math.min(1, this.strength * 0.9 + 0.1));
     } else {

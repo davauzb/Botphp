@@ -3,7 +3,19 @@
 Telefonda 3D model yaratish uchun yengil muharrir. Ilova to'liq oflayn ishlaydi.
 3D qism [three.js](https://threejs.org) asosida, Android qismi esa WebView.
 
-**Tayyor APK:** [`release/Mini3D-v3.0.apk`](release/Mini3D-v3.0.apk) (Android 7.0 va undan yuqori)
+**Tayyor APK:** [`release/Mini3D-v3.1.apk`](release/Mini3D-v3.1.apk) (Android 7.0 va undan yuqori)
+
+## v3.1 — qo'lda professional ish uchun vositalar (AI'siz)
+
+| Vosita | Tavsif |
+|---|---|
+| **Bo'yash cho'tkasi** | Modelga barmoq bilan rang surtish, "To'ldirish", tayyor ranglar |
+| **Niqob** | Bo'yalgan joy himoyalanadi — boshqa cho'tkalar, bo'yash va naqsh unga ta'sir qilmaydi; teskari/tozalash |
+| **Naqsh bo'rttirish** | Tangacha, yoriq, teri naqshi geometriyaga o'yiladi (3D Worley/shovqin) |
+| **Voxel remesh** | Cho'zilgan to'rni bir xil zichlikka qayta quradi, ranglarni saqlaydi |
+| **Yelpig'ich massiv** | Patlar, yol, tikanlarni burchak, o'lcham va rang o'zgarishi bilan taratadi |
+| **Skelet shablonlari** | Ajdar, uzun ajdar (loong), odam, qush |
+| **Dars** | "Maxluq yasash" — 11 qadamli qo'llanma ilova ichida |
 
 ## v3.0 — ✨ AI Studiya: rasmdan jonli 3D personaj
 

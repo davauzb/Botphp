@@ -9,6 +9,8 @@ import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from 'three-bvh
 import { mergeGeometries, mergeVertices, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { LoopSubdivision } from 'three-subdivide';
 import { organicMesh } from './organic.js';
+import { MeshBVH } from 'three-mesh-bvh';
+import { MarchingCubes } from 'three/examples/jsm/objects/MarchingCubes.js';
 import { deepClone, disposeObject } from './editor.js';
 import { t } from './i18n.js';
 
@@ -317,4 +319,255 @@ export function organicMerge(editor, root, { resolution = 96, blend = 0.15, keep
     disposeObject(root);
   }
   return editor.addObject(mesh, { parent, label: 'organic' });
+}
+
+// ---------- Naqsh bo'rttirish (geometriyani siljitish) ----------
+// 3D Worley (hujayra) shovqini: tangacha, yoriq, teri g'adir-budurligi
+function hash3(x, y, z) {
+  let h = (x * 374761393 + y * 668265263 + z * 2147483647) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+function worley(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  let f1 = 9, f2 = 9;
+  for (let dz = -1; dz <= 1; dz++)
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const cx = xi + dx, cy = yi + dy, cz = zi + dz;
+        const px = cx + hash3(cx, cy, cz), py = cy + hash3(cy, cz, cx), pz = cz + hash3(cz, cx, cy);
+        const d = (px - x) ** 2 + (py - y) ** 2 + (pz - z) ** 2;
+        if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d;
+      }
+  return [Math.sqrt(f1), Math.sqrt(f2)];
+}
+function vnoise(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const fx = x - xi, fy = y - yi, fz = z - zi;
+  const s = (t) => t * t * (3 - 2 * t);
+  const u = s(fx), v = s(fy), w = s(fz);
+  const L = (a, b, t) => a + (b - a) * t;
+  const h = (a, b, c) => hash3(xi + a, yi + b, zi + c);
+  return L(L(L(h(0, 0, 0), h(1, 0, 0), u), L(h(0, 1, 0), h(1, 1, 0), u), v), L(L(h(0, 0, 1), h(1, 0, 1), u), L(h(0, 1, 1), h(1, 1, 1), u), v), w);
+}
+export const displacePatterns = {
+  scales: (x, y, z) => {
+    const [f1, f2] = worley(x, y, z);
+    return Math.min(1, (f2 - f1) * 2.2) ** 0.6; // har bir hujayra — qavariq tangacha
+  },
+  cracks: (x, y, z) => {
+    const [f1, f2] = worley(x, y, z);
+    return Math.min(1, (f2 - f1) * 6); // chegaralar chuqur
+  },
+  skin: (x, y, z) => (vnoise(x, y, z) * 0.6 + vnoise(x * 2.1, y * 2.1, z * 2.1) * 0.3 + vnoise(x * 4.3, y * 4.3, z * 4.3) * 0.1),
+};
+
+/** Naqshni normal bo'ylab "o'yib/bo'rttirib" chiqaradi. Niqob hurmat qilinadi. */
+export function displacePattern(editor, mesh, { pattern = 'scales', strength = 0.03, scale = 8 } = {}) {
+  const g = mesh.geometry;
+  if (!g.attributes.normal) g.computeVertexNormals();
+  const pos = g.attributes.position.array, nor = g.attributes.normal.array;
+  const mask = g.attributes.mask?.array;
+  const f = displacePatterns[pattern];
+  g.computeBoundingSphere();
+  const k = scale / Math.max(0.01, g.boundingSphere.radius);
+  for (let i = 0; i < pos.length / 3; i++) {
+    const m = mask ? 1 - mask[i] : 1;
+    if (m <= 0) continue;
+    const h = (f(pos[i * 3] * k, pos[i * 3 + 1] * k, pos[i * 3 + 2] * k) - 0.5) * strength * m;
+    pos[i * 3] += nor[i * 3] * h;
+    pos[i * 3 + 1] += nor[i * 3 + 1] * h;
+    pos[i * 3 + 2] += nor[i * 3 + 2] * h;
+  }
+  g.attributes.position.needsUpdate = true;
+  g.computeVertexNormals();
+  g.computeBoundingBox();
+  g.computeBoundingSphere();
+  if (g.boundsTree) g.boundsTree.refit();
+  if (mesh.userData.params) {
+    mesh.userData = { ...mesh.userData, prim: 'custom' };
+    delete mesh.userData.params;
+  }
+  editor.emit('objectChanged', mesh, 'geometry');
+  editor.commit('displace');
+}
+
+// ---------- Voxel remesh ----------
+/**
+ * Modelni bir xil zichlikdagi yangi to'rga aylantiradi (sculpt paytida cho'zilgan
+ * uchburchaklarni tuzatadi, teshik/kesishmalarni yopadi). Ranglar ko'chiriladi.
+ */
+export async function voxelRemesh(editor, mesh, { resolution = 96, onProgress } = {}) {
+  const src = mesh.geometry;
+  const bvh = src.boundsTree || new MeshBVH(src);
+  src.computeBoundingBox();
+  const bb = src.boundingBox.clone();
+  const size = bb.getSize(new THREE.Vector3());
+  const center = bb.getCenter(new THREE.Vector3());
+  const N = resolution;
+  const ext = (Math.max(size.x, size.y, size.z) / 2) * (1 + 4 / N);
+  const cell = (2 * ext) / N;
+  const dist = new Float32Array(N * N * N).fill(cell * 3);
+  const near = new Uint8Array(N * N * N);
+  const nsign = new Int8Array(N * N * N); // sirtga yaqin kataklar: +1 ichkari, -1 tashqari
+  const p = new THREE.Vector3();
+  const sp = src.attributes.position, si0 = src.index;
+  const ta = new THREE.Vector3(), tb = new THREE.Vector3(), tc = new THREE.Vector3(), fn = new THREE.Vector3();
+  const faceNormal = (f) => {
+    const a = si0 ? si0.getX(f * 3) : f * 3, b = si0 ? si0.getX(f * 3 + 1) : f * 3 + 1, c = si0 ? si0.getX(f * 3 + 2) : f * 3 + 2;
+    ta.fromBufferAttribute(sp, a); tb.fromBufferAttribute(sp, b); tc.fromBufferAttribute(sp, c);
+    return fn.subVectors(tb, ta).cross(tc.sub(ta));
+  };
+  const target = { point: new THREE.Vector3(), distance: 0, faceIndex: 0 };
+  for (let z = 0; z < N; z++) {
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        p.set(center.x + ((x - N / 2) / (N / 2)) * ext, center.y + ((y - N / 2) / (N / 2)) * ext, center.z + ((z - N / 2) / (N / 2)) * ext);
+        const r = bvh.closestPointToPoint(p, target, 0, cell * 2);
+        if (r) {
+          const i = z * N * N + y * N + x;
+          dist[i] = target.distance;
+          if (target.distance < cell * 1.5) {
+            near[i] = 1;
+            const nrm = faceNormal(target.faceIndex);
+            nsign[i] = p.clone().sub(target.point).dot(nrm) > 0 ? -1 : 1;
+          }
+        }
+      }
+    }
+    if (z % 8 === 0) {
+      onProgress?.((z / N) * 0.8);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+  // Tashqarini chegaradan "suv bosish" bilan aniqlaymiz (devor — sirtga yaqin kataklar)
+  const outside = new Uint8Array(N * N * N);
+  const stack = [];
+  const push = (i) => {
+    if (!outside[i] && !near[i]) {
+      outside[i] = 1;
+      stack.push(i);
+    }
+  };
+  for (let a = 0; a < N; a++)
+    for (let b = 0; b < N; b++) {
+      push(a * N * N + b * N);
+      push(a * N * N + b * N + N - 1);
+      push(a * N * N + b);
+      push(a * N * N + (N - 1) * N + b);
+      push(a * N + b);
+      push((N - 1) * N * N + a * N + b);
+    }
+  while (stack.length) {
+    const i = stack.pop();
+    const x = i % N, y = ((i / N) | 0) % N, z = (i / (N * N)) | 0;
+    if (x > 0) push(i - 1);
+    if (x < N - 1) push(i + 1);
+    if (y > 0) push(i - N);
+    if (y < N - 1) push(i + N);
+    if (z > 0) push(i - N * N);
+    if (z < N - 1) push(i + N * N);
+  }
+  const mc = new MarchingCubes(N, new THREE.MeshBasicMaterial(), false, false, Math.min(1500000, N * N * 60));
+  mc.isolation = 0;
+  for (let i = 0; i < dist.length; i++) {
+    // ichkarida musbat; sirt atrofida masofa bo'yicha
+    let v;
+    if (near[i]) v = nsign[i] * dist[i];
+    else v = outside[i] ? -dist[i] : dist[i];
+    mc.field[i] = v / cell;
+    const x = i % N, y = ((i / N) | 0) % N, z = (i / (N * N)) | 0;
+    if (x < 1 || y < 1 || z < 1 || x > N - 3 || y > N - 3 || z > N - 3) mc.field[i] = -1;
+  }
+  onProgress?.(0.85);
+  mc.update();
+  const count = mc.count;
+  if (count < 3) throw new Error('empty');
+  let g = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    pos[i * 3] = center.x + mc.positionArray[i * 3] * ext;
+    pos[i * 3 + 1] = center.y + mc.positionArray[i * 3 + 1] * ext;
+    pos[i * 3 + 2] = center.z + mc.positionArray[i * 3 + 2] * ext;
+  }
+  mc.geometry.dispose();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g = mergeVertices(g, cell * 1e-3);
+  // yuzalar yo'nalishini tekshirish: normal tashqariga qarashi kerak
+  g.computeVertexNormals();
+  {
+    const n = g.attributes.normal.array, pp = g.attributes.position.array;
+    let out = 0, tot = 0;
+    for (let i = 0; i < pp.length / 3; i += 37) {
+      const v = new THREE.Vector3(pp[i * 3], pp[i * 3 + 1], pp[i * 3 + 2]).sub(center);
+      out += v.dot(new THREE.Vector3(n[i * 3], n[i * 3 + 1], n[i * 3 + 2])) > 0 ? 1 : 0;
+      tot++;
+    }
+    if (out < tot / 2) {
+      const idx = g.index.array;
+      for (let f = 0; f < idx.length; f += 3) { const t = idx[f + 1]; idx[f + 1] = idx[f + 2]; idx[f + 2] = t; }
+      g.computeVertexNormals();
+    }
+  }
+  // Ranglarni eng yaqin nuqtadan ko'chiramiz
+  if (src.attributes.color) {
+    const sc = src.attributes.color, si = src.index;
+    const pp = g.attributes.position.array;
+    const col = new Float32Array(pp.length);
+    for (let i = 0; i < pp.length / 3; i++) {
+      p.set(pp[i * 3], pp[i * 3 + 1], pp[i * 3 + 2]);
+      if (bvh.closestPointToPoint(p, target, 0, cell * 4)) {
+        const f = target.faceIndex;
+        const a = si ? si.getX(f * 3) : f * 3;
+        col[i * 3] = sc.getX(a); col[i * 3 + 1] = sc.getY(a); col[i * 3 + 2] = sc.getZ(a);
+      } else col.fill(1, i * 3, i * 3 + 3);
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
+  g.computeBoundingBox();
+  g.computeBoundingSphere();
+  const old = mesh.geometry;
+  old.disposeBoundsTree?.();
+  mesh.geometry = g;
+  old.dispose();
+  mesh.userData = { ...mesh.userData, prim: 'custom', sculpt: true };
+  delete mesh.userData.params;
+  onProgress?.(1);
+  editor.emit('objectChanged', mesh, 'geometry');
+  editor.emit('sceneGraphChanged');
+  editor.commit('remesh');
+  return g;
+}
+
+// ---------- Yelpig'ich massiv (patlar, tikanlar, yol) ----------
+/**
+ * Obyekt nusxalarini o'z markazi atrofida yelpig'ichdek taratadi.
+ * Patning markazi uning asosida bo'lgani uchun qanot/dum/yol yasash oson.
+ */
+export function fanArray(editor, obj, { count = 9, angle = 90, axis = 'z', step = [0, 0, 0], scaleEnd = 0.6, colorShift = 0 } = {}) {
+  const parent = obj.parent || editor.content;
+  const ax = new THREE.Vector3(axis === 'x' ? 1 : 0, axis === 'y' ? 1 : 0, axis === 'z' ? 1 : 0);
+  const baseQ = obj.quaternion.clone();
+  const baseS = obj.scale.clone();
+  const baseP = obj.position.clone();
+  const created = [];
+  for (let k = 1; k < count; k++) {
+    const t = k / (count - 1);
+    const c = deepClone(obj);
+    c.name = editor.uniqueName(obj.name.replace(/ \d+$/, ''));
+    c.quaternion.copy(baseQ).premultiply(new THREE.Quaternion().setFromAxisAngle(ax, THREE.MathUtils.degToRad(angle * t)));
+    c.scale.copy(baseS).multiplyScalar(1 + (scaleEnd - 1) * t);
+    c.position.copy(baseP).add(new THREE.Vector3(...step).multiplyScalar(k));
+    if (colorShift && c.material?.color) {
+      const hsl = {};
+      c.material.color.getHSL(hsl);
+      c.material.color.setHSL((hsl.h + colorShift * t + 1) % 1, hsl.s, hsl.l);
+    }
+    parent.add(c);
+    created.push(c);
+  }
+  editor.syncLightProxies();
+  editor.emit('sceneGraphChanged');
+  editor.commit('fan');
+  return created;
 }

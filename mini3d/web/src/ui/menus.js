@@ -3,7 +3,9 @@ import * as THREE from 'three';
 import { h, openSheet, gridButtons, listButton, toast, confirmDialog, promptDialog, row, numberInput, select, toggle, slider } from './dom.js';
 import { primitives } from '../primitives.js';
 import { exportFormats, exportModel, saveFile, importFile, importAccept, pickFile, dataURLToArrayBuffer, isAndroid } from '../io.js';
-import { booleanOp, arrayOp, mirrorOp, dropToGround, centerOrigin, resetTransform, mergeIntoMesh, bakeGeometry, smoothNormals, tools, subdivideOp, setPivot, organicMerge } from '../tools.js';
+import { booleanOp, arrayOp, mirrorOp, dropToGround, centerOrigin, resetTransform, mergeIntoMesh, bakeGeometry, smoothNormals, tools, subdivideOp, setPivot, organicMerge, displacePattern, voxelRemesh, fanArray } from '../tools.js';
+import { templates, addTemplate } from '../templates.js';
+import { openTutorial } from './tutorial.js';
 import { effects } from '../effects.js';
 import { recordVideo } from './timeline.js';
 import { samples } from '../samples.js';
@@ -46,6 +48,8 @@ export function createMenus(editor, app) {
           }),
         }))
       ),
+      h('div.menu-label', t('add.templates')),
+      gridButtons(templates.map((tp) => ({ icon: tp.icon, label: t(tp.label), onClick: add(() => (addTemplate(editor, tp.id), toast(t('tpl.hint')))) }))),
       h('div.menu-label', t('add.creature')),
       gridButtons(byCat('creature')),
       h('div.menu-label', t('add.effects')),
@@ -90,6 +94,7 @@ export function createMenus(editor, app) {
     const body = h(
       'div.list',
       listButton('magic', '✨ ' + t('ai.title'), t('ai.menuSub'), go(() => import_ai())),
+      listButton('help', '🎓 ' + t('tut.title'), t('tut.sub'), go(() => openTutorial(editor, app))),
       listButton('file', t('file.new'), t('file.newSub'), go(newProject)),
       listButton('save', t('file.save'), app.projectName ? app.projectName : t('file.saveSub'), go(() => saveProject(false))),
       listButton('save', t('file.saveAs'), null, go(() => saveProject(true))),
@@ -299,6 +304,9 @@ export function createMenus(editor, app) {
       { icon: 'subdivide', label: t('tool.subdivide'), onClick: go(subdivideDialog), disabled: !(isMesh || obj?.isGroup) },
       { icon: 'organic', label: t('tool.organic'), onClick: go(organicDialog), disabled: !obj?.isGroup },
       { icon: 'pivot', label: t('tool.pivot'), onClick: go(pivotDialog) },
+      { icon: 'array', label: t('tool.fan'), onClick: go(fanDialog) },
+      { icon: 'bDraw', label: t('tool.displace'), onClick: go(displaceDialog), disabled: !isMesh },
+      { icon: 'detail', label: t('tool.remesh'), onClick: go(remeshDialog), disabled: !isMesh },
       { icon: 'boolean', label: t('tool.boolean'), onClick: go(booleanDialog), disabled: !isMesh },
       { icon: 'array', label: t('tool.array'), onClick: go(arrayDialog) },
       { icon: 'mirror', label: t('tool.mirror'), onClick: go(mirrorDialog) },
@@ -515,6 +523,72 @@ export function createMenus(editor, app) {
       )
     );
     const s = openSheet(t('tool.organic'), body);
+  }
+
+  function fanDialog(obj) {
+    const st = { count: 12, angle: 110, axis: 'z', scaleEnd: 0.55, colorShift: 0.06, sx: 0, sy: 0, sz: 0 };
+    const body = h(
+      'div.dialog',
+      h('p.hint', t('fan.hint')),
+      row(t('array.count'), numberInput(st.count, { step: 1, min: 2, max: 200, decimals: 0, onInput: (v) => (st.count = Math.round(v)) })),
+      row(t('fan.angle'), numberInput(st.angle, { step: 5, min: -360, max: 360, decimals: 0, onInput: (v) => (st.angle = v) })),
+      row(t('array.axis'), select(['x', 'y', 'z'].map((v) => ({ value: v, label: v.toUpperCase() })), 'z', (v) => (st.axis = v))),
+      row(t('fan.scaleEnd'), slider(st.scaleEnd, { min: 0.1, max: 2, step: 0.05, onInput: (v) => (st.scaleEnd = v) })),
+      row(t('fan.colorShift'), slider(st.colorShift, { min: -0.3, max: 0.3, step: 0.01, onInput: (v) => (st.colorShift = v) })),
+      row(t('fan.step') + ' X', numberInput(0, { step: 0.05, onInput: (v) => (st.sx = v) })),
+      row(t('fan.step') + ' Y', numberInput(0, { step: 0.05, onInput: (v) => (st.sy = v) })),
+      row(t('fan.step') + ' Z', numberInput(0, { step: 0.05, onInput: (v) => (st.sz = v) })),
+      h(
+        'div.dialog-actions',
+        h('button.btn', { type: 'button', on: { click: () => s.close() } }, t('cancel')),
+        h('button.btn.primary', { type: 'button', on: { click: () => { s.close(); fanArray(editor, obj, { ...st, step: [st.sx, st.sy, st.sz] }); toast(t('done'), 'ok'); } } }, t('apply'))
+      )
+    );
+    const s = openSheet(t('tool.fan'), body);
+  }
+
+  function displaceDialog(obj) {
+    const st = { pattern: 'scales', strength: 0.04, scale: 10 };
+    const tris = (obj.geometry.index ? obj.geometry.index.count : obj.geometry.attributes.position.count) / 3;
+    const body = h(
+      'div.dialog',
+      h('p.hint', t('disp.hint')),
+      tris < 50000 ? h('p.hint', '⚠️ ' + t('disp.lowPoly')) : null,
+      row(t('mat.pattern'), select([{ value: 'scales', label: t('pat.scales') }, { value: 'cracks', label: t('pat.lava') }, { value: 'skin', label: t('disp.skin') }], 'scales', (v) => (st.pattern = v))),
+      row(t('disp.strength'), slider(st.strength, { min: -0.2, max: 0.2, step: 0.005, onInput: (v) => (st.strength = v) })),
+      row(t('disp.scale'), slider(st.scale, { min: 1, max: 60, step: 1, onInput: (v) => (st.scale = v) })),
+      h(
+        'div.dialog-actions',
+        h('button.btn', { type: 'button', on: { click: () => s.close() } }, t('cancel')),
+        h('button.btn.primary', { type: 'button', on: { click: () => { s.close(); app.busy(true, t('bool.working')); setTimeout(() => { try { displacePattern(editor, obj, st); toast(t('done'), 'ok'); } catch (e) { console.error(e); toast(t('err.tool'), 'error'); } finally { app.busy(false); } }, 30); } } }, t('apply'))
+      )
+    );
+    const s = openSheet(t('tool.displace'), body);
+  }
+
+  function remeshDialog(obj) {
+    let res = 96;
+    const body = h(
+      'div.dialog',
+      h('p.hint', t('remesh.hint')),
+      row(t('organic.quality'), select([{ value: '64', label: t('q.low') }, { value: '96', label: t('q.medium') }, { value: '128', label: t('q.high') }], '96', (v) => (res = +v))),
+      h(
+        'div.dialog-actions',
+        h('button.btn', { type: 'button', on: { click: () => s.close() } }, t('cancel')),
+        h('button.btn.primary', { type: 'button', on: { click: async () => {
+          s.close();
+          app.busy(true, t('remesh.working') + ' 0%');
+          try {
+            const wasSculpt = app.sculptor.active;
+            if (wasSculpt) app.sculptor.exit();
+            await voxelRemesh(editor, obj, { resolution: res, onProgress: (p) => app.busy(true, t('remesh.working') + ' ' + Math.round(p * 100) + '%') });
+            if (wasSculpt) app.sculptor.enter(obj);
+            toast(t('done'), 'ok');
+          } catch (e) { console.error(e); toast(t('err.tool'), 'error'); } finally { app.busy(false); }
+        } } }, t('apply'))
+      )
+    );
+    const s = openSheet(t('tool.remesh'), body);
   }
 
   function pivotDialog(obj) {

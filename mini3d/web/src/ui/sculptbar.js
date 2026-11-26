@@ -54,10 +54,31 @@ export function createSculptBar(editor, sculptor, settings, save) {
     sculptor.relax(2);
     toast(t('done'));
   }, 'sb-tog');
+  // Bo'yash va niqob uchun qo'shimcha qator
+  const colorIn = h('input.color', { type: 'color' });
+  colorIn.value = sculptor.paintColor;
+  colorIn.addEventListener('input', () => (sculptor.paintColor = colorIn.value));
+  const swatchColors = ['#d01a1a', '#ff7a1a', '#ffc94d', '#f3e4c8', '#7c0a12', '#1a1a1a', '#3a86ff', '#3fae7c', '#ffffff'];
+  const paintRow = h(
+    'div.sb-row.sb-paint',
+    colorIn,
+    ...swatchColors.map((c) => h('button.swatch', { type: 'button', style: { background: c }, on: { click: () => ((sculptor.paintColor = c), (colorIn.value = c)) } })),
+    h('button.btn.sb-small', { type: 'button', on: { click: () => (sculptor.fillColor(sculptor.paintColor), toast(t('done'))) } }, t('sculpt.fill'))
+  );
+  const maskRow = h(
+    'div.sb-row.sb-mask',
+    h('span.sb-rl', t('sculpt.maskHint')),
+    h('div.spacer'),
+    h('button.btn.sb-small', { type: 'button', on: { click: () => sculptor.invertMask() } }, t('sculpt.maskInvert')),
+    h('button.btn.sb-small', { type: 'button', on: { click: () => sculptor.clearMask() } }, t('sculpt.maskClear'))
+  );
+
   const doneBtn = h('button.btn.primary.sb-done', { type: 'button', on: { click: () => sculptor.exit() } }, h('span', { html: icon('check', 18) }), t('sculpt.done'));
 
   el.append(
     brushRow,
+    paintRow,
+    maskRow,
     h(
       'div.sb-row',
       range(t('sculpt.radius'), 8, 160, 1, () => sculptor.radius, (v) => ((sculptor.radius = v), (settings.sculptRadius = v))),
@@ -68,6 +89,9 @@ export function createSculptBar(editor, sculptor, settings, save) {
 
   function sync() {
     brushBtns.forEach((b) => b.classList.toggle('active', b.dataset.id === sculptor.brush));
+    paintRow.style.display = sculptor.brush === 'paint' ? '' : 'none';
+    maskRow.style.display = sculptor.brush === 'mask' ? '' : 'none';
+    if (sculptor.mesh) sculptor._updateMaskVisible();
     invBtn.classList.toggle('active', sculptor.invert);
     symBtn.classList.toggle('active', sculptor.symmetry);
     if (sculptor.mesh) info.textContent = Math.round(sculptor.triangleCount()).toLocaleString() + ' ▲';

@@ -12,7 +12,7 @@ import { applyPattern } from './textures.js';
 const UP = new THREE.Vector3(0, 1, 0);
 
 /** Qulay quruvchi: shakl, material, joylashuv, yo'nalish */
-function builder(E) {
+export function builder(E) {
   const add = (id, params, o = {}) => {
     const m = E.createPrimitive(id, params);
     if (o.name) m.name = E.uniqueName(o.name);
