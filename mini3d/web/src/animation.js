@@ -20,6 +20,7 @@ export const motions = {
   spin: { label: 'motion.spin', icon: 'reset', defaults: { axis: 'y', amount: 1, speed: 0.25, phase: 0 }, unit: '×' },
   pulse: { label: 'motion.pulse', icon: 'heart', defaults: { axis: 'y', amount: 0.08, speed: 1, phase: 0 }, unit: '' },
   shake: { label: 'motion.shake', icon: 'zap', defaults: { axis: 'x', amount: 0.04, speed: 6, phase: 0 }, unit: 'm' },
+  wave: { label: 'motion.wave', icon: 'smooth', defaults: { axis: 'z', amount: 0.12, speed: 0.6, phase: 0 }, unit: 'm' },
 };
 
 const axisIndex = { x: 0, y: 1, z: 2 };
@@ -66,6 +67,7 @@ export class Animator {
     this.playing = false;
     this.recording = false;
     this.rests = null; // Map(obj -> {p,q,s})
+    this.waveBases = new Map(); // mesh -> asl uchlar (to'lqin deformatsiyasi uchun)
     editor.updaters.add((dt) => this.tick(dt));
   }
 
@@ -89,7 +91,57 @@ export class Animator {
     for (const o of this.animated()) this.rests.set(o, { p: o.position.clone(), q: o.quaternion.clone(), s: o.scale.clone() });
   }
 
+  /**
+   * To'lqin: modelning chetlari (qanot, dum) markazga nisbatan ko'proq tebranadi.
+   * Uchlar har kadrda asl holatdan qayta hisoblanadi.
+   */
+  _wave(obj, m, time) {
+    const axis = axisIndex[m.axis || 'z'];
+    const along = axis === 0 ? 1 : 0; // x bo'ylab (z/y siljiganda), aks holda y
+    obj.traverse((o) => {
+      if (!o.isMesh || !o.geometry?.attributes.position) return;
+      const pos = o.geometry.attributes.position;
+      let base = this.waveBases.get(o);
+      if (!base || base.length !== pos.array.length) {
+        base = pos.array.slice();
+        this.waveBases.set(o, base);
+        o.geometry.computeBoundingBox();
+        o.userData.__waveBox = o.geometry.boundingBox.clone();
+      }
+      const bb = o.userData.__waveBox;
+      const lo = bb.min.getComponent(along), hi = bb.max.getComponent(along);
+      const mid = (lo + hi) / 2, half = Math.max(1e-6, (hi - lo) / 2);
+      const ylo = bb.min.y, yh = Math.max(1e-6, bb.max.y - bb.min.y);
+      const w0 = TAU * (m.speed || 0) * time + (m.phase || 0) * D2R;
+      const A = (m.amount || 0) * half;
+      const arr = pos.array;
+      for (let i = 0; i < arr.length; i += 3) {
+        const s = (base[i + along] - mid) / half; // -1..1
+        const up = (base[i + 1] - ylo) / yh; // 0..1 (oyoqlar qimirlamasin)
+        const w = Math.min(1, Math.abs(s)) ** 1.5 * Math.min(1, up * 1.6);
+        arr[i] = base[i];
+        arr[i + 1] = base[i + 1];
+        arr[i + 2] = base[i + 2];
+        arr[i + axis] += Math.sin(w0 + Math.abs(s) * 2.2) * A * w;
+        if (axis !== 1) arr[i + 1] += Math.cos(w0 + Math.abs(s) * 2.2) * A * 0.35 * w;
+      }
+      pos.needsUpdate = true;
+    });
+  }
+
+  _restoreWave() {
+    for (const [o, base] of this.waveBases) {
+      const pos = o.geometry?.attributes.position;
+      if (pos && pos.array.length === base.length) {
+        pos.array.set(base);
+        pos.needsUpdate = true;
+      }
+    }
+    this.waveBases.clear();
+  }
+
   _restoreRests() {
+    this._restoreWave();
     if (!this.rests) return;
     for (const [o, r] of this.rests) {
       if (o.userData?.keys?.length) continue;
@@ -162,6 +214,10 @@ export class Animator {
     for (const o of this.animated()) {
       const keys = o.userData.keys;
       if (keys?.length) evalKeys(o, keys, time);
+      if (withMotion && o.userData.motion?.type === 'wave') {
+        this._wave(o, o.userData.motion, time);
+        continue;
+      }
       if (withMotion && o.userData.motion?.type) {
         const rest = keys?.length ? { p: o.position.clone(), q: o.quaternion.clone(), s: o.scale.clone() } : this.rests?.get(o);
         if (rest) applyMotion(o, rest, o.userData.motion, time);

@@ -13,6 +13,9 @@ const outdir = serve ? join(here, 'dist') : join(here, '..', 'android', 'app', '
 rmSync(outdir, { recursive: true, force: true });
 mkdirSync(outdir, { recursive: true });
 for (const f of ['index.html', 'style.css']) cpSync(join(here, 'public', f), join(outdir, f));
+// ONNX Runtime (AI modellar uchun) — ilova ichida keladi, internetsiz ishlashi uchun
+mkdirSync(join(outdir, 'ort'), { recursive: true });
+for (const f of ['ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm']) cpSync(join(here, 'node_modules', 'onnxruntime-web', 'dist', f), join(outdir, 'ort', f));
 
 const options = {
   entryPoints: [join(here, 'src', 'main.js')],
@@ -23,6 +26,8 @@ const options = {
   sourcemap: serve,
   outfile: join(outdir, 'app.js'),
   loader: { '.json': 'json' },
+  platform: 'browser',
+  logOverride: { 'empty-import-meta': 'silent' },
   logLevel: 'info',
 };
 

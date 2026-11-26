@@ -19,15 +19,28 @@ import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import org.json.JSONObject;
 
 /**
  * Mini 3D Muharrir — asosiy oyna.
@@ -42,8 +55,11 @@ public class MainActivity extends Activity {
     private static final int REQ_PERM = 1002;
     private static final String FOLDER = "Mini3D";
 
+    private static final String ASSET_HOST = "appassets.androidplatform.net";
+
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
+    private final ExecutorService pool = Executors.newFixedThreadPool(3);
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -85,6 +101,36 @@ public class MainActivity extends Activity {
 
         web.addJavascriptInterface(new Bridge(), "AndroidBridge");
         web.setWebViewClient(new WebViewClient() {
+            /**
+             * Virtual host: https://appassets.androidplatform.net/...
+             *  /ort/*  — ilova ichidagi AI runtime (wasm), internetsiz
+             *  /tmp/*  — Java yuklab olgan katta fayllar (3D modellar)
+             */
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri u = request.getUrl();
+                if (!ASSET_HOST.equals(u.getHost())) return null;
+                String path = u.getPath() == null ? "" : u.getPath();
+                Map<String, String> h = new HashMap<>();
+                h.put("Access-Control-Allow-Origin", "*");
+                h.put("Cache-Control", "no-cache");
+                try {
+                    InputStream in;
+                    if (path.startsWith("/tmp/")) {
+                        File f = new File(new File(getCacheDir(), "http"), path.substring(5).replaceAll("[^A-Za-z0-9_.-]", ""));
+                        in = new FileInputStream(f);
+                    } else {
+                        in = getAssets().open(path.startsWith("/") ? path.substring(1) : path);
+                    }
+                    String mime = path.endsWith(".wasm") ? "application/wasm"
+                            : path.endsWith(".mjs") || path.endsWith(".js") ? "text/javascript"
+                            : "application/octet-stream";
+                    return new WebResourceResponse(mime, null, 200, "OK", h, in);
+                } catch (Exception e) {
+                    return new WebResourceResponse("text/plain", "utf-8", 404, "Not found", h, null);
+                }
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri u = request.getUrl();
@@ -162,12 +208,72 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        pool.shutdownNow();
+        // vaqtinchalik yuklab olingan fayllarni tozalaymiz
+        File dir = new File(getCacheDir(), "http");
+        File[] fs = dir.listFiles();
+        if (fs != null) for (File f : fs) f.delete();
         if (web != null) web.destroy();
         super.onDestroy();
     }
 
     // ================= JavaScript ko'prigi =================
     private class Bridge {
+        /**
+         * Asinxron HTTP so'rov (CORS cheklovisiz). Natija:
+         *   window.__httpDone(id, status, bodyBase64 | tmpUrl, error)
+         * responseType = "file" bo'lsa — javob faylga yoziladi va virtual URL qaytadi.
+         */
+        @JavascriptInterface
+        public void httpRequest(String id, String method, String url, String headersJson, String bodyB64, String responseType, int timeoutMs) {
+            pool.execute(() -> {
+                HttpURLConnection c = null;
+                try {
+                    c = (HttpURLConnection) new URL(url).openConnection();
+                    c.setRequestMethod(method);
+                    c.setConnectTimeout(30000);
+                    c.setReadTimeout(Math.max(30000, timeoutMs));
+                    c.setInstanceFollowRedirects(true);
+                    JSONObject hs = new JSONObject(headersJson == null || headersJson.isEmpty() ? "{}" : headersJson);
+                    for (Iterator<String> it = hs.keys(); it.hasNext(); ) {
+                        String k = it.next();
+                        c.setRequestProperty(k, hs.getString(k));
+                    }
+                    if (bodyB64 != null && !bodyB64.isEmpty()) {
+                        c.setDoOutput(true);
+                        byte[] b = Base64.decode(bodyB64, Base64.DEFAULT);
+                        c.setFixedLengthStreamingMode(b.length);
+                        try (OutputStream os = c.getOutputStream()) { os.write(b); }
+                    }
+                    int status = c.getResponseCode();
+                    InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
+                    String result;
+                    if ("file".equals(responseType) && status < 400) {
+                        File dir = new File(getCacheDir(), "http");
+                        if (!dir.exists()) dir.mkdirs();
+                        String name = "r" + id + "_" + System.currentTimeMillis() + ".bin";
+                        try (FileOutputStream fos = new FileOutputStream(new File(dir, name))) {
+                            byte[] buf = new byte[65536];
+                            int n;
+                            while (in != null && (n = in.read(buf)) > 0) fos.write(buf, 0, n);
+                        }
+                        result = "https://" + ASSET_HOST + "/tmp/" + name;
+                    } else {
+                        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                        byte[] buf = new byte[65536];
+                        int n;
+                        while (in != null && (n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                        result = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
+                    }
+                    deliver(id, status, result, null);
+                } catch (Exception e) {
+                    deliver(id, 0, "", String.valueOf(e.getMessage()));
+                } finally {
+                    if (c != null) c.disconnect();
+                }
+            });
+        }
+
         @JavascriptInterface
         public String version() {
             try {
@@ -212,6 +318,11 @@ public class MainActivity extends Activity {
                 return "ERR:" + e.getMessage();
             }
         }
+    }
+
+    private void deliver(String id, int status, String body, String err) {
+        String js = "window.__httpDone(" + JSONObject.quote(id) + "," + status + "," + JSONObject.quote(body == null ? "" : body) + "," + (err == null ? "null" : JSONObject.quote(err)) + ")";
+        runOnUiThread(() -> web.evaluateJavascript(js, null));
     }
 
     /** Android 10+ da MediaStore, eski versiyalarda oddiy fayl. Ulashish uchun content:// URI qaytaradi (10+). */

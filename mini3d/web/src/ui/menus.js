@@ -7,6 +7,8 @@ import { booleanOp, arrayOp, mirrorOp, dropToGround, centerOrigin, resetTransfor
 import { effects } from '../effects.js';
 import { recordVideo } from './timeline.js';
 import { samples } from '../samples.js';
+import { openAIStudio } from './aistudio.js';
+const import_ai = () => openAIStudio(window.mini3d.editor, window.mini3d.app);
 import { projects } from '../storage.js';
 import { icon } from '../icons.js';
 import { t } from '../i18n.js';
@@ -87,6 +89,7 @@ export function createMenus(editor, app) {
     };
     const body = h(
       'div.list',
+      listButton('magic', '✨ ' + t('ai.title'), t('ai.menuSub'), go(() => import_ai())),
       listButton('file', t('file.new'), t('file.newSub'), go(newProject)),
       listButton('save', t('file.save'), app.projectName ? app.projectName : t('file.saveSub'), go(() => saveProject(false))),
       listButton('save', t('file.saveAs'), null, go(() => saveProject(true))),

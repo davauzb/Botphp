@@ -10,8 +10,8 @@ android {
         applicationId 'uz.mini3d.editor'
         minSdk 24
         targetSdk 35
-        versionCode 3
-        versionName '2.1'
+        versionCode 4
+        versionName '3.0'
     }
 
     // Imzolash: agar MINI3D_KEYSTORE muhit o'zgaruvchisi berilsa, o'sha kalit ishlatiladi

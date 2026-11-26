@@ -3,7 +3,31 @@
 Telefonda 3D model yaratish uchun yengil muharrir. Ilova to'liq oflayn ishlaydi.
 3D qism [three.js](https://threejs.org) asosida, Android qismi esa WebView.
 
-**Tayyor APK:** [`release/Mini3D-v2.1.apk`](release/Mini3D-v2.1.apk) (Android 7.0 va undan yuqori)
+**Tayyor APK:** [`release/Mini3D-v3.0.apk`](release/Mini3D-v3.0.apk) (Android 7.0 va undan yuqori)
+
+## v3.0 — ✨ AI Studiya: rasmdan jonli 3D personaj
+
+Bitta rasm → bir necha soniyada jonli, effektli 3D personaj va video. Butun zanjir telefonda ishlaydi.
+
+```
+Rasm ──► Depth Anything V2 (telefonda, ONNX/WASM) ──► chuqurlik xaritasi
+     ──► obyektni ajratish (chuqurlik + Otsu + eng katta bo'lak)
+     ──► 3D to'r: old yuza = relyef, orqa = puflangan shakl, chegara tutash
+     ──► AI rejissyor: k-means ranglar, mavzu (olov/muz/sehr...), yorqin nuqtalar
+         → shu nuqtalarga effektlar, rim-yorug'lik, bloom, "to'lqin" harakati
+     ──► animatsiya ──► MP4 video
+```
+
+| Usul | Qanday ishlaydi | Internet |
+|---|---|---|
+| **Telefonda (AI chuqurlik)** | Depth Anything V2 (q8, ~27 MB) — bir marta yuklanadi, IndexedDB da saqlanadi | Faqat birinchi marta |
+| **Hunyuan3D-2 (bepul)** | HuggingFace Space; Gradio API avtomatik aniqlanadi (`/gradio_api/info`) — *tajribaviy* | Ha |
+| **Meshy / Tripo (pullik)** | API kalit bilan; to'liq 360° teksturali model — *tajribaviy* | Ha |
+
+- ONNX Runtime (wasm) ilova ichida keladi (`assets/ort`), Android'da virtual host orqali beriladi
+- Bulut so'rovlari Java orqali yuboriladi (CORS cheklovisiz), katta fayllar vaqtinchalik faylga yoziladi
+- AI rejissyor qarorlarini sababi bilan ko'rsatadi (tushuntiriladigan AI)
+- Kod: `src/ai/runtime.js`, `src/ai/image3d.js`, `src/ai/director.js`, `src/ai/cloud3d.js`, `src/ui/aistudio.js`
 
 ## v2.1 da yangi
 

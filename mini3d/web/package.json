@@ -8,6 +8,7 @@
     "dev": "node build.mjs --serve"
   },
   "dependencies": {
+    "@huggingface/transformers": "4.3.2",
     "three": "0.170.0",
     "three-bvh-csg": "0.0.17",
     "three-mesh-bvh": "0.8.3",

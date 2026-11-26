@@ -11,6 +11,7 @@ import { EffectSystem } from '../effects.js';
 import { Animator } from '../animation.js';
 import { createSculptBar } from './sculptbar.js';
 import { createTimeline } from './timeline.js';
+import { openAIStudio } from './aistudio.js';
 import { icon } from '../icons.js';
 import { t } from '../i18n.js';
 
@@ -70,6 +71,7 @@ export function createApp(root, editorFactory, settings) {
     h('div.spacer'),
     undoBtn,
     redoBtn,
+    iconBtn('magic', t('ai.title'), () => openAIStudio(editor, app), 'ai-btn'),
     (animBtn = iconBtn('film', t('anim.title'), () => showTimeline(!timelineOn))),
     iconBtn('views', t('view.title'), () => menus.openViewsMenu()),
     iconBtn('wand', t('tool.title'), () => menus.openToolsMenu())
