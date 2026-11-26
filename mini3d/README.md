@@ -3,7 +3,16 @@
 Telefonda 3D model yaratish uchun yengil muharrir. Ilova to'liq oflayn ishlaydi.
 3D qism [three.js](https://threejs.org) asosida, Android qismi esa WebView.
 
-**Tayyor APK:** [`release/Mini3D-v2.0.apk`](release/Mini3D-v2.0.apk) (Android 7.0 va undan yuqori)
+**Tayyor APK:** [`release/Mini3D-v2.1.apk`](release/Mini3D-v2.1.apk) (Android 7.0 va undan yuqori)
+
+## v2.1 da yangi
+
+| Imkoniyat | Tavsif |
+|---|---|
+| **Organik tana** | Guruhdagi shar/kapsula/silindrlardan bitta silliq, choksiz "teri" yasaydi (SDF + marching cubes). Ranglar silliq aralashadi, avtomatik UV. Natijani darhol sculpt qilish mumkin |
+| **Naqshlar** | Protsedural teksturalar: ajdar tangachasi, lava yoriqlari, pat tolalari — chetlari nur sochishi mumkin |
+| **Maxluq qismlari** | Pat (tishli, egilgan, rang o'tishi bilan) va shox/tirnoq (egilgan, uchi ingichka) |
+| **Yangi feniks-ajdar** | Organik tana + tangacha + 3 qatorli patli qanotlar + oltin zirh va tirnoqlar + olov |
 
 ## v2.0 da yangi
 
@@ -50,6 +59,8 @@ mini3d/
 │   │   ├── effects.js       zarracha effektlari (olov, tutun...)
 │   │   ├── animation.js     kalit kadrlar, tayyor harakatlar, video
 │   │   ├── samples.js       namuna sahnalar
+│   │   ├── organic.js       organik tana (SDF + marching cubes)
+│   │   ├── textures.js      protsedural naqshlar
 │   │   ├── io.js            import / eksport
 │   │   ├── history.js       undo / redo
 │   │   ├── storage.js       loyihalarni saqlash (IndexedDB)
