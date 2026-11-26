@@ -137,9 +137,17 @@ export class Sculptor {
     const src = new THREE.BufferGeometry();
     src.setAttribute('position', old.attributes.position);
     src.setIndex(old.index);
-    let g = LoopSubdivision.modify(src, 1, { split: false, preserveEdges: false });
-    for (const k of Object.keys(g.attributes)) if (k !== 'position') g.deleteAttribute(k);
-    g = mergeVertices(g, 1e-6);
+    for (const k of ['color', 'uv']) if (old.attributes[k]) src.setAttribute(k, old.attributes[k]);
+    let g = LoopSubdivision.modify(src, 1, { split: false, preserveEdges: false, uvSmooth: true });
+    for (const k of Object.keys(g.attributes)) if (!['position', 'color', 'uv'].includes(k)) g.deleteAttribute(k);
+    const expected = old.attributes.position.count * 4.5;
+    let merged = mergeVertices(g, 1e-6);
+    if (merged.attributes.position.count > expected) {
+      // rang/UV tufayli uchlar birlashmadi — faqat pozitsiya bilan
+      for (const k of ['color', 'uv']) if (g.attributes[k]) g.deleteAttribute(k);
+      merged = mergeVertices(g, 1e-6);
+    }
+    g = merged;
     g.computeVertexNormals();
     mesh.geometry = g;
     old.dispose();

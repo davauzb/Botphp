@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
 import { mergeGeometries, mergeVertices, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { LoopSubdivision } from 'three-subdivide';
+import { organicMesh } from './organic.js';
 import { deepClone, disposeObject } from './editor.js';
 import { t } from './i18n.js';
 
@@ -289,4 +290,31 @@ export function setPivot(editor, obj, mode = 'center') {
   editor.emit('objectChanged', obj, 'geometry');
   editor.emit('objectChanged', obj, 'transform');
   editor.commit('pivot');
+}
+
+// ---------- Organik tana ----------
+/**
+ * Guruhdagi shakllarni bitta silliq "teri"ga aylantiradi (keyin sculpt qilish mumkin).
+ * keep=true — asl guruh yashirilib saqlanadi (keyin qayta tahrirlash uchun).
+ */
+export function organicMerge(editor, root, { resolution = 96, blend = 0.15, keep = true } = {}) {
+  const g = organicMesh(root, { resolution, blend });
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.1 });
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.name = editor.uniqueName(root.name + ' (organik)');
+  mesh.userData = { prim: 'custom', sculpt: true };
+  mesh.castShadow = mesh.receiveShadow = true;
+  mesh.position.copy(root.position);
+  mesh.quaternion.copy(root.quaternion);
+  mesh.scale.copy(root.scale);
+  const parent = root.parent || editor.content;
+  editor.select(null);
+  if (keep) {
+    root.visible = false;
+    root.name = root.name.includes('(asl)') ? root.name : root.name + ' (asl)';
+  } else {
+    root.removeFromParent();
+    disposeObject(root);
+  }
+  return editor.addObject(mesh, { parent, label: 'organic' });
 }

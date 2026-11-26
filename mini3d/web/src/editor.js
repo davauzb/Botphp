@@ -465,6 +465,11 @@ export class Editor extends Emitter {
     mesh.name = this.uniqueName(t(def.label));
     mesh.userData = { prim: id, params: p };
     mesh.castShadow = mesh.receiveShadow = true;
+    if (def.vertexColors) {
+      mesh.material.vertexColors = true;
+      mesh.material.color.set('#ffffff');
+      mesh.material.side = THREE.DoubleSide;
+    }
     const bb = mesh.geometry.boundingBox;
     mesh.position.set(this.orbit.target.x, def.lift ? -bb.min.y : 0, this.orbit.target.z);
     return mesh;

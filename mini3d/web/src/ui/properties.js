@@ -9,6 +9,7 @@ import { icon } from '../icons.js';
 import { t } from '../i18n.js';
 import { effects, effectDefaults } from '../effects.js';
 import { motions } from '../animation.js';
+import { patterns, applyPattern } from '../textures.js';
 
 const R2D = THREE.MathUtils.RAD2DEG;
 const D2R = THREE.MathUtils.DEG2RAD;
@@ -117,6 +118,11 @@ export function createProperties(editor, ui) {
     const rows = def.params.map((p) => {
       let ctrl;
       if (p.type === 'bool') ctrl = toggle(params[p.key], (v) => editor.updatePrimitive(obj, { [p.key]: v }));
+      else if (p.type === 'color')
+        ctrl = colorInput(params[p.key], {
+          onInput: (v) => editor.updatePrimitive(obj, { [p.key]: v }, false),
+          onChange: (v) => editor.updatePrimitive(obj, { [p.key]: v }),
+        });
       else if (p.type === 'text')
         ctrl = textInput(params[p.key], {
           onInput: (v) => editor.updatePrimitive(obj, { [p.key]: v }, false),
@@ -266,8 +272,29 @@ export function createProperties(editor, ui) {
     if ('flatShading' in mat) items.push(row(t('mat.flat'), toggle(mat.flatShading, (v) => ((getMat().flatShading = v), changed(true)))));
     items.push(row(t('mat.doubleSide'), toggle(mat.side === THREE.DoubleSide, (v) => ((getMat().side = v ? THREE.DoubleSide : THREE.FrontSide), changed(true)))));
 
-    // Tekstura
+    // Protsedural naqsh (tangacha, lava, pat)
     if ('map' in mat && !mat.isMeshNormalMaterial) {
+      const cur = mat.map?.userData?.pattern || '';
+      const glowOn = !!mat.emissiveMap?.userData?.pattern;
+      let rep = mat.map?.userData?.pattern ? mat.map.repeat.x : 4;
+      const apply = (id, glow) => {
+        applyPattern(getMat(), id, { repeat: rep, glow: glow ? '#' + (getMat().emissive?.getHexString?.() !== '000000' ? getMat().emissive.getHexString() : 'ff5a10') : null });
+        if (!glow && getMat().emissiveMap?.userData?.pattern) getMat().emissiveMap = null;
+        changed(true);
+        rerender();
+      };
+      items.push(
+        h('div.sub-label', t('mat.pattern')),
+        row(t('mat.pattern'), select([{ value: '', label: '— ' + t('anim.none') + ' —' }, ...Object.entries(patterns).map(([id, d]) => ({ value: id, label: t(d.label) }))], cur, (v) => apply(v || null, glowOn || v === 'lava')))
+      );
+      if (cur) {
+        items.push(row(t('mat.patternGlow'), toggle(glowOn, (v) => apply(cur, v))));
+        items.push(row(t('mat.repeat'), numberInput(rep, { step: 1, min: 0.5, max: 64, onChange: (v) => { rep = v; for (const k of ['map', 'emissiveMap', 'bumpMap']) getMat()[k]?.repeat.set(v, v); changed(true); } })));
+      }
+    }
+
+    // Tekstura
+    if ('map' in mat && !mat.isMeshNormalMaterial && !mat.map?.userData?.pattern) {
       const texRow = h('div.tex-row');
       const thumb = h('div.tex-thumb');
       if (mat.map?.image) {

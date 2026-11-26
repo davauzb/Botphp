@@ -38,6 +38,8 @@ export function registerPrimitive(def) {
   primitives.set(def.id, { lift: true, category: 'basic', ...def });
 }
 
+/** Parametr turlari: number | int | bool | text | color */
+
 export function defaultParams(id) {
   const def = primitives.get(id);
   const out = {};
@@ -204,6 +206,103 @@ registerPrimitive({
     const flat = m.toNonIndexed();
     flat.computeVertexNormals();
     return toPlain(flat);
+  },
+});
+
+// ---------- Maxluqlar uchun: pat, shox/tirnoq ----------
+/** Pat: tishli chetli barg shakli, uzunligi bo'ylab egilgan, pastdan uchiga rang o'tadi */
+registerPrimitive({
+  id: 'feather', label: 'prim.feather', icon: 'wing', category: 'creature', lift: false, vertexColors: true,
+  params: [
+    n('length', 'p.length', 1.2, 0.05, 20), n('width', 'p.width', 0.32, 0.01, 10), n('bend', 'p.bend', 0.15, -2, 2, 0.01),
+    i('barbs', 'p.barbs', 7, 0, 30), n('thickness', 'p.thick', 0.02, 0.002, 1, 0.005),
+    { key: 'colorBase', label: 'p.colorBase', type: 'color', default: '#a3101b' },
+    { key: 'colorTip', label: 'p.colorTip', type: 'color', default: '#ffc21a' },
+  ],
+  build: (p) => {
+    const L = p.length, W = p.width / 2;
+    const sh = new THREE.Shape();
+    sh.moveTo(0, 0);
+    const N = Math.max(1, p.barbs);
+    // o'ng tomon (tishli)
+    for (let k = 1; k <= N; k++) {
+      const t = k / (N + 1);
+      const wv = Math.sin(Math.PI * Math.pow(t, 0.8)) * W;
+      sh.lineTo(wv, t * L);
+      sh.lineTo(wv * 0.72, t * L + L / (N + 1) * 0.55);
+    }
+    sh.lineTo(0, L);
+    for (let k = N; k >= 1; k--) {
+      const t = k / (N + 1);
+      const wv = Math.sin(Math.PI * Math.pow(t, 0.8)) * W;
+      sh.lineTo(-wv * 0.72, t * L + L / (N + 1) * 0.55);
+      sh.lineTo(-wv, t * L);
+    }
+    sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: p.thickness, bevelEnabled: false, curveSegments: 2 });
+    g.translate(0, 0, -p.thickness / 2);
+    const pos = g.attributes.position;
+    const cb = new THREE.Color(p.colorBase), ct = new THREE.Color(p.colorTip);
+    const col = new Float32Array(pos.count * 3);
+    const c = new THREE.Color();
+    for (let k = 0; k < pos.count; k++) {
+      const y = pos.getY(k) / L;
+      pos.setZ(k, pos.getZ(k) + p.bend * L * y * y);
+      c.copy(cb).lerp(ct, Math.pow(Math.max(0, y), 1.3));
+      col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    // UV: v — uzunlik bo'ylab (pat teksturasi uchun)
+    const uv = g.attributes.uv;
+    for (let k = 0; k < pos.count; k++) uv.setXY(k, 0.5 + pos.getX(k) / (2 * W || 1) * 0.5, pos.getY(k) / L);
+    g.computeVertexNormals();
+    return toPlain(g);
+  },
+});
+
+/** Shox / tirnoq / tikan: egilgan, uchiga qarab ingichkalashuvchi */
+registerPrimitive({
+  id: 'horn', label: 'prim.horn', icon: 'cone', category: 'creature', lift: false,
+  params: [n('length', 'p.length', 0.8, 0.02, 20), n('radius', 'p.radius', 0.1, 0.005, 5, 0.01), n('bend', 'p.bendDeg', 60, -270, 270, 5), n('tip', 'p.tip', 0.05, 0, 1, 0.01), i('segments', 'p.tseg', 16, 3, 64), i('sides', 'p.sides', 12, 3, 32)],
+  build: (p) => {
+    const S = p.segments, R = p.sides;
+    const bend = (p.bend * Math.PI) / 180;
+    const verts = [], idx = [];
+    const rad = Math.abs(bend) > 1e-3 ? p.length / bend : 0;
+    for (let i = 0; i <= S; i++) {
+      const t = i / S;
+      let cx, cy, tx, ty;
+      if (rad) {
+        const a = t * bend;
+        cx = rad * (1 - Math.cos(a)); cy = rad * Math.sin(a);
+        tx = Math.sin(a); ty = Math.cos(a);
+      } else {
+        cx = 0; cy = t * p.length; tx = 0; ty = 1;
+      }
+      const r = p.radius * ((1 - t) * (1 - p.tip) + p.tip) * (i === S ? 0.02 : 1);
+      // normal (egilish tekisligida) va Z
+      const nx = ty, ny = -tx;
+      for (let j = 0; j < R; j++) {
+        const th = (j / R) * Math.PI * 2;
+        const ox = Math.cos(th) * r, oz = Math.sin(th) * r;
+        verts.push(cx + nx * ox, cy + ny * ox, oz);
+      }
+    }
+    for (let i = 0; i < S; i++) {
+      for (let j = 0; j < R; j++) {
+        const a = i * R + j, b = i * R + ((j + 1) % R), c = (i + 1) * R + j, d = (i + 1) * R + ((j + 1) % R);
+        idx.push(a, c, b, b, c, d);
+      }
+    }
+    // asos qopqog'i
+    const base = verts.length / 3;
+    verts.push(0, 0, 0);
+    for (let j = 0; j < R; j++) idx.push(base, j, (j + 1) % R);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
   },
 });
 

@@ -112,6 +112,7 @@ const P = {
   sample: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4z"/><circle cx="16.5" cy="16.5" r="3.5"/>',
   done: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
   detail: '<path d="M4 20 20 4"/><path d="M4 14 14 4M10 20 20 10M4 8l4-4M16 20l4-4"/>',
+  organic: '<path d="M7 14a4 4 0 1 1 3-6.6A4.5 4.5 0 1 1 17 13a3.5 3.5 0 1 1-4 5 4 4 0 0 1-6-4z"/>',
   zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
 };
 

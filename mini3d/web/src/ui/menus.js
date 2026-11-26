@@ -1,9 +1,9 @@
 // Menyular va dialoglar: Qo'shish, Fayl, Vositalar, Ko'rinishlar, Loyihalar.
 import * as THREE from 'three';
-import { h, openSheet, gridButtons, listButton, toast, confirmDialog, promptDialog, row, numberInput, select, toggle } from './dom.js';
+import { h, openSheet, gridButtons, listButton, toast, confirmDialog, promptDialog, row, numberInput, select, toggle, slider } from './dom.js';
 import { primitives } from '../primitives.js';
 import { exportFormats, exportModel, saveFile, importFile, importAccept, pickFile, dataURLToArrayBuffer, isAndroid } from '../io.js';
-import { booleanOp, arrayOp, mirrorOp, dropToGround, centerOrigin, resetTransform, mergeIntoMesh, bakeGeometry, smoothNormals, tools, subdivideOp, setPivot } from '../tools.js';
+import { booleanOp, arrayOp, mirrorOp, dropToGround, centerOrigin, resetTransform, mergeIntoMesh, bakeGeometry, smoothNormals, tools, subdivideOp, setPivot, organicMerge } from '../tools.js';
 import { effects } from '../effects.js';
 import { recordVideo } from './timeline.js';
 import { samples } from '../samples.js';
@@ -44,6 +44,8 @@ export function createMenus(editor, app) {
           }),
         }))
       ),
+      h('div.menu-label', t('add.creature')),
+      gridButtons(byCat('creature')),
       h('div.menu-label', t('add.effects')),
       gridButtons(
         [...effects.values()].map((fx) => ({
@@ -292,6 +294,7 @@ export function createMenus(editor, app) {
     const items = [
       { icon: 'brush', label: t('sculpt.title'), onClick: go((o) => app.enterSculpt(o)), disabled: !isMesh },
       { icon: 'subdivide', label: t('tool.subdivide'), onClick: go(subdivideDialog), disabled: !(isMesh || obj?.isGroup) },
+      { icon: 'organic', label: t('tool.organic'), onClick: go(organicDialog), disabled: !obj?.isGroup },
       { icon: 'pivot', label: t('tool.pivot'), onClick: go(pivotDialog) },
       { icon: 'boolean', label: t('tool.boolean'), onClick: go(booleanDialog), disabled: !isMesh },
       { icon: 'array', label: t('tool.array'), onClick: go(arrayDialog) },
@@ -468,6 +471,47 @@ export function createMenus(editor, app) {
       )
     );
     const s = openSheet(t('tool.subdivide'), body);
+  }
+
+  function organicDialog(obj) {
+    let res = 96, blend = 0.15, keep = true;
+    const body = h(
+      'div.dialog',
+      h('p.hint', t('organic.hint')),
+      row(t('organic.quality'), select([{ value: '64', label: t('q.low') }, { value: '96', label: t('q.medium') }, { value: '128', label: t('q.high') }], '96', (v) => (res = +v))),
+      row(t('organic.blend'), slider(blend, { min: 0, max: 0.6, step: 0.01, onInput: (v) => (blend = v) })),
+      row(t('organic.keep'), toggle(true, (v) => (keep = v))),
+      h(
+        'div.dialog-actions',
+        h('button.btn', { type: 'button', on: { click: () => s.close() } }, t('cancel')),
+        h(
+          'button.btn.primary',
+          {
+            type: 'button',
+            on: {
+              click: () => {
+                s.close();
+                app.busy(true, t('organic.working'));
+                setTimeout(() => {
+                  try {
+                    const m = organicMerge(editor, obj, { resolution: res, blend, keep });
+                    toast(t('organic.done'), 'ok');
+                    editor.focus(m);
+                  } catch (e) {
+                    console.error(e);
+                    toast(t('err.tool'), 'error');
+                  } finally {
+                    app.busy(false);
+                  }
+                }, 40);
+              },
+            },
+          },
+          t('apply')
+        )
+      )
+    );
+    const s = openSheet(t('tool.organic'), body);
   }
 
   function pivotDialog(obj) {

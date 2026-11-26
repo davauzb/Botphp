@@ -6,7 +6,8 @@
 // ============================================================
 import * as THREE from 'three';
 import { effectDefaults } from './effects.js';
-import { subdivideOp } from './tools.js';
+import { organicMesh } from './organic.js';
+import { applyPattern } from './textures.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -73,138 +74,184 @@ function builder(E) {
 }
 
 // ---------------------------------------------------------------
-//  1) OLOV FENIKS-AJDAR (donghua uslubidagi maxluq)
+//  1) OLOV FENIKS-AJDAR — "Organik tana" + tangacha + patlar
 // ---------------------------------------------------------------
 function buildPhoenix(E) {
   const { add, group, fx, light } = builder(E);
-  const C = {
-    red: { color: '#b0141f', rough: 0.4, metal: 0.15 },
-    darkred: { color: '#6e0a12', rough: 0.45, metal: 0.15 },
-    cream: { color: '#f3e4c8', rough: 0.55 },
-    gold: { color: '#ffc94d', metal: 1, rough: 0.22 },
-    fire1: { color: '#d8200a', emissive: '#c01800', ei: 0.45, rough: 0.5 },
-    fire2: { color: '#ff6a10', emissive: '#f04a00', ei: 0.55, rough: 0.5 },
-    fire3: { color: '#ffb81a', emissive: '#f59a00', ei: 0.7, rough: 0.5 },
-    eye: { color: '#fff3a0', emissive: '#ffd000', ei: 4 },
-    gem: { color: '#22c55e', emissive: '#16a34a', ei: 2, metal: 0.3, rough: 0.1 },
-  };
+  const RED = '#a50c17', DRED = '#6e0810', CREAM = '#ecd6b0';
+  const gold = { color: '#ffc94d', metal: 1, rough: 0.2 };
   const root = group('Olov feniks-ajdar');
-  root.userData.motion = { type: 'bob', axis: 'y', amount: 0.04, speed: 0.5, phase: 0 };
+  root.userData.motion = { type: 'bob', axis: 'y', amount: 0.03, speed: 0.5, phase: 0 };
 
-  // ---- Tana ----
-  const body = group('Tana', root);
-  const torso = add('sphere', { radius: 1, widthSegments: 32, heightSegments: 20 }, { name: 'Gavda', parent: body, pos: [0.1, 1.65, 0], scale: [1.45, 0.78, 0.78], mat: C.red });
-  add('sphere', { radius: 1, widthSegments: 28, heightSegments: 18 }, { name: 'Koʻkrak', parent: body, pos: [-0.8, 1.6, 0], scale: [0.62, 0.78, 0.66], mat: C.cream });
-  add('sphere', { radius: 1, widthSegments: 28, heightSegments: 16 }, { name: 'Qorin', parent: body, pos: [0.15, 1.28, 0], scale: [1.1, 0.42, 0.62], mat: C.cream });
-  void torso;
-  for (let k = 0; k < 6; k++) {
-    const x = -0.7 + k * 0.38;
-    add('cone', { radius: 0.13, height: 0.55 - k * 0.04, radialSegments: 4 }, { name: 'Orqa tikan', parent: body, base: [x, 2.3 - Math.abs(x) * 0.12, 0], dir: [0.45, 1, 0], len: 0.55 - k * 0.04, mat: k % 2 ? C.fire2 : C.fire3, flat: true });
+  // ===== 1. Skelet (shakllardan) → organik tana =====
+  const sk = group('Tana skeleti', root);
+  const ball = (pos, r, color, scale) => add('sphere', { radius: r, widthSegments: 16, heightSegments: 10 }, { parent: sk, pos, scale, mat: { color } });
+  const caps = (pos, r, len, rot, color) => add('capsule', { radius: r, length: len, capSegments: 4, radialSegments: 10 }, { parent: sk, pos, rot, mat: { color } });
+  // tana
+  ball([0.2, 1.75, 0], 1, RED, [1.3, 0.78, 0.76]);
+  ball([-0.78, 1.7, 0], 1, CREAM, [0.6, 0.8, 0.52]);
+  ball([0.1, 1.33, 0], 1, CREAM, [1.0, 0.42, 0.58]);
+  ball([1.15, 1.62, 0], 1, RED, [0.72, 0.68, 0.68]);
+  // bo'yin (orqasi qizil, oldi krem)
+  const neck = [[-1.0, 2.3, 0.46], [-1.22, 2.62, 0.4], [-1.38, 2.9, 0.35], [-1.48, 3.12, 0.32]];
+  neck.forEach(([x, y, r]) => ball([x + 0.06, y, 0], r, RED));
+  neck.forEach(([x, y, r]) => ball([x - 0.2, y - 0.05, 0], r * 0.66, CREAM, [1, 1, 0.7]));
+  // bosh
+  ball([-1.62, 3.32, 0], 0.36, RED, [1.15, 0.92, 0.9]);
+  ball([-1.86, 3.22, 0], 0.22, RED, [1.2, 0.8, 0.85]);
+  for (const z of [-1, 1]) ball([-1.72, 3.16, 0.15 * z], 0.17, CREAM);
+  // oyoqlar
+  const legsAt = [[-0.68, 0.55], [-0.68, -0.55], [1.12, 0.58], [1.12, -0.58]];
+  for (const [x, z] of legsAt) {
+    const zs = Math.sign(z);
+    caps([x, 1.12, z], 0.28, 0.5, [0.18 * zs, 0, x < 0 ? 0.15 : -0.2], RED);
+    caps([x + (x < 0 ? -0.05 : 0.12), 0.55, z * 1.12], 0.17, 0.48, [0.12 * zs, 0, x < 0 ? -0.1 : 0.35], DRED);
+    caps([x - 0.1, 0.13, z * 1.18], 0.12, 0.3, [0, 0, Math.PI / 2], DRED);
   }
+  // dum: S-shaklida yuqoriga buraladi
+  const tailCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(1.5, 1.6, 0), new THREE.Vector3(2.2, 1.3, 0.05), new THREE.Vector3(2.85, 1.35, 0.1),
+    new THREE.Vector3(3.3, 1.85, 0.08), new THREE.Vector3(3.45, 2.5, 0), new THREE.Vector3(3.25, 3.05, -0.05), new THREE.Vector3(2.95, 3.25, -0.05),
+  ]);
+  const TN = 34;
+  for (let k = 0; k <= TN; k++) {
+    const t = k / TN;
+    ball(tailCurve.getPoint(t).toArray(), 0.42 * (1 - t * 0.78), k % 7 === 3 ? DRED : RED);
+  }
+  const body = organicMesh(sk, { resolution: 112, blend: 0.22 });
+  const bodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.12, envMapIntensity: 0.6 });
+  applyPattern(bodyMat, 'scales', { repeat: 1.3, glow: '#ff4a0a', glowIntensity: 0.8 });
+  const skin = new THREE.Mesh(body, bodyMat);
+  skin.name = 'Tana (organik)';
+  skin.userData = { prim: 'custom', sculpt: true };
+  skin.castShadow = skin.receiveShadow = true;
+  E.addObject(skin, { parent: root, select: false, commit: false });
+  sk.visible = false;
+  sk.name = 'Tana skeleti (asl)';
+
+  // ===== 2. Patlar uchun yordamchi =====
+  const featherMat = (m, glow = 1.2) => {
+    m.material.color.set('#ffffff');
+    m.material.side = THREE.DoubleSide;
+    m.material.roughness = 0.55;
+    m.material.metalness = 0.05;
+    applyPattern(m.material, 'feather', { repeat: 1, glow: '#ff6a10', glowIntensity: glow });
+  };
+  const feather = (parent, base, dir, normal, len, width, cBase, cTip, bend = 0.12, glow = 1.2) => {
+    const m = add('feather', { length: len, width, bend, barbs: 6, thickness: 0.015, colorBase: cBase, colorTip: cTip }, { name: 'Pat', parent, base, dir, len: 0, planeNormal: normal });
+    m.position.set(...base);
+    featherMat(m, glow);
+    return m;
+  };
+  const horn = (parent, base, dir, normal, length, radius, bend, mat = gold, name = 'Shox') => {
+    const m = add('horn', { length, radius, bend, tip: 0.04, segments: 14, sides: 10 }, { name, parent, base, dir, len: 0, planeNormal: normal, mat });
+    m.position.set(...base);
+    return m;
+  };
+
+  // ===== 3. Bosh: tumshuq, ko'zlar, shoxlar, olovli yol =====
+  const head = group('Bosh bezaklari', root, [-1.6, 3.3, 0]);
+  head.userData.motion = { type: 'sway', axis: 'z', amount: 4, speed: 0.5, phase: 90 };
+  const Hp = (x, y, z) => [x + 1.6, y - 3.3, z];
+  horn(head, Hp(-1.98, 3.24, 0), [-1, -0.15, 0], [0, 0, 1], 0.42, 0.11, -55, gold, 'Tumshuq');
   for (const z of [-1, 1]) {
-    add('sphere', { radius: 1, widthSegments: 16, heightSegments: 10 }, { name: 'Yelka zirhi', parent: body, pos: [-0.55, 1.95, 0.58 * z], scale: [0.42, 0.3, 0.14], rot: [0.5 * z, 0, -0.3], mat: C.gold, flat: true });
-    add('cone', { radius: 0.12, height: 0.6, radialSegments: 4 }, { name: 'Zirh tikani', parent: body, base: [-0.5, 2.1, 0.62 * z], dir: [0.6, 1, 0.4 * z], len: 0.6, mat: C.gold, flat: true });
-    add('sphere', { radius: 1, widthSegments: 16, heightSegments: 10 }, { name: 'Son zirhi', parent: body, pos: [0.85, 1.55, 0.6 * z], scale: [0.38, 0.28, 0.12], rot: [0.4 * z, 0, 0.2], mat: C.gold, flat: true });
+    add('sphere', { radius: 0.07, widthSegments: 12, heightSegments: 8 }, { name: 'Koʻz', parent: head, pos: Hp(-1.97, 3.4, 0.17 * z), scale: [0.7, 1, 1], mat: { color: '#fff1a0', emissive: '#ffcc00', ei: 5 } });
+    horn(head, Hp(-1.55, 3.6, 0.16 * z), [0.6, 1, 0.45 * z], [0, 0, 1], 0.75, 0.07, 70, gold, 'Shox');
+    horn(head, Hp(-1.7, 3.52, 0.2 * z), [0.4, 1, 0.7 * z], [0, 0, 1], 0.4, 0.05, 50, gold, 'Kichik shox');
   }
+  add('octahedron', { radius: 0.06, detail: 0 }, { name: 'Peshona javohiri', parent: head, pos: Hp(-1.93, 3.5, 0), scale: [0.6, 1.4, 1], mat: { color: '#22c55e', emissive: '#16a34a', ei: 2.5, metal: 0.3, rough: 0.1 } });
+  for (let k = 0; k < 11; k++) {
+    const a = (k / 10 - 0.5) * 1.6;
+    const len = 0.7 + Math.cos(a) * 0.55;
+    feather(head, Hp(-1.62 + Math.abs(a) * 0.1, 3.55, a * 0.18), [0.55 + Math.abs(a) * 0.3, 1, a * 0.9], [-Math.sin(a), 0, Math.cos(a)], len, 0.26, '#c4161c', '#ffd23f', 0.2, 1.6);
+  }
+  fx('fire', 'Toj olovi', head, Hp(-1.5, 3.95, 0), { rate: 45, size: 0.32, speed: 0.9, radius: 0.18, life: 0.6, opacity: 0.7 });
 
-  // ---- Bosh (bo'yin asosida aylanadi) ----
-  const head = group('Bosh', root, [-0.95, 1.95, 0]);
-  head.userData.motion = { type: 'sway', axis: 'z', amount: 6, speed: 0.5, phase: 90 };
-  const H = (x, y, z) => [x + 0.95, y - 1.95, z];
-  add('cylinder', { radiusTop: 0.27, radiusBottom: 0.45, height: 1.15, radialSegments: 20 }, { name: 'Boʻyin', parent: head, pos: H(-1.18, 2.3, 0), rot: [0, 0, 0.55], mat: C.red });
-  add('cylinder', { radiusTop: 0.22, radiusBottom: 0.36, height: 1.0, radialSegments: 20 }, { name: 'Boʻyin oldi', parent: head, pos: H(-1.27, 2.22, 0), rot: [0, 0, 0.55], mat: C.cream });
-  add('sphere', { radius: 0.4, widthSegments: 24, heightSegments: 16 }, { name: 'Kalla', parent: head, pos: H(-1.62, 2.86, 0), scale: [1.15, 0.9, 0.85], mat: C.red });
-  add('cone', { radius: 0.16, height: 0.55, radialSegments: 12 }, { name: 'Tumshuq', parent: head, base: H(-1.9, 2.8, 0), dir: [-1, -0.35, 0], len: 0.55, mat: C.gold });
-  for (const z of [-1, 1]) {
-    add('sphere', { radius: 0.07, widthSegments: 12, heightSegments: 8 }, { name: 'Koʻz', parent: head, pos: H(-1.88, 2.96, 0.2 * z), mat: C.eye });
-    add('cone', { radius: 0.06, height: 0.5, radialSegments: 6 }, { name: 'Shox', parent: head, base: H(-1.6, 3.15, 0.18 * z), dir: [0.8, 1, 0.35 * z], len: 0.5, mat: C.gold });
-  }
-  add('octahedron', { radius: 0.07, detail: 0 }, { name: 'Peshona javohiri', parent: head, pos: H(-1.96, 3.08, 0), scale: [0.6, 1.3, 1], mat: C.gem });
-  const crest = [[-1.75, 0.0, 0.75, C.fire3], [-1.6, 0.12, 0.95, C.fire2], [-1.6, -0.12, 0.95, C.fire2], [-1.45, 0.2, 1.05, C.fire1], [-1.45, -0.2, 1.05, C.fire1], [-1.45, 0, 1.15, C.fire3], [-1.3, 0.25, 0.9, C.fire2], [-1.3, -0.25, 0.9, C.fire2]];
-  for (const [x, z, h, m] of crest) {
-    add('cone', { radius: 0.17, height: h, radialSegments: 4 }, { name: 'Olov yol', parent: head, base: H(x, 3.1, z), dir: [0.9 + (x + 1.75) * 1.2, 1, z * 1.6], len: h, scale: [1, 1, 0.35], mat: m, flat: true, planeNormal: [0, 0, 1] });
-  }
-  fx('fire', 'Toj olovi', head, H(-1.45, 3.2, 0), { rate: 50, size: 0.3, speed: 1.0, radius: 0.12, life: 0.6, opacity: 0.8 });
-
-  // ---- Oyoqlar ----
-  const legs = group('Oyoqlar', root);
-  for (const [lx, lz, nm] of [[-0.75, 0.42, 'Old oʻng'], [-0.75, -0.42, 'Old chap'], [0.85, 0.45, 'Orqa oʻng'], [0.85, -0.45, 'Orqa chap']]) {
-    const leg = group(nm + ' oyoq', legs, [lx, 0, lz]);
-    add('capsule', { radius: 0.22, length: 0.45, capSegments: 6, radialSegments: 16 }, { name: 'Son', parent: leg, pos: [0.05, 1.12, 0], rot: [0, 0, -0.25], mat: C.red });
-    add('cylinder', { radiusTop: 0.15, radiusBottom: 0.11, height: 0.75, radialSegments: 12 }, { name: 'Boldir', parent: leg, pos: [0.02, 0.5, 0], rot: [0, 0, 0.12], mat: C.darkred });
-    add('cone', { radius: 0.14, height: 0.4, radialSegments: 4 }, { name: 'Tizza zirhi', parent: leg, base: [-0.12, 0.75, 0], dir: [-0.4, 1, 0], len: 0.4, mat: C.gold, flat: true });
-    add('capsule', { radius: 0.08, length: 0.3, capSegments: 4, radialSegments: 10 }, { name: 'Panja', parent: leg, pos: [-0.06, 0.08, 0], rot: [0, 0, Math.PI / 2], scale: [1, 1, 1.8], mat: C.darkred });
-    for (const cz of [-0.11, 0, 0.11]) {
-      add('cone', { radius: 0.045, height: 0.24, radialSegments: 8 }, { name: 'Tirnoq', parent: leg, base: [-0.25, 0.07, cz], dir: [-1, -0.3, cz * 2], len: 0.24, mat: C.gold });
+  // ===== 4. Yol (bo'yin va orqa bo'ylab olov patlar) =====
+  const mane = group('Yol', root);
+  for (let k = 0; k < 16; k++) {
+    const t = k / 15;
+    const x = -1.4 + t * 2.4, y = 3.0 - t * 0.95 - Math.sin(t * Math.PI) * 0.15;
+    for (const z of [-0.12, 0.12]) {
+      feather(mane, [x, y, z], [0.9, 0.8 - t * 0.4, z * 3], [0, -0.3, 1], 0.55 + (1 - t) * 0.35, 0.22, '#a3101b', t < 0.5 ? '#ffb020' : '#ff7a1a', 0.25, 1.3);
     }
   }
 
-  // ---- Dum (asosidan chayqaladi) ----
-  const tail = group('Dum', root, [1.45, 1.55, 0]);
-  tail.userData.motion = { type: 'sway', axis: 'y', amount: 14, speed: 0.45, phase: 0 };
-  let prev = new THREE.Vector3(0, 0, 0);
-  const N = 9;
-  for (let k = 0; k < N; k++) {
-    const tt = (k + 1) / N;
-    const pt = new THREE.Vector3(tt * 1.6, Math.sin(tt * Math.PI * 0.85) * 1.1 + tt * 0.4, Math.sin(tt * Math.PI) * 0.25);
-    const d = pt.clone().sub(prev);
-    const r = 0.3 * (1 - tt * 0.75);
-    add('cylinder', { radiusTop: r * 0.85, radiusBottom: r, height: d.length() * 1.15, radialSegments: 14 }, { name: 'Dum boʻlagi', parent: tail, base: prev.toArray(), dir: d.toArray(), len: d.length() * 1.15, mat: k % 2 ? C.red : C.darkred });
-    if (k >= 3) {
-      for (const sd of [-1, 1]) {
-        const h = 0.5 + tt * 0.7;
-        add('cone', { radius: 0.3, height: h, radialSegments: 4 }, { name: 'Dum pati', parent: tail, base: pt.toArray(), dir: [0.5, 0.6, 0.8 * sd], len: h, scale: [1, 1, 0.22], mat: k > 6 ? C.fire3 : C.fire2, flat: true, planeNormal: [0, 1, -0.6 * sd] });
+  // ===== 5. Oltin zirhlar va tirnoqlar =====
+  const armor = group('Oltin zirhlar', root);
+  for (const z of [-1, 1]) {
+    for (let k = 0; k < 4; k++) horn(armor, [-0.55 + k * 0.12, 2.1 - k * 0.12, 0.62 * z], [0.7 + k * 0.2, 1 - k * 0.15, 0.55 * z], [0, 0, z], 0.55 - k * 0.08, 0.09, 45, gold, 'Yelka zirhi');
+    for (let k = 0; k < 3; k++) horn(armor, [1.0 + k * 0.12, 1.85 - k * 0.1, 0.62 * z], [0.8, 0.7, 0.5 * z], [0, 0, z], 0.45 - k * 0.08, 0.08, 40, gold, 'Son zirhi');
+  }
+  for (const [x, z] of legsAt) {
+    const zs = Math.sign(z);
+    horn(armor, [x - 0.08, 0.78, z * 1.12], [-0.4, 1, 0.3 * zs], [0, 0, 1], 0.35, 0.08, 30, gold, 'Tizza zirhi');
+    for (const cz of [-0.11, 0, 0.11]) horn(armor, [x - 0.3, 0.1, z * 1.18 + cz], [-1, 0.25, cz * 2], [0, 0, 1], 0.28, 0.05, -80, gold, 'Tirnoq');
+  }
+
+  // ===== 6. Qanotlar =====
+  for (const z of [-1, 1]) {
+    const wing = group(z > 0 ? 'Oʻng qanot' : 'Chap qanot', root, [-0.3, 2.35, 0.55 * z]);
+    wing.userData.motion = { type: 'flap', axis: 'x', amount: 16, speed: 0.7, phase: z > 0 ? 0 : 180 };
+    const U = new THREE.Vector3(0.45, 1, 0.75 * z).normalize(); // old qirra
+    const V = new THREE.Vector3(1, -0.15, 0.45 * z).normalize(); // orqa yo'nalish
+    const Nw = new THREE.Vector3().crossVectors(U, V).normalize().multiplyScalar(z);
+    const Lw = 2.1;
+    horn(wing, [0, 0, 0], U.toArray(), Nw.toArray(), Lw * 0.9, 0.1, -25, { color: DRED, rough: 0.45, metal: 0.2 }, 'Qanot suyagi');
+    horn(wing, U.clone().multiplyScalar(Lw * 0.55).toArray(), [-0.3, 1, 0.2 * z], Nw.toArray(), 0.6, 0.09, -40, gold, 'Qanot zirhi');
+    horn(wing, U.clone().multiplyScalar(Lw * 0.95).toArray(), U.clone().add(new THREE.Vector3(-0.4, 0, 0)).toArray(), Nw.toArray(), 0.5, 0.08, -60, gold, 'Qanot tirnogʻi');
+    const rows = [
+      { n: 17, lenK: 1.0, w: 0.34, cb: '#b0121c', ct: '#ffd23f', off: 0, glow: 1.5 },
+      { n: 15, lenK: 0.66, w: 0.3, cb: '#8e0c16', ct: '#ff8a1c', off: 0.04, glow: 1.0 },
+      { n: 12, lenK: 0.38, w: 0.26, cb: '#7c0a12', ct: '#ff4a14', off: 0.08, glow: 0.6 },
+    ];
+    for (const r of rows) {
+      for (let k = 0; k < r.n; k++) {
+        const s = (k + 0.5) / r.n;
+        const base = U.clone().multiplyScalar(s * Lw * 0.98).addScaledVector(Nw, r.off);
+        const dir = V.clone().multiplyScalar(1 - s * 0.55).add(U.clone().multiplyScalar(s * 0.85 + 0.05)).normalize();
+        const len = (1.0 + 1.7 * Math.pow(s, 1.2)) * r.lenK;
+        feather(wing, base.toArray(), dir.toArray(), Nw.toArray(), len, r.w, r.cb, r.ct, 0.1, r.glow);
       }
     }
-    prev = pt;
-  }
-  for (let k = 0; k < 5; k++) {
-    const h = 0.9 + k * 0.15;
-    add('cone', { radius: 0.3, height: h, radialSegments: 4 }, { name: 'Dum uchi pati', parent: tail, base: prev.toArray(), dir: [0.4 + k * 0.25, 1, (k - 2) * 0.35], len: h, scale: [1, 1, 0.25], mat: [C.fire1, C.fire2, C.fire3, C.fire2, C.fire1][k], flat: true, planeNormal: [0, 0, 1] });
-  }
-  fx('fire', 'Dum olovi', tail, prev.toArray(), { rate: 110, size: 0.5, speed: 1.4, radius: 0.25, opacity: 0.8 });
-
-  // ---- Qanotlar (yelkadan qoqiladi) ----
-  for (const z of [-1, 1]) {
-    const wing = group(z > 0 ? 'Oʻng qanot' : 'Chap qanot', root, [-0.35, 2.15, 0.5 * z]);
-    wing.userData.motion = { type: 'flap', axis: 'x', amount: 28, speed: 0.9, phase: z > 0 ? 0 : 180 };
-    const boneDir = new THREE.Vector3(0.35, 1, 0.75 * z).normalize();
-    add('cylinder', { radiusTop: 0.08, radiusBottom: 0.16, height: 1.4, radialSegments: 10 }, { name: 'Qanot suyagi', parent: wing, base: [0, 0, 0], dir: boneDir.toArray(), len: 1.4, mat: C.red });
-    const tip = boneDir.clone().multiplyScalar(1.4);
-    add('cone', { radius: 0.13, height: 0.5, radialSegments: 4 }, { name: 'Qanot zirhi', parent: wing, base: tip.toArray(), dir: [-0.6, 0.9, 0.3 * z], len: 0.5, mat: C.gold, flat: true });
-    const F = 12;
-    const dirOf = (a) => new THREE.Vector3(Math.sin(a) + 0.2, Math.cos(a) * 1.1 + 0.15, 0.85 * z).normalize();
-    const wingNormal = new THREE.Vector3().crossVectors(dirOf(0.15), dirOf(1.7)).normalize();
-    for (let k = 0; k < F; k++) {
-      const tt = k / (F - 1);
-      const a = 0.15 + tt * 1.55;
-      const dir = dirOf(a);
-      const base = boneDir.clone().multiplyScalar(0.25 + (1 - tt) * 1.0);
-      const h = 1.1 + Math.sin(tt * Math.PI) * 1.3 + (1 - tt) * 0.4;
-      const m = h > 2.2 ? C.fire3 : h > 1.7 ? C.fire2 : C.fire1;
-      add('cone', { radius: 0.34, height: h, radialSegments: 4 }, { name: 'Olov pat', parent: wing, base: base.toArray(), dir: dir.toArray(), len: h, scale: [1, 1, 0.14], mat: m, flat: true, planeNormal: wingNormal.toArray() });
-      if (k % 2 === 0) add('cone', { radius: 0.3, height: h * 0.6, radialSegments: 4 }, { name: 'Ichki pat', parent: wing, base: base.clone().addScaledVector(wingNormal, 0.03).toArray(), dir: dir.toArray(), len: h * 0.6, scale: [1, 1, 0.14], mat: C.red, flat: true, planeNormal: wingNormal.toArray() });
-    }
-    fx('sparks', 'Qanot uchqunlari', wing, dirOf(0.9).multiplyScalar(1.8).toArray(), { rate: 14, radius: 0.6, size: 0.06, speed: 0.8, opacity: 0.8 });
+    fx('fire', 'Qanot olovi', wing, U.clone().multiplyScalar(Lw).add(V.clone().multiplyScalar(1.4)).toArray(), { rate: 60, size: 0.45, speed: 0.9, radius: 0.5, opacity: 0.55, life: 0.8 });
+    fx('sparks', 'Qanot uchqunlari', wing, U.clone().multiplyScalar(Lw * 0.7).add(V.clone().multiplyScalar(1.2)).toArray(), { rate: 14, radius: 0.8, size: 0.06, speed: 0.7, opacity: 0.85 });
   }
 
-  // ---- Atrof ----
-  fx('sparks', 'Uchqunlar', root, [0, 0.2, 0], { rate: 30, radius: 2.2, size: 0.06, speed: 1.2, life: 2.6 });
-  fx('smoke', 'Tutun', root, [0.4, 0, 0], { rate: 8, radius: 1.4, size: 1.6, opacity: 0.25, speed: 0.35 });
-  light('PointLight', 'Olov yorugʻi', [0, 2.6, 0], '#ff6a1a', 10);
-  light('PointLight', 'Orqa nur', [2.5, 3.5, -2.5], '#ffb347', 14);
-
-  // Tanadagi asosiy shakllarni silliqlaymiz (yumaloq, tirik ko'rinish)
-  for (const o of [...body.children, ...head.children]) {
-    if (o.isMesh && ['Gavda', 'Koʻkrak', 'Qorin', 'Kalla'].includes(o.name)) subdivideOp(E, o, { levels: 1, smooth: true, crease: 180 });
+  // ===== 7. Dum patlari va olovi =====
+  const tailFx = group('Dum olovi', root, tailCurve.getPoint(0.55).toArray());
+  tailFx.userData.motion = { type: 'sway', axis: 'y', amount: 6, speed: 0.45, phase: 0 };
+  const T0 = tailCurve.getPoint(0.55);
+  for (let k = 0; k < 26; k++) {
+    const t = 0.55 + (k / 25) * 0.45;
+    const p = tailCurve.getPoint(t).sub(T0);
+    const tan = tailCurve.getTangent(t);
+    const side = k % 2 ? 1 : -1;
+    const out = new THREE.Vector3(0, 0, side).add(new THREE.Vector3(-tan.y, tan.x, 0).multiplyScalar(0.8)).normalize();
+    feather(tailFx, p.toArray(), out.clone().add(tan.clone().multiplyScalar(0.6)).toArray(), new THREE.Vector3().crossVectors(out, tan).toArray(), 0.6 + t * 0.9, 0.3, '#b0121c', '#ffc21a', 0.3, 1.5);
   }
+  const tip = tailCurve.getPoint(1).sub(T0);
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 6 - 0.5) * 2.2;
+    feather(tailFx, tip.toArray(), [-0.6 + Math.sin(a) * 0.4, 1, Math.cos(a) * 0.9], [Math.cos(a), 0, -Math.sin(a)], 1.3 + Math.cos(a) * 0.4, 0.4, '#c4161c', '#ffe066', 0.35, 1.8);
+  }
+  fx('fire', 'Dum uchi olovi', tailFx, tip.toArray(), { rate: 120, size: 0.6, speed: 1.4, radius: 0.35, opacity: 0.75 });
+
+  // ===== 8. Atrof: pol, uchqun, tutun, yorug'lik =====
+  const floor = add('plane', { width: 24, height: 24, segments: 1 }, { name: 'Pol', pos: [0, 0, 0], mat: { color: '#0b0909', rough: 0.55, metal: 0.25 } });
+  floor.material.envMapIntensity = 0.15;
+  fx('sparks', 'Uchqunlar', root, [0.6, 0.3, 0], { rate: 40, radius: 3, size: 0.06, speed: 1.1, life: 3 });
+  fx('smoke', 'Tutun', E.content, [0.6, 0, 0], { rate: 10, radius: 3, size: 2.2, opacity: 0.18, speed: 0.25 });
+  light('PointLight', 'Olov yorugʻi', [0.2, 3.2, 0], '#ff6a1a', 14);
+  light('PointLight', 'Old nur', [-3, 2.5, 2.5], '#ffb070', 12);
+  light('PointLight', 'Orqa nur', [2.5, 4, -2.5], '#ff9a40', 20);
 
   Object.assign(E.sceneSettings, {
-    background: '#140f14', grid: false, axes: false, studioIntensity: 0.85, envIntensity: 0.8, exposure: 1.05,
-    bloom: true, bloomStrength: 0.75, bloomRadius: 0.4, bloomThreshold: 1.05, fog: true,
+    background: '#1d1b20', grid: false, axes: false, studio: true, studioIntensity: 0.6, env: true, envIntensity: 0.7, exposure: 1.0,
+    bloom: true, bloomStrength: 0.75, bloomRadius: 0.45, bloomThreshold: 1.0, fog: true, shadows: true, ground: false,
     anim: { duration: 6, fps: 30, loop: true },
   });
-  return { camera: [[-5.6, 3.3, 6.4], [0.2, 1.9, 0]] };
+  return { camera: [[-6.4, 2.4, 5.6], [0.5, 1.95, 0]] };
 }
 
 // ---------------------------------------------------------------
