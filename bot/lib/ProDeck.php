@@ -611,10 +611,17 @@ class ProDeck
         $areaW = self::W - 2 * self::M;
         $areaH = self::H - 660000 - $y0;
         $cw = (int)(($areaW - ($cols - 1) * $gap) / $cols);
-        $ch = min(2600000, (int)(($areaH - ($rows - 1) * $gap) / $rows));
+        $chMax = min(2600000, (int)(($areaH - ($rows - 1) * $gap) / $rows));
         $d = 520000;
         $tw = $cw - 2 * 240000;
-        $sz = self::commonSize($pts, $tw, $ch - $d - 330000, 18, 11);
+        // shrift kattaroq (kam kartada 22 pt gacha), karta balandligi esa matnga moslanadi — bo'sh «quti» qolmasin
+        $sz = self::commonSize($pts, $tw, $chMax - $d - 330000, $cnt <= 4 ? 22 : 18, 11);
+        $need = 0;
+        foreach ($pts as $p) {
+            $need = max($need, self::measure(self::pointBlocks($p), $tw, $sz));
+        }
+        $ch = max(min($chMax, 1500000), min($chMax, $need + $d + 330000 + 160000));
+        $y0 += (int)max(0, ($areaH - ($rows * $ch + ($rows - 1) * $gap)) * 0.4);   // blok bo'sh joyda muvozanatli turadi
         foreach ($pts as $i => $p) {
             $c = $i % $cols;
             $r = (int)floor($i / $cols);
@@ -891,7 +898,7 @@ class ProDeck
                 }
                 $bg = $bg ?: $absBg(1);
             } elseif (!in_array($kind, ['matn', 'reja'], true) && $img) {
-                $bg = ProArt::photoFull($img, $theme, 'dim');
+                $bg = ProArt::photoFull($img, $theme, 'soft');      // xiralashgan fon — kartalar va matn aniq o'qiladi
                 if ($bg) {
                     $tmp[] = $bg;
                 }

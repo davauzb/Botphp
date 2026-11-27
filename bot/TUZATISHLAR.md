@@ -1,3 +1,18 @@
+# studybot 14-19 — TAQDIMOT DIZAYNI VA RASMLAR TUZATILDI
+
+17 ta dizaynning hammasida to'liq taqdimot (barcha slayd turlari, turli o'lchamdagi rasmlar) yaratilib, ko'z bilan tekshirildi:
+- **⭐ PRO: matnli slaydlarda fon rasmi xiralashtiriladi** (blur) va kuchliroq qoraytiriladi — oldin rang-barang foto
+  kartalar va matn orqasida aniq ko'rinib, o'qishni qiyinlashtirardi. Rasm rangi va kayfiyati saqlanadi; muqova tiniq qoladi.
+  «Rahmat» slaydida qoraytirish kuchaytirildi.
+- **⭐ PRO kartalar**: karta balandligi matnga moslanadi, shrift kattaroq (22 pt gacha), blok muvozanatli joylashadi
+  (oldin matn tepada, pastda katta bo'sh joy edi).
+- **Oddiy dizaynlar — rasm yon panelni doim to'liq to'ldiradi**: oddiy gorizontal foto tor panelda kichik bo'lib
+  o'rtada «suzib» qolardi (3× nisbat chegarasi). Endi markazdan qirqilib, panel to'liq to'ladi.
+- **Kartalar**: sarlavha balandligi matnga moslanadi — «Moslashuvchan ta'lim» kabi ikki qatorli sarlavhalar chetga
+  yopishmaydi va kesilmaydi; bir qatordagi kartalar bir xil.
+- **Xulosa**: asosiy fikr endi tepada to'liq kenglikdagi rangli blokda, qalin va yirik (oldin tor ustunda mayda kursiv edi);
+  xulosa punktlari keng qatorlarda.
+
 # studybot 14-18 — ⭐ JONLI OVOZ: BITTA SKRIPT BILAN O'RNATISH
 
 - **Ovoz serveri endi botga o'zi ulanadi** (`voice_api.php`): port, domen, HTTPS, SSH va token nusxalash kerak emas.

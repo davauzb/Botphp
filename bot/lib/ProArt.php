@@ -104,12 +104,33 @@ class ProArt
             }
             return;
         }
+        // 'soft' — matnli slaydlar foni: rasm xiralashgan, kuchli qoraytirilgan (rang va kayfiyat qoladi, matn bilan urishmaydi)
+        // 'dim'  — «Rahmat»: tiniq rasm, markazdagi yozuv o'qilishi uchun bir tekis qalin qoplama
+        $base = $mode === 'soft' ? 0.70 : 0.66;
         for ($y = 0; $y < $h; $y++) {
             $t = $y / $h;
             $edge = $t < 0.18 ? (0.18 - $t) / 0.18 : ($t > 0.72 ? ($t - 0.72) / 0.28 : 0.0);
-            $op = min(0.92, 0.50 + 0.30 * $edge);       // rasm yaqqol ko'rinsin; matn o'qilishini shisha kartalar ta'minlaydi
+            $op = min(0.94, $base + 0.20 * $edge);
             imageline($im, 0, $y, $w, $y, imagecolorallocatealpha($im, $r, $g, $b, self::a($op)));
         }
+    }
+
+    /** Yumshoq xiralashtirish: kichraytirib-kattalashtirish (tez, GD'da ishonchli) + bir marta Gauss. */
+    private static function blur(GdImage $im, int $factor = 14): GdImage
+    {
+        $w = imagesx($im);
+        $h = imagesy($im);
+        $sw = max(8, intdiv($w, $factor));
+        $sh = max(8, intdiv($h, $factor));
+        $small = imagecreatetruecolor($sw, $sh);
+        imagecopyresampled($small, $im, 0, 0, 0, 0, $sw, $sh, $w, $h);
+        imagefilter($small, IMG_FILTER_GAUSSIAN_BLUR);
+        $out = imagecreatetruecolor($w, $h);
+        imagecopyresampled($out, $small, 0, 0, 0, 0, $w, $h, $sw, $sh);
+        imagedestroy($small);
+        imagefilter($out, IMG_FILTER_GAUSSIAN_BLUR);
+        imagedestroy($im);
+        return $out;
     }
 
     /** To'liq ekranli fon rasmi (1920x1080). Qaytadi: JPEG yo'li yoki null. */
@@ -120,6 +141,9 @@ class ProArt
         }
         $im = self::cover($im0, self::FW, self::FH);
         imagedestroy($im0);
+        if ($mode === 'soft') {
+            $im = self::blur($im);
+        }
         self::shade($im, $theme['bg'], $mode);
         return self::save($im, self::out('pf_'));
     }

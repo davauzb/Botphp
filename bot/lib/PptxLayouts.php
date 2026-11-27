@@ -481,15 +481,16 @@ class PptxLayouts
     private static function pictureXml(string $imagePath, int $bx, int $by, int $bw, int $bh, string $border): string
     {
         // Rasm qutini TO'LIQ to'ldiradi (cover): ortiqcha qismi markazdan qirqiladi — kichkina "pochta markasi" ko'rinishi bo'lmaydi.
-        // Juda cho'zilgan qutida (nisbat 2.2 baravardan ko'p farq qilsa) rasm buzilmasligi uchun quti rasmga moslab qisqartiriladi.
+        // Oddiy gorizontal foto tor yon panelga tushganda ham panel to'liq to'ldiriladi (markazi ko'rinadi) — oldin 3× chegarada
+        // quti kichrayib, rasm o'rtada «suzib» qolardi. Faqat haddan tashqari nisbatda (5×, masalan panorama) quti moslashadi.
         $x = $bx; $y = $by; $w = $bw; $h = $bh;
         $src = '<a:srcRect/>';
         $size = @getimagesize($imagePath);
         if ($size && $size[0] > 0 && $size[1] > 0 && $bw > 0 && $bh > 0) {
             $ir = $size[0] / $size[1];
             $br = $bw / $bh;
-            if ($ir / $br > 3.0 || $br / $ir > 3.0) {
-                $tr = $ir > $br ? $br * 3.0 : $br / 3.0;        // qutining yangi nisbati
+            if ($ir / $br > 5.0 || $br / $ir > 5.0) {
+                $tr = $ir > $br ? $br * 5.0 : $br / 5.0;        // qutining yangi nisbati
                 if ($ir > $br) {
                     $h = (int)round($bw / $tr);
                     $y = $by + (int)round(($bh - $h) / 2);
@@ -1191,15 +1192,21 @@ class PptxLayouts
         $k = 0;
         foreach ($layout as $ri => $cnt) {
             $cellW = (int)(($cw - $gap * ($cnt - 1)) / $cnt);
+            // Sarlavha balandligi matnga moslanadi: ikki qatorli sarlavha («Moslashuvchan ta'lim») ham sig'adi,
+            // bir qatordagi kartalar bir xil balandlikda bo'ladi (oldin qat'iy 620000 — matn chetga yopishib/kesilib qolardi)
+            $headH = $single ? 800000 : 620000;
+            for ($ci = 0; $ci < $cnt; $ci++) {
+                $hd = $pts[$k + $ci]['head'] !== '' ? $pts[$k + $ci]['head'] : 'Yo\'nalish';
+                $headH = max($headH, min((int)($rowH * 0.45), self::measure([[$hd, true, 0, 0]], $cellW - 300000, $single ? 18 : 15) + 200000));
+            }
             for ($ci = 0; $ci < $cnt; $ci++) {
                 $p = $pts[$k];
                 $col = ($k % 2 === 0) ? $A : $T;
                 $cx = $x0 + $ci * ($cellW + $gap);
                 $cy = $y + $ri * ($rowH + $gap);
-                $headH = $single ? 800000 : 620000;
                 $body .= self::card('GCard' . ($k + 1), $cx, $cy, $cellW, $rowH, $col);
                 $head = $p['head'] !== '' ? $p['head'] : ('Yo\'nalish ' . ($k + 1));
-                $hs = self::fit([[$head, true, 0, 0]], $cellW - 300000, $headH - 60000, $single ? 20 : 17, 12);
+                $hs = self::fit([[$head, true, 0, 0]], $cellW - 300000, $headH - 100000, $single ? 20 : 17, 12);
                 $body .= self::gridHead('GHead' . ($k + 1), $cx, $cy, $cellW, $headH, $head, $hs, $col);
                 $tw = $cellW - 300000;
                 $th = $rowH - $headH - 100000;
@@ -1291,27 +1298,31 @@ class PptxLayouts
         $cw = self::$cw;
         $pts = array_slice($pts, 0, 6);
         $N = max(1, count($pts));
-        $panelW = (int)($cw * 0.33);
-        $h = self::$yb - self::$y0;
         $geom = $c['geom'] === 'foldedCorner' ? 'rect' : $c['geom'];
         $adj = is_int($c['adj']) ? 6000 : $c['adj'];
         $on = self::isPro() ? 'FFFFFF' : self::on($A);
-        $body = self::shape('Panel', $geom, $x0, self::$y0, $panelW, $h, $A, null, 0, '', 't', [0, 0, 0, 0], $adj);
-        $body .= self::shape('PanelDeco', 'ellipse', $x0 + $panelW - 1350000, self::$y0 + $h - 1500000, 1350000, 1350000, self::mix($A, $on, 0.14));
+        // Asosiy fikr — tepada to'liq kenglikdagi rangli blok (oldin tor ustunda mayda kursiv edi, o'qilishi qiyin)
         $panelText = $lead !== '' ? $lead : I18n::t('default_panel', self::$lang);
-        $sz = self::fit([[$panelText, false, 0, 0]], $panelW - 400000, $h - 800000, 20, 12);
-        $body .= self::textBox('PanelText', $x0 + 200000, self::$y0 + 200000, $panelW - 400000, $h - 900000, self::para(self::run($panelText, $sz, $on, false, true)), 'ctr');
+        // blok balandligi matnga moslanadi (17 pt da sig'adigan qilib), rasm yonida tor bo'lsa ham shrift mayda bo'lib qolmaydi
+        $ph = max(760000, min(1500000, self::measure([[$panelText, true, 0, 0]], $cw - 1150000, 17) + 300000));
+        $body = self::shape('Panel', $geom, $x0, self::$y0, $cw, $ph, $A, null, 0, '', 't', [0, 0, 0, 0], $adj);
+        $body .= self::shape('PanelMark', 'ellipse', $x0 + 220000, self::$y0 + (int)(($ph - 440000) / 2), 440000, 440000, self::mix($A, $on, 0.22), null, 0,
+            self::para(self::run('✓', 18, $on, true), 'ctr'), 'ctr');
+        $sz = self::fit([[$panelText, true, 0, 0]], $cw - 1150000, $ph - 140000, 20, 13);
+        $body .= self::textBox('PanelText', $x0 + 820000, self::$y0, $cw - 1150000, $ph, self::para(self::run($panelText, $sz, $on, true)), 'ctr');
 
-        $x = $x0 + $panelW + 200000;
-        $w = $cw - $panelW - 200000;
+        $top = self::$y0 + $ph + 170000;
+        $h = self::$yb - $top;
+        $x = $x0;
+        $w = $cw;
         $gap = 110000;
         $rowH = (int)(($h - $gap * ($N - 1)) / $N);
-        $nb = 460000;
+        $nb = min(460000, (int)($rowH * 0.62));
         $tw = $w - 240000 - $nb - 160000;
         $pts = self::shrinkPts($pts, $tw, $rowH - 50000, 11);
         $s = self::commonSize($pts, $tw, $rowH - 50000, 18, 11);
         foreach ($pts as $i => $p) {
-            $ry = self::$y0 + $i * ($rowH + $gap);
+            $ry = $top + $i * ($rowH + $gap);
             $body .= self::card('CRow' . ($i + 1), $x, $ry, $w, $rowH, $i % 2 === 0 ? $A : $T, $i % 2 === 0 ? null : $P['soft']);
             $body .= self::badge('CNum' . ($i + 1), $x + 150000, $ry + (int)(($rowH - $nb) / 2), $nb, (string)($i + 1), 16, $T, true);
             $body .= self::textBox('CText' . ($i + 1), $x + 240000 + $nb, $ry, $tw, $rowH, self::pointParas($p, $s, $P['head'], 2), 'ctr');
