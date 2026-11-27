@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ovozli AI</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --text: #1d1d1f; --muted: #6b6b70;
+    --accent: #0f766e; --accent-text: #ffffff; --me: #e6f2f0; --border: #e2e0da; --danger: #b42318;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121214; --card: #1c1c1f; --text: #f2f2f3; --muted: #9a9aa2;
+            --accent: #2dd4bf; --accent-text: #062b27; --me: #17322f; --border: #2c2c31; --danger: #f97066; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 16px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  h1 { font-size: 20px; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  select, button.small { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 8px;
+         border: 1px solid var(--border); background: var(--card); color: var(--text); }
+  #log { flex: 1; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 85%; padding: 10px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); white-space: pre-wrap; }
+  .msg.me { align-self: flex-end; background: var(--me); }
+  .msg.err { color: var(--danger); }
+  .msg audio { display: block; margin-top: 8px; width: 100%; }
+  .controls { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  #mic { width: 84px; height: 84px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-text);
+         font-size: 34px; cursor: pointer; transition: transform .15s; }
+  #mic.rec { background: var(--danger); transform: scale(1.08); }
+  #mic:disabled { opacity: .5; cursor: wait; }
+  #status { color: var(--muted); font-size: 14px; min-height: 21px; text-align: center; }
+  form { display: flex; gap: 8px; width: 100%; }
+  form input { flex: 1; min-width: 0; font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
+  form button { font: inherit; padding: 10px 16px; border-radius: 10px; border: 0; background: var(--accent); color: var(--accent-text); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1 id="name">Ovozli AI</h1>
+      <div class="sub">O'zbekcha ovozli yordamchi</div>
+    </div>
+    <div>
+      <select id="provider" aria-label="AI modeli"></select>
+      <button class="small" id="reset" title="Suhbatni tozalash">Yangi</button>
+    </div>
+  </header>
+
+  <div id="log"></div>
+
+  <div class="controls">
+    <button id="mic" aria-label="Gapirish">🎤</button>
+    <div id="status">Tugmani bosing va gapiring</div>
+    <form id="textForm">
+      <input id="textInput" placeholder="Yoki yozing..." autocomplete="off">
+      <button>Yuborish</button>
+    </form>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let sessionId;
+try { sessionId = localStorage.getItem("sid"); } catch (e) {}
+if (!sessionId) {
+  sessionId = Math.random().toString(36).slice(2);
+  try { localStorage.setItem("sid", sessionId); } catch (e) {}
+}
+
+function add(text, cls, audioB64) {
+  const div = document.createElement("div");
+  div.className = "msg " + (cls || "");
+  div.textContent = text;
+  if (audioB64) {
+    const a = document.createElement("audio");
+    a.controls = true;
+    a.src = "data:audio/mpeg;base64," + audioB64;
+    div.appendChild(a);
+    a.play().catch(() => {});
+  }
+  $("log").appendChild(div);
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+async function init() {
+  const r = await fetch("/api/info").then((r) => r.json());
+  $("name").textContent = r.name;
+  document.title = r.name;
+  const names = Object.entries(r.providers);
+  if (!names.length) add("Hech qaysi AI kaliti sozlanmagan. .env faylini to'ldiring.", "err");
+  for (const [key, title] of names) {
+    const o = new Option(title, key, false, key === r.default);
+    $("provider").add(o);
+  }
+}
+
+async function send(formData) {
+  formData.append("session_id", sessionId);
+  formData.append("provider", $("provider").value);
+  $("mic").disabled = true;
+  $("status").textContent = "O'ylayapman...";
+  try {
+    const res = await fetch("/api/talk", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Xatolik");
+    if (formData.has("audio")) add(data.user_text, "me");
+    add(data.reply, "", data.audio);
+    if (data.voice_error) add("Ovoz: " + data.voice_error, "err");
+    $("status").textContent = "Tugmani bosing va gapiring";
+  } catch (e) {
+    add(e.message, "err");
+    $("status").textContent = "";
+  } finally {
+    $("mic").disabled = false;
+  }
+}
+
+let recorder = null, chunks = [];
+$("mic").onclick = async () => {
+  if (recorder && recorder.state === "recording") { recorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recorder = new MediaRecorder(stream);
+    chunks = [];
+    recorder.ondataavailable = (e) => chunks.push(e.data);
+    recorder.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      $("mic").classList.remove("rec");
+      const blob = new Blob(chunks, { type: recorder.mimeType });
+      const ext = recorder.mimeType.includes("mp4") ? "m4a" : "webm";
+      const fd = new FormData();
+      fd.append("audio", blob, "ovoz." + ext);
+      send(fd);
+    };
+    recorder.start();
+    $("mic").classList.add("rec");
+    $("status").textContent = "Eshityapman... tugatish uchun yana bosing";
+  } catch (e) {
+    add("Mikrofonga ruxsat berilmadi.", "err");
+  }
+};
+
+$("textForm").onsubmit = (e) => {
+  e.preventDefault();
+  const t = $("textInput").value.trim();
+  if (!t) return;
+  add(t, "me");
+  $("textInput").value = "";
+  const fd = new FormData();
+  fd.append("text", t);
+  send(fd);
+};
+
+$("reset").onclick = async () => {
+  const fd = new FormData();
+  fd.append("session_id", sessionId);
+  await fetch("/api/reset", { method: "POST", body: fd });
+  $("log").innerHTML = "";
+};
+
+init();
+</script>
+</body>
+</html>
